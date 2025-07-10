@@ -1,0 +1,24 @@
+[
+  {
+    "id": "section-123",
+    "displayName": "Test Section 1",
+    "createdDateTime": "2024-01-01T00:00:00Z",
+    "lastModifiedDateTime": "2024-01-02T00:00:00Z",
+    "pagesUrl": "https://graph.microsoft.com/v1.0/me/onenote/sections/section-123/pages",
+    "parentNotebook": {
+      "id": "notebook-123",
+      "displayName": "Test Notebook 1"
+    }
+  },
+  {
+    "id": "section-456",
+    "displayName": "Test Section 2",
+    "createdDateTime": "2024-01-03T00:00:00Z",
+    "lastModifiedDateTime": "2024-01-04T00:00:00Z",
+    "pagesUrl": "https://graph.microsoft.com/v1.0/me/onenote/sections/section-456/pages",
+    "parentNotebook": {
+      "id": "notebook-123",
+      "displayName": "Test Notebook 1"
+    }
+  }
+]

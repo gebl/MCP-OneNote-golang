@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "onenote": {
+      "transport": {
+        "type": "sse",
+        "url": "http://localhost:8080/mcp",
+        "headers": {
+          "Authorization": "aaa"
+        }
+      }
+    }
+  }
+}

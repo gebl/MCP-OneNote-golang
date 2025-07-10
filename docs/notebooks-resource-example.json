@@ -1,0 +1,58 @@
+[
+  {
+    "id": "1-abc123def456789ghi",
+    "notebookId": "1-abc123def456789ghi",
+    "displayName": "Work Notebook",
+    "createdDateTime": "2024-01-15T10:30:00Z",
+    "lastModifiedDateTime": "2024-08-02T14:20:35Z",
+    "isDefault": false,
+    "isShared": true,
+    "userRole": "Owner",
+    "createdBy": {
+      "user": {
+        "id": "48d31887-5fad-4d73-a9f5-3c356e68a038",
+        "displayName": "John Doe"
+      },
+      "application": {
+        "id": "16bd594c-1b8a-4e1d-8b4b-1e4c9a6f2c5e",
+        "displayName": "OneNote"
+      }
+    },
+    "lastModifiedBy": {
+      "user": {
+        "id": "48d31887-5fad-4d73-a9f5-3c356e68a038",
+        "displayName": "John Doe"
+      },
+      "application": {
+        "id": "16bd594c-1b8a-4e1d-8b4b-1e4c9a6f2c5e",
+        "displayName": "OneNote Web"
+      }
+    }
+  },
+  {
+    "id": "1-xyz789abc456def123",
+    "notebookId": "1-xyz789abc456def123",
+    "displayName": "Personal Notes",
+    "createdDateTime": "2024-02-20T08:15:22Z",
+    "lastModifiedDateTime": "2024-08-01T16:45:18Z",
+    "isDefault": true,
+    "isShared": false,
+    "userRole": "Owner",
+    "createdBy": {
+      "user": {
+        "id": "48d31887-5fad-4d73-a9f5-3c356e68a038",
+        "displayName": "John Doe"
+      }
+    },
+    "lastModifiedBy": {
+      "user": {
+        "id": "48d31887-5fad-4d73-a9f5-3c356e68a038",
+        "displayName": "John Doe"
+      },
+      "application": {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "displayName": "OneNote Mobile"
+      }
+    }
+  }
+]

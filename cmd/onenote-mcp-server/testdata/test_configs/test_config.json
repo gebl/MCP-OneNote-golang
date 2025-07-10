@@ -1,0 +1,7 @@
+{
+  "client_id": "test-client-id-12345",
+  "tenant_id": "test-tenant-id-67890",
+  "redirect_uri": "http://localhost:8080/callback",
+  "notebook_name": "Test Notebook",
+  "toolsets": ["notebooks", "sections", "pages", "content"]
+}

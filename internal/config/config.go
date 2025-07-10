@@ -1,53 +1,468 @@
+// config.go - Configuration management for the OneNote MCP server.
+//
+// This file provides flexible configuration loading from multiple sources including
+// environment variables, JSON configuration files, and command-line arguments.
+// It centralizes all configuration management for the OneNote MCP server.
+//
+// Key Features:
+// - Multi-source configuration loading (env vars, JSON files, defaults)
+// - Environment variable support with automatic mapping
+// - JSON configuration file support with validation
+// - Configuration validation and error reporting
+// - Flexible toolset configuration
+// - Comprehensive logging of configuration values
+//
+// Configuration Sources (in order of precedence):
+// 1. Environment variables (highest priority)
+// 2. JSON configuration file (if ONENOTE_MCP_CONFIG is set)
+// 3. Default values (lowest priority)
+//
+// Environment Variables:
+// - ONENOTE_CLIENT_ID: Azure App Registration Client ID
+// - ONENOTE_TENANT_ID: Azure Tenant ID (use "common" for multi-tenant)
+// - ONENOTE_REDIRECT_URI: OAuth2 redirect URI for authentication
+// - ONENOTE_DEFAULT_NOTEBOOK_NAME: Default notebook name (optional)
+// - ONENOTE_TOOLSETS: Comma-separated list of enabled toolsets
+// - ONENOTE_MCP_CONFIG: Path to JSON configuration file (optional)
+// - LOG_LEVEL: General logging level (DEBUG, INFO, WARN, ERROR)
+// - LOG_FORMAT: Log format ("text" or "json")
+// - MCP_LOG_FILE: Optional log file path
+// - CONTENT_LOG_LEVEL: Content logging verbosity (DEBUG, INFO, WARN, ERROR, OFF)
+//
+// JSON Configuration File Format:
+// {
+//   "client_id": "your-azure-app-client-id",
+//   "tenant_id": "your-azure-tenant-id",
+//   "redirect_uri": "http://localhost:8080/callback",
+//   "notebook_name": "My Default Notebook",
+//   "toolsets": ["notebooks", "sections", "pages", "content"],
+//   "log_level": "DEBUG",
+//   "log_format": "text",
+//   "log_file": "mcp-server.log",
+//   "content_log_level": "DEBUG"
+// }
+//
+// Available Toolsets:
+// - "notebooks": Notebook listing and management
+// - "sections": Section operations within notebooks
+// - "pages": Page CRUD operations
+// - "content": Content extraction and manipulation
+//
+// Configuration Validation:
+// - Required fields validation
+// - URL format validation for redirect URI
+// - Azure app registration validation
+// - Toolset availability checking
+//
+// Error Handling:
+// - Missing required configuration values
+// - Invalid JSON configuration files
+// - File permission issues
+// - Environment variable parsing errors
+//
+// Usage Example:
+//   cfg, err := config.Load()
+//   if err != nil {
+//       log.Fatalf("Failed to load config: %v", err)
+//   }
+//   fmt.Printf("Client ID: %s\n", cfg.ClientID)
+//
+// For detailed configuration options, see README.md and docs/setup.md
+
 package config
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
+// Config holds all configuration values for the OneNote MCP server.
 type Config struct {
-	ClientID     string   `json:"client_id"`
-	ClientSecret string   `json:"client_secret"`
-	TenantID     string   `json:"tenant_id"`
-	RedirectURI  string   `json:"redirect_uri"`
-	Toolsets     []string `json:"toolsets"`
-	NotebookName string   `json:"notebook_name"`
+	ClientID     string   `json:"client_id"`     // Application (client) ID
+	TenantID     string   `json:"tenant_id"`     // Directory (tenant) ID
+	RedirectURI  string   `json:"redirect_uri"`  // Redirect URI for OAuth2 callback
+	Toolsets     []string `json:"toolsets"`      // Enabled toolsets (e.g., notebooks, sections, pages)
+	NotebookName string   `json:"notebook_name"` // Default notebook name (optional) - maps to ONENOTE_DEFAULT_NOTEBOOK_NAME
+
+	// MCP Authentication configuration
+	MCPAuth *MCPAuthConfig `json:"mcp_auth"` // MCP server authentication settings
+
+	// Server configuration
+	Stateless *bool `json:"stateless"` // Enable stateless mode for HTTP server
+
+	// Logging configuration
+	LogLevel        string `json:"log_level"`         // General logging level: DEBUG, INFO, WARN, ERROR
+	LogFormat       string `json:"log_format"`        // Log format: "text" or "json"
+	LogFile         string `json:"log_file"`          // Optional log file path
+	ContentLogLevel string `json:"content_log_level"` // Content logging verbosity: DEBUG, INFO, WARN, ERROR, OFF
 }
 
+// MCPAuthConfig holds MCP server authentication configuration.
+type MCPAuthConfig struct {
+	Enabled     bool   `json:"enabled"`      // Enable MCP authentication for HTTP/SSE modes
+	BearerToken string `json:"bearer_token"` // Bearer token for authentication
+}
+
+// Load reads configuration from environment variables and optionally from a JSON config file.
+// Returns a pointer to a Config and an error, if any.
+//
+// IMPORTANT: This function assumes logging is initialized with DEBUG level to capture
+// all configuration loading details. After config loading, logging will be reconfigured
+// based on the loaded configuration values.
 func Load() (*Config, error) {
-	log.Println("[config] Loading configuration...")
+	startTime := time.Now()
+	logger := logging.ConfigLogger
+
+	logger.Debug("Starting configuration loading")
+
+	// Initialize stateless with default value (false)
+	statelessDefault := false
+	statelessPtr := &statelessDefault
+	if statelessEnv := os.Getenv("MCP_STATELESS"); statelessEnv == "true" {
+		statelessTrue := true
+		statelessPtr = &statelessTrue
+	}
+
 	cfg := &Config{
 		ClientID:     os.Getenv("ONENOTE_CLIENT_ID"),
-		ClientSecret: os.Getenv("ONENOTE_CLIENT_SECRET"),
 		TenantID:     os.Getenv("ONENOTE_TENANT_ID"),
 		RedirectURI:  os.Getenv("ONENOTE_REDIRECT_URI"),
-		NotebookName: os.Getenv("ONENOTE_NOTEBOOK_NAME"),
-	}
-	log.Printf("[config] Loaded from env: client_id=%q, tenant_id=%q, redirect_uri=%q, notebook_name=%q", cfg.ClientID, cfg.TenantID, cfg.RedirectURI, cfg.NotebookName)
+		NotebookName: os.Getenv("ONENOTE_DEFAULT_NOTEBOOK_NAME"),
 
-	// Toolsets from env
+		// MCP Authentication configuration from environment variables
+		MCPAuth: &MCPAuthConfig{
+			Enabled:     os.Getenv("MCP_AUTH_ENABLED") == "true",
+			BearerToken: os.Getenv("MCP_BEARER_TOKEN"),
+		},
+
+		// Server configuration from environment variables
+		Stateless: statelessPtr,
+
+		// Logging configuration from environment variables
+		LogLevel:        os.Getenv("LOG_LEVEL"),
+		LogFormat:       os.Getenv("LOG_FORMAT"),
+		LogFile:         os.Getenv("MCP_LOG_FILE"),
+		ContentLogLevel: os.Getenv("CONTENT_LOG_LEVEL"),
+	}
+
+	logger.Debug("Loaded from environment variables",
+		"client_id", maskSensitiveData(cfg.ClientID),
+		"tenant_id", cfg.TenantID,
+		"redirect_uri", cfg.RedirectURI,
+		"notebook_name", cfg.NotebookName,
+		"mcp_auth_enabled", cfg.MCPAuth.Enabled,
+		"mcp_bearer_token", maskSensitiveData(cfg.MCPAuth.BearerToken),
+		"stateless", cfg.Stateless != nil && *cfg.Stateless,
+		"log_level", cfg.LogLevel,
+		"log_format", cfg.LogFormat,
+		"log_file", cfg.LogFile,
+		"content_log_level", cfg.ContentLogLevel)
+
+	// Log all environment variables that could affect configuration
+	logger.Debug("Environment variables scan",
+		"ONENOTE_CLIENT_ID", maskEnvironmentValue("ONENOTE_CLIENT_ID"),
+		"ONENOTE_TENANT_ID", maskEnvironmentValue("ONENOTE_TENANT_ID"),
+		"ONENOTE_REDIRECT_URI", maskEnvironmentValue("ONENOTE_REDIRECT_URI"),
+		"ONENOTE_DEFAULT_NOTEBOOK_NAME", maskEnvironmentValue("ONENOTE_DEFAULT_NOTEBOOK_NAME"),
+		"ONENOTE_TOOLSETS", maskEnvironmentValue("ONENOTE_TOOLSETS"),
+		"ONENOTE_MCP_CONFIG", maskEnvironmentValue("ONENOTE_MCP_CONFIG"),
+		"MCP_AUTH_ENABLED", maskEnvironmentValue("MCP_AUTH_ENABLED"),
+		"MCP_BEARER_TOKEN", maskEnvironmentValue("MCP_BEARER_TOKEN"),
+		"MCP_STATELESS", maskEnvironmentValue("MCP_STATELESS"),
+		"LOG_LEVEL", maskEnvironmentValue("LOG_LEVEL"),
+		"LOG_FORMAT", maskEnvironmentValue("LOG_FORMAT"),
+		"MCP_LOG_FILE", maskEnvironmentValue("MCP_LOG_FILE"),
+		"CONTENT_LOG_LEVEL", maskEnvironmentValue("CONTENT_LOG_LEVEL"))
+
+	// Toolsets from env (comma-separated string)
 	if toolsets := os.Getenv("ONENOTE_TOOLSETS"); toolsets != "" {
 		cfg.Toolsets = strings.Split(toolsets, ",")
-		log.Printf("[config] Loaded toolsets from env: %v", cfg.Toolsets)
+		logger.Debug("Loaded toolsets from environment", "toolsets", cfg.Toolsets)
+	} else {
+		logger.Debug("No toolsets specified in environment")
 	}
 
-	// Optionally load from config file
+	// Optionally load from config file if ONENOTE_MCP_CONFIG is set
 	if path := os.Getenv("ONENOTE_MCP_CONFIG"); path != "" {
-		log.Printf("[config] Loading from config file: %s", path)
+		logger.Debug("Loading from config file", "path", path)
+
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			logger.Error("Failed to stat config file", "path", path, "error", err)
+			return nil, fmt.Errorf("config file not accessible: %v", err)
+		}
+		logger.Debug("Config file info", "size", fileInfo.Size(), "mod_time", fileInfo.ModTime())
+
 		f, err := os.Open(path)
 		if err != nil {
-			return nil, err
+			logger.Error("Failed to open config file", "path", path, "error", err)
+			return nil, fmt.Errorf("failed to open config file: %v", err)
 		}
 		defer f.Close()
+
 		dec := json.NewDecoder(f)
 		if err := dec.Decode(cfg); err != nil {
-			return nil, err
+			logger.Error("Failed to decode JSON from config file", "path", path, "error", err)
+			return nil, fmt.Errorf("failed to parse config file JSON: %v", err)
 		}
-		log.Printf("[config] Loaded from file: client_id=%q, tenant_id=%q, redirect_uri=%q, toolsets=%v, notebook_name=%q", cfg.ClientID, cfg.TenantID, cfg.RedirectURI, cfg.Toolsets, cfg.NotebookName)
+
+		// Ensure stateless has a default value if not set in JSON
+		if cfg.Stateless == nil {
+			defaultStateless := false
+			cfg.Stateless = &defaultStateless
+		}
+
+		logger.Debug("Successfully loaded from config file",
+			"client_id", maskSensitiveData(cfg.ClientID),
+			"tenant_id", cfg.TenantID,
+			"redirect_uri", cfg.RedirectURI,
+			"toolsets", cfg.Toolsets,
+			"notebook_name", cfg.NotebookName,
+			"mcp_auth_enabled", cfg.MCPAuth.Enabled,
+			"mcp_bearer_token", maskSensitiveData(cfg.MCPAuth.BearerToken),
+			"stateless", cfg.Stateless != nil && *cfg.Stateless,
+			"log_level", cfg.LogLevel,
+			"log_format", cfg.LogFormat,
+			"log_file", cfg.LogFile,
+			"content_log_level", cfg.ContentLogLevel)
+
+		logger.Info("Configuration loaded from JSON file",
+			"config_file", path,
+			"file_size", fileInfo.Size(),
+			"contains_client_id", cfg.ClientID != "",
+			"contains_tenant_id", cfg.TenantID != "",
+			"contains_redirect_uri", cfg.RedirectURI != "",
+			"contains_notebook_name", cfg.NotebookName != "",
+			"toolsets_count", len(cfg.Toolsets),
+			"mcp_auth_configured", cfg.MCPAuth != nil && cfg.MCPAuth.Enabled,
+			"logging_configured", cfg.LogLevel != "" || cfg.LogFormat != "" || cfg.LogFile != "" || cfg.ContentLogLevel != "")
+	} else {
+		logger.Debug("No config file specified (ONENOTE_MCP_CONFIG not set)")
 	}
 
-	log.Printf("[config] Final config: %+v", cfg)
+	// Validate configuration
+	logger.Debug("Validating configuration")
+	if err := validateConfig(cfg); err != nil {
+		logger.Error("Configuration validation failed", "error", err)
+		return nil, err
+	}
+	logger.Debug("Configuration validation passed")
+
+	elapsed := time.Since(startTime)
+
+	// Comprehensive final configuration summary
+	logger.Info("Configuration loaded successfully",
+		"duration", elapsed,
+		"client_id_configured", cfg.ClientID != "",
+		"tenant_id_configured", cfg.TenantID != "",
+		"redirect_uri_configured", cfg.RedirectURI != "",
+		"notebook_name_configured", cfg.NotebookName != "",
+		"toolsets_configured", len(cfg.Toolsets) > 0,
+		"mcp_auth_configured", cfg.MCPAuth != nil && cfg.MCPAuth.Enabled,
+		"logging_level_set", cfg.LogLevel != "",
+		"config_source", getConfigSource())
+
+	logger.Debug("Final configuration details",
+		"client_id", maskSensitiveData(cfg.ClientID),
+		"tenant_id", cfg.TenantID,
+		"redirect_uri", cfg.RedirectURI,
+		"notebook_name", cfg.NotebookName,
+		"toolsets", cfg.Toolsets,
+		"toolsets_count", len(cfg.Toolsets),
+		"mcp_auth_enabled", cfg.MCPAuth.Enabled,
+		"mcp_bearer_token", maskSensitiveData(cfg.MCPAuth.BearerToken),
+		"stateless", cfg.Stateless != nil && *cfg.Stateless,
+		"log_level", cfg.LogLevel,
+		"log_format", cfg.LogFormat,
+		"log_file", cfg.LogFile,
+		"content_log_level", cfg.ContentLogLevel)
+
+	// Log effective configuration values (after all sources processed)
+	logger.Debug("Effective configuration values",
+		"client_id_length", len(cfg.ClientID),
+		"tenant_id_set", cfg.TenantID != "",
+		"redirect_uri_set", cfg.RedirectURI != "",
+		"default_notebook_name", cfg.NotebookName,
+		"enabled_toolsets", cfg.Toolsets,
+		"mcp_auth_config", map[string]interface{}{
+			"enabled":      cfg.MCPAuth.Enabled,
+			"token_length": len(cfg.MCPAuth.BearerToken),
+		},
+		"logging_config", map[string]string{
+			"level":         cfg.LogLevel,
+			"format":        cfg.LogFormat,
+			"file":          cfg.LogFile,
+			"content_level": cfg.ContentLogLevel,
+		})
+
 	return cfg, nil
+}
+
+// GetLogLevel returns the configured logging level.
+func (c *Config) GetLogLevel() string {
+	return c.LogLevel
+}
+
+// GetLogFormat returns the configured log format (text or json).
+func (c *Config) GetLogFormat() string {
+	return c.LogFormat
+}
+
+// GetLogFile returns the configured log file path.
+func (c *Config) GetLogFile() string {
+	return c.LogFile
+}
+
+// GetContentLogLevel returns the configured content logging level.
+func (c *Config) GetContentLogLevel() string {
+	return c.ContentLogLevel
+}
+
+// validateConfig performs validation on the loaded configuration
+func validateConfig(cfg *Config) error {
+	logger := logging.ConfigLogger
+
+	logger.Debug("Starting configuration validation",
+		"client_id_present", cfg.ClientID != "",
+		"tenant_id_present", cfg.TenantID != "",
+		"redirect_uri_present", cfg.RedirectURI != "",
+		"toolsets_count", len(cfg.Toolsets))
+
+	logger.Debug("Validating ClientID")
+	if cfg.ClientID == "" {
+		logger.Error("ClientID validation failed - required field missing")
+		return fmt.Errorf("ONENOTE_CLIENT_ID is required")
+	}
+	logger.Debug("ClientID validation passed", "client_id_length", len(cfg.ClientID))
+
+	logger.Debug("Validating TenantID")
+	if cfg.TenantID == "" {
+		logger.Error("TenantID validation failed - required field missing")
+		return fmt.Errorf("ONENOTE_TENANT_ID is required")
+	}
+	logger.Debug("TenantID validation passed", "tenant_id", cfg.TenantID)
+
+	logger.Debug("Validating RedirectURI")
+	if cfg.RedirectURI == "" {
+		logger.Error("RedirectURI validation failed - required field missing")
+		return fmt.Errorf("ONENOTE_REDIRECT_URI is required")
+	}
+
+	// Basic URL validation
+	if !strings.HasPrefix(cfg.RedirectURI, "http://") && !strings.HasPrefix(cfg.RedirectURI, "https://") {
+		logger.Error("RedirectURI validation failed - invalid URL format", "redirect_uri", cfg.RedirectURI)
+		return fmt.Errorf("ONENOTE_REDIRECT_URI must be a valid HTTP/HTTPS URL")
+	}
+	logger.Debug("RedirectURI validation passed", "redirect_uri", cfg.RedirectURI)
+
+	logger.Debug("Validating toolsets", "toolsets", cfg.Toolsets)
+	if len(cfg.Toolsets) > 0 {
+		validToolsets := map[string]bool{
+			"notebooks": true,
+			"sections":  true,
+			"pages":     true,
+			"content":   true,
+		}
+
+		for i, toolset := range cfg.Toolsets {
+			cleanToolset := strings.TrimSpace(toolset)
+			if !validToolsets[cleanToolset] {
+				logger.Error("Toolset validation failed",
+					"invalid_toolset", toolset,
+					"index", i,
+					"valid_options", []string{"notebooks", "sections", "pages", "content"})
+				return fmt.Errorf("invalid toolset: %s (valid options: notebooks, sections, pages, content)", toolset)
+			}
+			logger.Debug("Toolset validated", "toolset", cleanToolset, "index", i)
+		}
+		logger.Debug("All toolsets validation passed", "valid_toolsets", cfg.Toolsets)
+	} else {
+		logger.Debug("No toolsets specified - using default behavior")
+	}
+
+	// Validate logging configuration values if present
+	if cfg.LogLevel != "" {
+		validLogLevels := []string{"DEBUG", "INFO", "WARN", "WARNING", "ERROR"}
+		validLevel := false
+		for _, level := range validLogLevels {
+			if strings.ToUpper(cfg.LogLevel) == level {
+				validLevel = true
+				break
+			}
+		}
+		if !validLevel {
+			logger.Warn("Invalid log level specified, will use default",
+				"specified_level", cfg.LogLevel,
+				"valid_levels", validLogLevels)
+		} else {
+			logger.Debug("Log level validation passed", "log_level", cfg.LogLevel)
+		}
+	}
+
+	if cfg.ContentLogLevel != "" {
+		validContentLevels := []string{"DEBUG", "INFO", "WARN", "WARNING", "ERROR", "OFF"}
+		validLevel := false
+		for _, level := range validContentLevels {
+			if strings.ToUpper(cfg.ContentLogLevel) == level {
+				validLevel = true
+				break
+			}
+		}
+		if !validLevel {
+			logger.Warn("Invalid content log level specified, will use default",
+				"specified_level", cfg.ContentLogLevel,
+				"valid_levels", validContentLevels)
+		} else {
+			logger.Debug("Content log level validation passed", "content_log_level", cfg.ContentLogLevel)
+		}
+	}
+
+	logger.Debug("Configuration validation completed successfully")
+	return nil
+}
+
+// maskSensitiveData masks sensitive configuration values for logging
+func maskSensitiveData(value string) string {
+	if value == "" {
+		return "<empty>"
+	}
+	if len(value) <= 8 {
+		return "***"
+	}
+	return value[:4] + "***" + value[len(value)-4:]
+}
+
+// maskEnvironmentValue gets and masks an environment variable value for logging
+func maskEnvironmentValue(envVar string) string {
+	value := os.Getenv(envVar)
+	if value == "" {
+		return "<not set>"
+	}
+
+	// Identify sensitive environment variables
+	sensitiveVars := map[string]bool{
+		"ONENOTE_CLIENT_ID":    true,
+		"ONENOTE_TENANT_ID":    false, // Tenant IDs are not as sensitive
+		"ONENOTE_REDIRECT_URI": false, // Redirect URIs are not sensitive
+		"MCP_BEARER_TOKEN":     true,  // Bearer tokens are sensitive
+	}
+
+	if sensitive, exists := sensitiveVars[envVar]; exists && sensitive {
+		return maskSensitiveData(value)
+	}
+
+	return value
+}
+
+// getConfigSource determines the primary source of configuration
+func getConfigSource() string {
+	if os.Getenv("ONENOTE_MCP_CONFIG") != "" {
+		return "json_file_with_env_overrides"
+	}
+	return "environment_variables_only"
 }

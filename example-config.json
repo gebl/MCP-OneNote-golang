@@ -1,0 +1,11 @@
+{
+  "client_id": "your-azure-app-client-id",
+  "tenant_id": "your-azure-tenant-id",
+  "redirect_uri": "http://localhost:8080/callback",
+  "notebook_name": "My Default Notebook",
+  "toolsets": ["notebooks", "sections", "pages", "content"],
+  "log_level": "DEBUG",
+  "log_format": "text",
+  "log_file": "mcp-server.log",
+  "content_log_level": "DEBUG"
+}

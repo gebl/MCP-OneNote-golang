@@ -1,0 +1,41 @@
+{
+  "example_unfiltered": [
+    "Work Notebook",
+    "Personal Notes",
+    "Meeting Notes",
+    "Project Alpha",
+    "Research & Development",
+    "Travel Plans",
+    "Learning Journal",
+    "Quick Notes"
+  ],
+  "example_filtered_work": [
+    "Work Notebook"
+  ],
+  "example_filtered_notes": [
+    "Personal Notes",
+    "Meeting Notes",
+    "Quick Notes"
+  ],
+  "usage_examples": {
+    "get_all_names": {
+      "tool": "getNotebookNameCompletions",
+      "arguments": {},
+      "description": "Returns all notebook names for general completion"
+    },
+    "filter_by_prefix": {
+      "tool": "getNotebookNameCompletions",
+      "arguments": {
+        "filter": "Work"
+      },
+      "description": "Returns notebook names containing 'Work'"
+    },
+    "case_insensitive_filter": {
+      "tool": "getNotebookNameCompletions",
+      "arguments": {
+        "filter": "notes"
+      },
+      "description": "Returns notebook names containing 'notes' (case-insensitive)"
+    }
+  }
+}

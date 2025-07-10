@@ -1,0 +1,42 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters-settings:
+  govet:
+    check-shadowing: true
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  misspell:
+    locale: US
+  lll:
+    line-length: 120
+  goimports:
+    local-prefixes: github.com/gebl/onenote-mcp-server
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - unconvert
+    - staticcheck
+    - govet
+    - ineffassign
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - unused
+    - path: internal/
+      linters:
+        - errcheck

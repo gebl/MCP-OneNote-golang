@@ -1,0 +1,34 @@
+# Token files (contains sensitive OAuth tokens)
+tokens.json
+
+# Build artifacts
+*.exe
+*.exe~
+
+# Logs
+*.log
+mcp-server.log
+
+# Test files
+*_test
+ctf_image_base64.txt
+image.txt
+
+# Config backups
+mcp-backup.json
+test-config.json
+
+# IDE and editor files
+.vscode/
+.cursor/
+.cursor.env
+
+# Development files
+.claude/
+
+# Node.js dependencies (for Husky)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json

@@ -1,0 +1,27 @@
+flowchart TD
+    subgraph Client_Side
+        A["User/AI Agent"]
+        B["MCP Client"]
+    end
+    subgraph Server_Side
+        C["onenote-mcp-server (main.go)"]
+        D["registerTools / registerPrompts"]
+        E["Graph Client (internal/graph)"]
+        F["Auth (internal/auth)"]
+        G["Config (internal/config)"]
+    end
+    subgraph Microsoft_Cloud
+        H["Microsoft Graph API"]
+        I["OneNote Service"]
+    end
+    A --> B
+    B -->|"MCP Protocol"| C
+    C --> D
+    D -->|"Tool Calls"| E
+    D -->|"Prompt Calls"| E
+    E -->|"Token"| F
+    E -->|"Config"| G
+    E -->|"HTTP Requests"| H
+    H --> I
+    F -->|"OAuth2"| H
+    G --> C 

@@ -1,0 +1,40 @@
+
+# Read the commit message
+commit_msg=$(cat "$1")
+
+# Define the conventional commit pattern
+pattern="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,72}"
+
+# Check if commit message follows conventional commit format
+if echo "$commit_msg" | grep -qE "$pattern"; then
+    echo "✅ Commit message follows conventional commit format"
+else
+    echo "❌ Commit message does not follow conventional commit format"
+    echo ""
+    echo "📝 Your commit message:"
+    echo "   $commit_msg"
+    echo ""
+    echo "💡 Conventional commit format:"
+    echo "   <type>[optional scope]: <description>"
+    echo ""
+    echo "🏷️  Valid types:"
+    echo "   feat:     A new feature"
+    echo "   fix:      A bug fix"
+    echo "   docs:     Documentation only changes"
+    echo "   style:    Changes that do not affect the meaning of the code"
+    echo "   refactor: A code change that neither fixes a bug nor adds a feature"
+    echo "   test:     Adding missing tests or correcting existing tests"
+    echo "   chore:    Changes to the build process or auxiliary tools"
+    echo "   perf:     A code change that improves performance"
+    echo "   ci:       Changes to CI configuration files and scripts"
+    echo "   build:    Changes that affect the build system or external dependencies"
+    echo "   revert:   Reverts a previous commit"
+    echo ""
+    echo "📖 Examples:"
+    echo "   feat: add OneNote page creation functionality"
+    echo "   fix(auth): resolve token refresh issue"
+    echo "   docs: update installation instructions"
+    echo "   test: add unit tests for page operations"
+    echo ""
+    exit 1
+fi

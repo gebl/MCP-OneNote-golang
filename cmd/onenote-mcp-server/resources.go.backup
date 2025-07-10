@@ -1,0 +1,1577 @@
+// OneNote MCP Server Resources
+//
+// This file implements MCP (Model Context Protocol) resources for accessing Microsoft OneNote data
+// through a hierarchical REST-like URI structure. The resources provide AI models with structured
+// access to OneNote notebooks, sections, and pages.
+//
+// ## URI Structure and Navigation Guide for AI Models
+//
+// ### Resource Hierarchy
+// The OneNote MCP server exposes resources following OneNote's natural hierarchy:
+// ```
+// Notebooks
+// ├── Sections (in notebook root)
+// ├── Section Groups
+// │   ├── Sections (in section group)
+// │   └── Nested Section Groups
+// │       └── Sections (in nested groups)
+// └── Pages (in sections)
+// ```
+//
+// ### Available Resource URIs
+//
+// #### 1. List All Notebooks
+// **URI:** `onenote://notebooks`
+// **Purpose:** Get a complete list of all accessible OneNote notebooks
+// **Returns:** JSON array of notebook objects with metadata (IDs, names, creation dates, etc.)
+// **Example Response:**
+// ```json
+// [
+//   {
+//     "notebookId": "1-abc123...",
+//     "displayName": "My Notebook",
+//     "createdDateTime": "2024-01-15T10:30:00Z",
+//     "lastModifiedDateTime": "2024-01-20T14:22:00Z",
+//     "isDefault": false,
+//     "userRole": "Owner",
+//     "sectionsUrl": "https://graph.microsoft.com/v1.0/me/onenote/notebooks/1-abc123.../sections"
+//   }
+// ]
+// ```
+//
+// #### 2. Get Specific Notebook Details
+// **URI:** `onenote://notebooks/{NotebookDisplayName}`
+// **Purpose:** Get detailed information about a specific notebook by its display name
+// **Parameters:** 
+//   - `{NotebookDisplayName}`: URL-encoded display name of the notebook (spaces become %20)
+// **Returns:** JSON object with comprehensive notebook metadata
+// **Example:** `onenote://notebooks/My%20Notebook` or `onenote://notebooks/Work%20Notes`
+// **Example Response:**
+// ```json
+// {
+//   "notebookId": "1-abc123...",
+//   "displayName": "My Notebook",
+//   "createdDateTime": "2024-01-15T10:30:00Z",
+//   "lastModifiedDateTime": "2024-01-20T14:22:00Z",
+//   "isDefault": false,
+//   "userRole": "Owner",
+//   "sectionsUrl": "https://graph.microsoft.com/v1.0/me/onenote/notebooks/1-abc123.../sections",
+//   "sectionGroupsUrl": "https://graph.microsoft.com/v1.0/me/onenote/notebooks/1-abc123.../sectionGroups"
+// }
+// ```
+//
+// #### 3. List Sections in a Notebook
+// **URI:** `onenote://notebooks/{NotebookDisplayName}/sections`
+// **Purpose:** Get hierarchical view of all sections and section groups within a notebook
+// **Parameters:** 
+//   - `{NotebookDisplayName}`: URL-encoded display name of the notebook
+// **Returns:** JSON object with hierarchical structure showing sections and section groups
+// **Example:** `onenote://notebooks/My%20Notebook/sections`
+// **Example Response:**
+// ```json
+// {
+//   "type": "notebook",
+//   "id": "1-abc123...",
+//   "displayName": "My Notebook",
+//   "sections": [
+//     {
+//       "type": "section",
+//       "id": "1-def456...",
+//       "displayName": "Quick Notes",
+//       "parentNotebookId": "1-abc123..."
+//     }
+//   ],
+//   "sectionGroups": [
+//     {
+//       "type": "sectionGroup",
+//       "id": "1-ghi789...",
+//       "displayName": "Projects",
+//       "parentNotebookId": "1-abc123...",
+//       "sections": [
+//         {
+//           "type": "section",
+//           "id": "1-jkl012...",
+//           "displayName": "Project Alpha",
+//           "parentSectionGroupId": "1-ghi789...",
+//           "parentNotebookId": "1-abc123..."
+//         }
+//       ],
+//       "sectionGroups": []
+//     }
+//   ]
+// }
+// ```
+//
+// #### 4. Navigate into Sections and Section Groups (Directory-Style)
+// **URI:** `onenote://notebooks/{NotebookDisplayName}/sections/{Path}`
+// **Purpose:** Navigate into any section or section group using directory-like paths
+// **Parameters:** 
+//   - `{NotebookDisplayName}`: URL-encoded display name of the notebook
+//   - `{Path}`: URL-encoded path to section or section group (can contain forward slashes for nested navigation)
+// **Returns:** JSON object showing the item details and contents (if section group) or metadata (if section)
+// **Examples:**
+//   - `onenote://notebooks/My%20Notebook/sections/Quick%20Notes` - Direct section
+//   - `onenote://notebooks/My%20Notebook/sections/Projects` - Section group (shows contents)
+//   - `onenote://notebooks/My%20Notebook/sections/Projects/Alpha%20Project` - Section within section group
+//   - `onenote://notebooks/My%20Notebook/sections/Projects/Active/Q1%20Goals` - Nested path
+// 
+// **Section Response Example:**
+// ```json
+// {
+//   "type": "section",
+//   "id": "1-def456...",
+//   "name": "Quick Notes",
+//   "parentNotebookId": "1-abc123...",
+//   "parentNotebookName": "My Notebook",
+//   "path": "Quick Notes",
+//   "canContainPages": true
+// }
+// ```
+//
+// **Section Group Response Example:**
+// ```json
+// {
+//   "type": "sectionGroup", 
+//   "id": "1-ghi789...",
+//   "name": "Projects",
+//   "parentNotebookId": "1-abc123...",
+//   "parentNotebookName": "My Notebook",
+//   "path": "Projects",
+//   "canContainPages": false,
+//   "contents": [
+//     {
+//       "type": "section",
+//       "id": "1-jkl012...",
+//       "name": "Alpha Project",
+//       "path": "Projects/Alpha Project"
+//     },
+//     {
+//       "type": "sectionGroup",
+//       "id": "1-mno345...",
+//       "name": "Active",
+//       "path": "Projects/Active"
+//     }
+//   ]
+// }
+// ```
+//
+// #### 5. List Pages in a Section
+// **URI:** `onenote://notebooks/{NotebookDisplayName}/sections/{Path}/pages`
+// **Purpose:** Get all pages within a specific section (Path must lead to a section, not section group)
+// **Parameters:** 
+//   - `{NotebookDisplayName}`: URL-encoded display name of the notebook
+//   - `{Path}`: URL-encoded path to the section
+// **Returns:** JSON object with pages array and context information
+// **Examples:**
+//   - `onenote://notebooks/My%20Notebook/sections/Quick%20Notes/pages` - Direct section
+//   - `onenote://notebooks/My%20Notebook/sections/Projects/Alpha%20Project/pages` - Section within section group
+// **Example Response:**
+// ```json
+// {
+//   "notebookName": "My Notebook",
+//   "notebookId": "1-abc123...",
+//   "sectionName": "Alpha Project",
+//   "sectionId": "1-jkl012...",
+//   "sectionPath": "Projects/Alpha Project",
+//   "pagesCount": 3,
+//   "pages": [
+//     {
+//       "pageId": "1-mno345...",
+//       "title": "Meeting Notes - Jan 15",
+//       "createdDateTime": "2024-01-15T14:30:00Z",
+//       "lastModifiedDateTime": "2024-01-15T16:22:00Z",
+//       "contentUrl": "https://graph.microsoft.com/v1.0/me/onenote/pages/1-mno345.../content",
+//       "level": 0,
+//       "order": 0
+//     }
+//   ]
+// }
+// ```
+//
+// ### Usage Guidelines for AI Models
+//
+// #### Directory-Style Navigation
+// The OneNote MCP server treats sections and section groups as a unified directory structure:
+//
+// #### Navigation Strategy
+// 1. **Start with notebooks list**: Use `onenote://notebooks` to discover available notebooks
+// 2. **Explore notebook structure**: Use `onenote://notebooks/{name}/sections` to see root-level contents
+// 3. **Navigate like directories**: Use `onenote://notebooks/{name}/sections/{path}` to navigate deeper
+// 4. **Access pages**: Use `onenote://notebooks/{name}/sections/{path}/pages` when path leads to a section
+//
+// #### Directory Concepts
+// - **Notebooks** = Root directories (can contain sections and section groups)
+// - **Section Groups** = Subdirectories (can contain sections and other section groups)  
+// - **Sections** = Files (can contain pages, no further subdirectories)
+// - **Pages** = File contents (only exist within sections)
+//
+// #### Navigation Examples
+// ```
+// # List notebook contents
+// onenote://notebooks/My%20Notebook/sections
+//
+// # Navigate to a section group (like 'cd Projects')
+// onenote://notebooks/My%20Notebook/sections/Projects
+//
+// # Navigate to a section in root (like 'cat Quick Notes')  
+// onenote://notebooks/My%20Notebook/sections/Quick%20Notes
+//
+// # Navigate to nested section (like 'cat Projects/Alpha/Tasks')
+// onenote://notebooks/My%20Notebook/sections/Projects/Alpha/Tasks
+//
+// # Get pages from any section (like 'ls Quick Notes/')
+// onenote://notebooks/My%20Notebook/sections/Quick%20Notes/pages
+// onenote://notebooks/My%20Notebook/sections/Projects/Alpha/Tasks/pages
+// ```
+//
+// #### Path Rules
+// - Use forward slashes `/` to separate path components
+// - URL-encode each path component (spaces become %20)
+// - Paths are resolved relative to notebook root
+// - Section groups show their contents, sections show their metadata
+// - Only sections can have `/pages` appended
+//
+// #### Response Types
+// - **Section Group Response**: Contains `"type": "sectionGroup"`, `"contents"` array, `"canContainPages": false`
+// - **Section Response**: Contains `"type": "section"`, `"canContainPages": true`, no contents array
+// - **Pages Response**: Contains `"pages"` array with page metadata
+//
+// #### Error Handling
+// - Invalid notebook names return "notebook not found" errors
+// - Invalid paths return "path not found" errors with suggestions
+// - Trying to get pages from section group returns "path leads to section group, not section" error
+// - Missing or inaccessible resources return appropriate error messages
+// - URL decoding failures return clear error messages
+//
+// #### Best Practices
+// - **Explore incrementally**: Start at root, navigate step by step
+// - **Check response type**: Look at `"type"` and `"canContainPages"` fields
+// - **Use proper encoding**: Path components are automatically URL-encoded/decoded
+//   - Outgoing: All path values in responses are URL-encoded using buildEncodedPath()
+//   - Incoming: URI paths are URL-decoded using extractPathFromSectionsURI()
+//   - Handles spaces, special characters, Unicode properly in section/section group names
+// - **Handle both types**: Sections and section groups behave differently
+// - **Use path information**: Responses include full path context for navigation
+//
+// ### Technical Notes
+// - All resources return JSON with appropriate MIME types
+// - URIs follow REST-like conventions for intuitive navigation
+// - Section groups are included in sections listings with hierarchical structure
+// - Pages include metadata like titles, creation dates, and ordering information
+// - Comprehensive error messages help with debugging and navigation
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/gebl/onenote-mcp-server/internal/graph"
+	"github.com/gebl/onenote-mcp-server/internal/logging"
+	"github.com/gebl/onenote-mcp-server/internal/notebooks"
+	"github.com/gebl/onenote-mcp-server/internal/pages"
+	"github.com/gebl/onenote-mcp-server/internal/sections"
+)
+
+// registerResources registers all MCP resources for the OneNote server
+func registerResources(s *server.MCPServer, graphClient *graph.Client) {
+	logging.MainLogger.Debug("Starting resource registration process")
+
+	// Register notebooks resource - list all notebooks with full metadata
+	logging.MainLogger.Debug("Creating notebooks resource", 
+		"resource_uri", "onenote://notebooks",
+		"resource_type", "static_resource")
+	notebooksResource := mcp.NewResource(
+		"onenote://notebooks",
+		"OneNote Notebooks",
+		mcp.WithResourceDescription("List of all OneNote notebooks accessible to the authenticated user with comprehensive metadata including timestamps, ownership, links, and properties"),
+		mcp.WithMIMEType("application/json"),
+	)
+
+	s.AddResource(notebooksResource, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		logging.MainLogger.Debug("Resource handler invoked", 
+			"resource_uri", "onenote://notebooks",
+			"request_uri", request.Params.URI,
+			"handler_type", "notebooks_list")
+
+		// Create specialized client for notebooks
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		logging.MainLogger.Debug("Created notebook client for resource request")
+
+		// Get notebooks with detailed information
+		logging.MainLogger.Debug("Calling ListNotebooksDetailed from resource handler")
+		notebooks, err := notebookClient.ListNotebooksDetailed()
+		if err != nil {
+			logging.MainLogger.Error("Failed to list detailed notebooks for resource", 
+				"error", err,
+				"resource_uri", "onenote://notebooks")
+			return nil, fmt.Errorf("failed to list detailed notebooks: %v", err)
+		}
+
+		logging.MainLogger.Debug("Retrieved detailed notebooks for resource", 
+			"count", len(notebooks),
+			"resource_uri", "onenote://notebooks")
+
+		// Convert to JSON
+		logging.MainLogger.Debug("Marshaling notebooks data to JSON")
+		jsonData, err := json.Marshal(notebooks)
+		if err != nil {
+			logging.MainLogger.Error("Failed to marshal detailed notebooks to JSON", 
+				"error", err,
+				"notebooks_count", len(notebooks))
+			return nil, fmt.Errorf("failed to marshal detailed notebooks: %v", err)
+		}
+
+		responseSize := len(jsonData)
+		logging.MainLogger.Debug("Successfully prepared resource response", 
+			"resource_uri", "onenote://notebooks",
+			"response_size_bytes", responseSize,
+			"notebooks_count", len(notebooks))
+
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      "onenote://notebooks",
+				MIMEType: "application/json",
+				Text:     string(jsonData),
+			},
+		}, nil
+	})
+	logging.MainLogger.Debug("Registered notebooks resource successfully", 
+		"resource_uri", "onenote://notebooks")
+
+	// Register pages resource template (path-based) - MOST SPECIFIC FIRST
+	logging.MainLogger.Debug("Creating pages resource template", 
+		"template_pattern", "onenote://notebooks/{name}/sections/{path}/pages",
+		"resource_type", "template_resource")
+	pagesTemplate := mcp.NewResourceTemplate(
+		"onenote://notebooks/{name}/sections/{path}/pages",
+		"OneNote Pages in Section",
+		mcp.WithTemplateDescription("List all pages within a specific section using path-based navigation. Path must lead to a section, not section group."),
+		mcp.WithTemplateMIMEType("application/json"),
+	)
+
+	s.AddResourceTemplate(pagesTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		logging.MainLogger.Debug("Pages handler invoked", 
+			"template_pattern", "onenote://notebooks/{name}/sections/{path}/pages",
+			"request_uri", request.Params.URI,
+			"handler_type", "section_pages")
+
+		// Extract notebook and section path from URI
+		notebookName, sectionPath := extractNotebookAndPathFromPagesURI(request.Params.URI)
+		if notebookName == "" || sectionPath == "" {
+			logging.MainLogger.Error("Invalid notebook or section path in pages URI", 
+				"request_uri", request.Params.URI,
+				"extracted_notebook", notebookName,
+				"extracted_path", sectionPath)
+			return nil, fmt.Errorf("invalid notebook or section path in URI: %s", request.Params.URI)
+		}
+
+		logging.MainLogger.Debug("Extracted path parameters for pages", 
+			"notebook_name", notebookName,
+			"section_path", sectionPath,
+			"request_uri", request.Params.URI)
+
+		// Create specialized clients
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		sectionClient := sections.NewSectionClient(graphClient)
+		pageClient := pages.NewPageClient(graphClient)
+		logging.MainLogger.Debug("Created clients for pages request")
+
+		// Get the specific notebook by name
+		logging.MainLogger.Debug("Getting notebook details for pages", 
+			"notebook_name", notebookName)
+		notebook, err := notebookClient.GetDetailedNotebookByName(notebookName)
+		if err != nil {
+			logging.MainLogger.Error("Failed to get notebook for pages", 
+				"notebook_name", notebookName, 
+				"error", err,
+				"request_uri", request.Params.URI)
+			return nil, fmt.Errorf("failed to get notebook '%s': %v", notebookName, err)
+		}
+
+		notebookID, exists := notebook["notebookId"].(string)
+		if !exists {
+			logging.MainLogger.Error("Notebook ID not found in notebook data", 
+				"notebook_name", notebookName,
+				"notebook_data_keys", getMapKeys(notebook))
+			return nil, fmt.Errorf("notebook ID not found for notebook '%s'", notebookName)
+		}
+
+		logging.MainLogger.Debug("Retrieved notebook ID for pages", 
+			"notebook_name", notebookName,
+			"notebook_id", notebookID)
+
+		// Resolve the path within the notebook to ensure it's a section
+		pathItem, err := resolvePathInNotebook(notebookID, notebookName, sectionPath, sectionClient)
+		if err != nil {
+			logging.MainLogger.Error("Failed to resolve section path for pages", 
+				"notebook_name", notebookName,
+				"section_path", sectionPath,
+				"error", err)
+			return nil, fmt.Errorf("failed to resolve path '%s' in notebook '%s': %v", sectionPath, notebookName, err)
+		}
+
+		// Verify that the path leads to a section (which can contain pages)
+		if pathItem.Type != "section" {
+			logging.MainLogger.Error("Path does not lead to section for pages request", 
+				"notebook_name", notebookName,
+				"section_path", sectionPath,
+				"resolved_type", pathItem.Type)
+			return nil, fmt.Errorf("path '%s' leads to %s, not a section. Only sections can contain pages", sectionPath, pathItem.Type)
+		}
+
+		if !pathItem.CanContainPages {
+			logging.MainLogger.Error("Resolved item cannot contain pages", 
+				"notebook_name", notebookName,
+				"section_path", sectionPath,
+				"item_type", pathItem.Type)
+			return nil, fmt.Errorf("path '%s' leads to item that cannot contain pages", sectionPath)
+		}
+
+		logging.MainLogger.Debug("Resolved path to section for pages", 
+			"notebook_name", notebookName,
+			"section_path", sectionPath,
+			"section_id", pathItem.ID,
+			"section_name", pathItem.Name)
+
+		// Get pages in this section
+		logging.MainLogger.Debug("Listing pages in section", 
+			"section_id", pathItem.ID,
+			"section_name", pathItem.Name,
+			"section_path", sectionPath)
+		pages, err := pageClient.ListPages(pathItem.ID)
+		if err != nil {
+			logging.MainLogger.Error("Failed to list pages in section", 
+				"section_id", pathItem.ID,
+				"section_name", pathItem.Name,
+				"section_path", sectionPath,
+				"notebook_name", notebookName,
+				"error", err)
+			return nil, fmt.Errorf("failed to list pages in section at path '%s': %v", sectionPath, err)
+		}
+
+		logging.MainLogger.Debug("Retrieved pages from section", 
+			"section_path", sectionPath,
+			"section_name", pathItem.Name,
+			"pages_count", len(pages))
+
+		// Create comprehensive response with pages and context
+		pagesResponse := map[string]interface{}{
+			"notebookName": notebookName,
+			"notebookId": notebookID,
+			"sectionName": pathItem.Name,
+			"sectionId": pathItem.ID,
+			"sectionPath": pathItem.Path,
+			"pages": pages,
+			"pagesCount": len(pages),
+		}
+
+		logging.MainLogger.Debug("Marshaling pages response to JSON", 
+			"section_path", sectionPath,
+			"section_name", pathItem.Name,
+			"notebook_name", notebookName)
+		jsonData, err := json.Marshal(pagesResponse)
+		if err != nil {
+			logging.MainLogger.Error("Failed to marshal pages response to JSON", 
+				"error", err,
+				"section_path", sectionPath,
+				"section_name", pathItem.Name,
+				"notebook_name", notebookName)
+			return nil, fmt.Errorf("failed to marshal pages response: %v", err)
+		}
+
+		responseSize := len(jsonData)
+		logging.MainLogger.Debug("Successfully prepared pages response", 
+			"notebook_name", notebookName,
+			"section_path", sectionPath,
+			"section_name", pathItem.Name,
+			"request_uri", request.Params.URI,
+			"response_size_bytes", responseSize,
+			"pages_count", len(pages))
+
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      request.Params.URI,
+				MIMEType: "application/json",
+				Text:     string(jsonData),
+			},
+		}, nil
+	})
+	logging.MainLogger.Debug("Registered pages resource template successfully", 
+		"template_pattern", "onenote://notebooks/{name}/sections/{path}/pages")
+
+	// Register path navigation resource template - SECOND MOST SPECIFIC
+	logging.MainLogger.Debug("Creating path navigation resource template", 
+		"template_pattern", "onenote://notebooks/{name}/sections/{path}",
+		"resource_type", "template_resource")
+	pathNavigationTemplate := mcp.NewResourceTemplate(
+		"onenote://notebooks/{name}/sections/{path}",
+		"OneNote Path Navigation",
+		mcp.WithTemplateDescription("Navigate into any section or section group using directory-like paths. Returns contents if section group, metadata if section."),
+		mcp.WithTemplateMIMEType("application/json"),
+	)
+
+	s.AddResourceTemplate(pathNavigationTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		logging.MainLogger.Debug("Path navigation handler invoked", 
+			"template_pattern", "onenote://notebooks/{name}/sections/{path}",
+			"request_uri", request.Params.URI,
+			"handler_type", "path_navigation")
+
+		// Extract notebook and path from URI
+		notebookName, targetPath := extractNotebookAndPathFromSectionsURI(request.Params.URI)
+		if notebookName == "" {
+			logging.MainLogger.Error("Invalid notebook name in path navigation URI", 
+				"request_uri", request.Params.URI,
+				"extracted_notebook", notebookName)
+			return nil, fmt.Errorf("invalid notebook name in URI: %s", request.Params.URI)
+		}
+
+		logging.MainLogger.Debug("Extracted path navigation parameters", 
+			"notebook_name", notebookName,
+			"target_path", targetPath,
+			"request_uri", request.Params.URI)
+
+		// Create specialized clients
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		sectionClient := sections.NewSectionClient(graphClient)
+		logging.MainLogger.Debug("Created clients for path navigation")
+
+		// Get the specific notebook by name
+		logging.MainLogger.Debug("Getting notebook details for path navigation", 
+			"notebook_name", notebookName)
+		notebook, err := notebookClient.GetDetailedNotebookByName(notebookName)
+		if err != nil {
+			logging.MainLogger.Error("Failed to get notebook for path navigation", 
+				"notebook_name", notebookName, 
+				"error", err,
+				"request_uri", request.Params.URI)
+			return nil, fmt.Errorf("failed to get notebook '%s': %v", notebookName, err)
+		}
+
+		notebookID, exists := notebook["notebookId"].(string)
+		if !exists {
+			logging.MainLogger.Error("Notebook ID not found in notebook data", 
+				"notebook_name", notebookName,
+				"notebook_data_keys", getMapKeys(notebook))
+			return nil, fmt.Errorf("notebook ID not found for notebook '%s'", notebookName)
+		}
+
+		logging.MainLogger.Debug("Retrieved notebook ID for path navigation", 
+			"notebook_name", notebookName,
+			"notebook_id", notebookID)
+
+		// Resolve the path within the notebook
+		pathItem, err := resolvePathInNotebook(notebookID, notebookName, targetPath, sectionClient)
+		if err != nil {
+			logging.MainLogger.Error("Failed to resolve path in notebook", 
+				"notebook_name", notebookName,
+				"target_path", targetPath,
+				"error", err)
+			return nil, fmt.Errorf("failed to resolve path '%s' in notebook '%s': %v", targetPath, notebookName, err)
+		}
+
+		logging.MainLogger.Debug("Successfully resolved path", 
+			"notebook_name", notebookName,
+			"target_path", targetPath,
+			"resolved_type", pathItem.Type,
+			"resolved_name", pathItem.Name)
+
+		// Convert to JSON
+		jsonData, err := json.Marshal(pathItem)
+		if err != nil {
+			logging.MainLogger.Error("Failed to marshal path item to JSON", 
+				"error", err,
+				"notebook_name", notebookName,
+				"target_path", targetPath,
+				"item_type", pathItem.Type)
+			return nil, fmt.Errorf("failed to marshal path navigation response: %v", err)
+		}
+
+		responseSize := len(jsonData)
+		logging.MainLogger.Debug("Successfully prepared path navigation response", 
+			"notebook_name", notebookName,
+			"target_path", targetPath,
+			"request_uri", request.Params.URI,
+			"response_size_bytes", responseSize,
+			"item_type", pathItem.Type)
+
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      request.Params.URI,
+				MIMEType: "application/json",
+				Text:     string(jsonData),
+			},
+		}, nil
+	})
+	logging.MainLogger.Debug("Registered path navigation resource template successfully", 
+		"template_pattern", "onenote://notebooks/{name}/sections/{path}")
+
+	// Register sections by notebook name resource template - THIRD MOST SPECIFIC
+	logging.MainLogger.Debug("Creating sections by notebook resource template", 
+		"template_pattern", "onenote://notebooks/{name}/sections",
+		"resource_type", "template_resource")
+	sectionsTemplate := mcp.NewResourceTemplate(
+		"onenote://notebooks/{name}/sections",
+		"OneNote Sections for Notebook",
+		mcp.WithTemplateDescription("Hierarchical view of sections and section groups within a specific notebook to understand its organizational structure"),
+		mcp.WithTemplateMIMEType("application/json"),
+	)
+
+	s.AddResourceTemplate(sectionsTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		logging.MainLogger.Debug("Resource template handler invoked", 
+			"template_pattern", "onenote://notebooks/{name}/sections",
+			"request_uri", request.Params.URI,
+			"handler_type", "notebook_sections")
+
+		// Extract notebook name from URI
+		notebookName := extractNotebookNameFromSectionsURI(request.Params.URI)
+		if notebookName == "" {
+			logging.MainLogger.Error("Invalid notebook name in sections URI", 
+				"request_uri", request.Params.URI,
+				"extracted_name", notebookName)
+			return nil, fmt.Errorf("invalid notebook name in URI: %s", request.Params.URI)
+		}
+
+		logging.MainLogger.Debug("Extracted notebook name from sections URI", 
+			"notebook_name", notebookName,
+			"request_uri", request.Params.URI)
+
+		// Create specialized clients
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		sectionClient := sections.NewSectionClient(graphClient)
+		logging.MainLogger.Debug("Created notebook and section clients for sections resource request")
+
+		// Get the specific notebook by name
+		logging.MainLogger.Debug("Getting notebook details for sections resource", 
+			"notebook_name", notebookName)
+		notebook, err := notebookClient.GetDetailedNotebookByName(notebookName)
+		if err != nil {
+			logging.MainLogger.Error("Failed to get notebook for sections resource", 
+				"notebook_name", notebookName, 
+				"error", err,
+				"request_uri", request.Params.URI)
+			return nil, fmt.Errorf("failed to get notebook '%s': %v", notebookName, err)
+		}
+
+		notebookID, exists := notebook["notebookId"].(string)
+		if !exists {
+			logging.MainLogger.Error("Notebook ID not found in notebook data", 
+				"notebook_name", notebookName,
+				"notebook_data_keys", getMapKeys(notebook))
+			return nil, fmt.Errorf("notebook ID not found for notebook '%s'", notebookName)
+		}
+
+		logging.MainLogger.Debug("Retrieved notebook ID for sections resource", 
+			"notebook_name", notebookName,
+			"notebook_id", notebookID)
+
+		// Build hierarchical structure for this notebook
+		notebookHierarchy := map[string]interface{}{
+			"type":        "notebook",
+			"id":          notebookID,
+			"displayName": notebook["displayName"],
+			"sections":    make([]map[string]interface{}, 0),
+			"sectionGroups": make([]map[string]interface{}, 0),
+		}
+
+		// Get sections in this notebook
+		logging.MainLogger.Debug("Listing sections in notebook", 
+			"notebook_id", notebookID,
+			"notebook_name", notebookName)
+		sections, err := sectionClient.ListSections(notebookID)
+		if err != nil {
+			logging.MainLogger.Error("Failed to list sections for notebook", 
+				"notebook_id", notebookID, 
+				"notebook_name", notebookName,
+				"error", err)
+			return nil, fmt.Errorf("failed to list sections for notebook '%s': %v", notebookName, err)
+		}
+
+		logging.MainLogger.Debug("Retrieved sections for notebook", 
+			"notebook_name", notebookName,
+			"sections_count", len(sections))
+
+		sectionsWithType := make([]map[string]interface{}, len(sections))
+		for i, section := range sections {
+			// Map the section fields correctly - the sections client returns "sectionId" and "name"
+			var sectionID interface{}
+			var displayName interface{}
+			
+			// Try both possible field names for backward compatibility
+			if id, exists := section["sectionId"]; exists {
+				sectionID = id
+			} else if id, exists := section["id"]; exists {
+				sectionID = id
+			}
+			
+			if name, exists := section["name"]; exists {
+				displayName = name
+			} else if name, exists := section["displayName"]; exists {
+				displayName = name
+			}
+			
+			logging.MainLogger.Debug("Processing section for resource response", 
+				"section_index", i,
+				"raw_section_data", section,
+				"extracted_id", sectionID,
+				"extracted_name", displayName)
+			
+			// Safe type assertion for displayName
+			var displayNameStr string
+			if name, ok := displayName.(string); ok {
+				displayNameStr = name
+			} else {
+				displayNameStr = ""
+			}
+			
+			sectionsWithType[i] = map[string]interface{}{
+				"type":        "section",
+				"id":          sectionID,
+				"displayName": displayName,
+				"path":        buildEncodedPath(displayNameStr),
+				"parentNotebookId": notebookID,
+			}
+		}
+		notebookHierarchy["sections"] = sectionsWithType
+
+		// Get section groups in this notebook
+		logging.MainLogger.Debug("Listing section groups in notebook", 
+			"notebook_id", notebookID,
+			"notebook_name", notebookName)
+		sectionGroups, err := sectionClient.ListSectionGroups(notebookID)
+		if err != nil {
+			logging.MainLogger.Error("Failed to list section groups for notebook", 
+				"notebook_id", notebookID, 
+				"notebook_name", notebookName,
+				"error", err)
+			return nil, fmt.Errorf("failed to list section groups for notebook '%s': %v", notebookName, err)
+		}
+
+		logging.MainLogger.Debug("Retrieved section groups for notebook", 
+			"notebook_name", notebookName,
+			"section_groups_count", len(sectionGroups))
+
+		sectionGroupsWithHierarchy := make([]map[string]interface{}, 0)
+		for _, sectionGroup := range sectionGroups {
+			sgID, exists := sectionGroup["id"].(string)
+			if !exists {
+				logging.MainLogger.Warn("Section group missing ID field, skipping", 
+					"section_group_data", sectionGroup)
+				continue
+			}
+
+			logging.MainLogger.Debug("Processing section group", 
+				"section_group_id", sgID,
+				"section_group_data", sectionGroup)
+
+			// Map the section group fields correctly - handle both possible field names
+			var sectionGroupDisplayName interface{}
+			
+			// Try both possible field names for backward compatibility
+			if name, exists := sectionGroup["displayName"]; exists {
+				sectionGroupDisplayName = name
+			} else if name, exists := sectionGroup["name"]; exists {
+				sectionGroupDisplayName = name
+			}
+			
+			logging.MainLogger.Debug("Processing section group for resource response", 
+				"section_group_id", sgID,
+				"raw_section_group_data", sectionGroup,
+				"extracted_name", sectionGroupDisplayName)
+
+			// Safe type assertion for section group display name
+			var sgDisplayNameStr string
+			if name, ok := sectionGroupDisplayName.(string); ok {
+				sgDisplayNameStr = name
+			} else {
+				sgDisplayNameStr = ""
+			}
+			
+			sgHierarchy := map[string]interface{}{
+				"type":        "sectionGroup", 
+				"id":          sgID,
+				"displayName": sectionGroupDisplayName,
+				"path":        buildEncodedPath(sgDisplayNameStr),
+				"parentNotebookId": notebookID,
+				"sections":    make([]map[string]interface{}, 0),
+				"sectionGroups": make([]map[string]interface{}, 0),
+			}
+
+			// Get sections within this section group
+			logging.MainLogger.Debug("Listing sections in section group", 
+				"section_group_id", sgID)
+			sgSections, err := sectionClient.ListSectionsInSectionGroup(sgID)
+			if err != nil {
+				logging.MainLogger.Warn("Failed to list sections in section group", 
+					"section_group_id", sgID, 
+					"error", err)
+			} else {
+				logging.MainLogger.Debug("Retrieved sections in section group", 
+					"section_group_id", sgID,
+					"sections_count", len(sgSections))
+				sgSectionsWithType := make([]map[string]interface{}, len(sgSections))
+				for i, section := range sgSections {
+					// Map the section fields correctly - handle both possible field names
+					var sectionID interface{}
+					var displayName interface{}
+					
+					// Try both possible field names for backward compatibility
+					if id, exists := section["id"]; exists {
+						sectionID = id
+					} else if id, exists := section["sectionId"]; exists {
+						sectionID = id
+					}
+					
+					if name, exists := section["name"]; exists {
+						displayName = name
+					} else if name, exists := section["displayName"]; exists {
+						displayName = name
+					}
+					
+					logging.MainLogger.Debug("Processing section in section group for resource response", 
+						"section_group_id", sgID,
+						"section_index", i,
+						"raw_section_data", section,
+						"extracted_id", sectionID,
+						"extracted_name", displayName)
+					
+					// Safe type assertion for section display name in section group
+					var sectionDisplayNameStr string
+					if name, ok := displayName.(string); ok {
+						sectionDisplayNameStr = name
+					} else {
+						sectionDisplayNameStr = ""
+					}
+					
+					sgSectionsWithType[i] = map[string]interface{}{
+						"type":        "section",
+						"id":          sectionID,
+						"displayName": displayName,
+						"path":        buildEncodedPath(sgDisplayNameStr, sectionDisplayNameStr),
+						"parentSectionGroupId": sgID,
+						"parentNotebookId": notebookID,
+					}
+				}
+				sgHierarchy["sections"] = sgSectionsWithType
+			}
+
+			// Note: Nested section groups would require recursive logic
+			// For now, we'll keep it at one level deep to avoid complexity
+			
+			sectionGroupsWithHierarchy = append(sectionGroupsWithHierarchy, sgHierarchy)
+		}
+		notebookHierarchy["sectionGroups"] = sectionGroupsWithHierarchy
+
+		logging.MainLogger.Debug("Built hierarchical sections structure for notebook", 
+			"notebook_name", notebookName, 
+			"notebook_id", notebookID,
+			"sections_count", len(sectionsWithType), 
+			"section_groups_count", len(sectionGroupsWithHierarchy))
+
+		// Convert to JSON
+		logging.MainLogger.Debug("Marshaling sections hierarchy to JSON", 
+			"notebook_name", notebookName)
+		jsonData, err := json.Marshal(notebookHierarchy)
+		if err != nil {
+			logging.MainLogger.Error("Failed to marshal sections hierarchy to JSON", 
+				"error", err,
+				"notebook_name", notebookName,
+				"sections_count", len(sectionsWithType),
+				"section_groups_count", len(sectionGroupsWithHierarchy))
+			return nil, fmt.Errorf("failed to marshal sections hierarchy: %v", err)
+		}
+
+		responseSize := len(jsonData)
+		logging.MainLogger.Debug("Successfully prepared sections resource response", 
+			"notebook_name", notebookName,
+			"request_uri", request.Params.URI,
+			"response_size_bytes", responseSize,
+			"sections_count", len(sectionsWithType),
+			"section_groups_count", len(sectionGroupsWithHierarchy))
+
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      request.Params.URI,
+				MIMEType: "application/json",
+				Text:     string(jsonData),
+			},
+		}, nil
+	})
+	logging.MainLogger.Debug("Registered sections by notebook resource template successfully", 
+		"template_pattern", "onenote://notebooks/{name}/sections")
+
+	// Register notebook by name resource template - LEAST SPECIFIC
+	logging.MainLogger.Debug("Creating notebook by name resource template", 
+		"template_pattern", "onenote://notebooks/{name}",
+		"resource_type", "template_resource")
+	notebookByNameTemplate := mcp.NewResourceTemplate(
+		"onenote://notebooks/{name}",
+		"OneNote Notebook by Name",
+		mcp.WithTemplateDescription("Get a specific OneNote notebook by its display name with comprehensive metadata including timestamps, ownership, links, and properties"),
+		mcp.WithTemplateMIMEType("application/json"),
+	)
+
+	s.AddResourceTemplate(notebookByNameTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		logging.MainLogger.Debug("Resource template handler invoked", 
+			"template_pattern", "onenote://notebooks/{name}",
+			"request_uri", request.Params.URI,
+			"handler_type", "notebook_by_name")
+
+		// Extract notebook name from URI
+		notebookName := extractNotebookNameFromURI(request.Params.URI)
+		if notebookName == "" {
+			logging.MainLogger.Error("Invalid notebook name in URI", 
+				"request_uri", request.Params.URI,
+				"extracted_name", notebookName)
+			return nil, fmt.Errorf("invalid notebook name in URI: %s", request.Params.URI)
+		}
+
+		logging.MainLogger.Debug("Extracted notebook name from URI", 
+			"notebook_name", notebookName,
+			"request_uri", request.Params.URI)
+
+		// Create specialized client for notebooks
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		logging.MainLogger.Debug("Created notebook client for notebook by name resource request")
+
+		// Get detailed notebook information by name using the existing function
+		logging.MainLogger.Debug("Calling GetDetailedNotebookByName from resource handler", 
+			"notebook_name", notebookName)
+		detailedNotebook, err := notebookClient.GetDetailedNotebookByName(notebookName)
+		if err != nil {
+			logging.MainLogger.Error("Failed to get detailed notebook for resource", 
+				"notebook_name", notebookName, 
+				"error", err,
+				"request_uri", request.Params.URI)
+			return nil, fmt.Errorf("failed to get detailed notebook '%s': %v", notebookName, err)
+		}
+
+		logging.MainLogger.Debug("Retrieved detailed notebook by name", 
+			"notebook_name", notebookName, 
+			"attributes_count", len(detailedNotebook),
+			"request_uri", request.Params.URI)
+
+		logging.MainLogger.Debug("Marshaling detailed notebook data to JSON", 
+			"notebook_name", notebookName)
+		jsonData, err := json.Marshal(detailedNotebook)
+		if err != nil {
+			logging.MainLogger.Error("Failed to marshal detailed notebook to JSON", 
+				"error", err,
+				"notebook_name", notebookName,
+				"attributes_count", len(detailedNotebook))
+			return nil, fmt.Errorf("failed to marshal detailed notebook: %v", err)
+		}
+
+		responseSize := len(jsonData)
+		logging.MainLogger.Debug("Successfully prepared notebook by name resource response", 
+			"notebook_name", notebookName,
+			"request_uri", request.Params.URI,
+			"response_size_bytes", responseSize,
+			"attributes_count", len(detailedNotebook))
+
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      request.Params.URI,
+				MIMEType: "application/json",
+				Text:     string(jsonData),
+			},
+		}, nil
+	})
+	logging.MainLogger.Debug("Registered notebook by name resource template successfully", 
+		"template_pattern", "onenote://notebooks/{name}")
+
+		// Extract notebook and section path from URI
+		notebookName, sectionPath := extractNotebookAndPathFromPagesURI(request.Params.URI)
+		if notebookName == "" || sectionPath == "" {
+			logging.MainLogger.Error("Invalid notebook or section path in pages URI", 
+				"request_uri", request.Params.URI,
+				"extracted_notebook", notebookName,
+				"extracted_path", sectionPath)
+			return nil, fmt.Errorf("invalid notebook or section path in URI: %s", request.Params.URI)
+		}
+
+		logging.MainLogger.Debug("Extracted path parameters for pages", 
+			"notebook_name", notebookName,
+			"section_path", sectionPath,
+			"request_uri", request.Params.URI)
+
+		// Create specialized clients
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		sectionClient := sections.NewSectionClient(graphClient)
+		pageClient := pages.NewPageClient(graphClient)
+		logging.MainLogger.Debug("Created clients for pages request")
+
+		// Get the specific notebook by name
+		logging.MainLogger.Debug("Getting notebook details for pages", 
+			"notebook_name", notebookName)
+		notebook, err := notebookClient.GetDetailedNotebookByName(notebookName)
+		if err != nil {
+			logging.MainLogger.Error("Failed to get notebook for pages", 
+				"notebook_name", notebookName, 
+				"error", err,
+				"request_uri", request.Params.URI)
+			return nil, fmt.Errorf("failed to get notebook '%s': %v", notebookName, err)
+		}
+
+		notebookID, exists := notebook["notebookId"].(string)
+		if !exists {
+			logging.MainLogger.Error("Notebook ID not found in notebook data", 
+				"notebook_name", notebookName,
+				"notebook_data_keys", getMapKeys(notebook))
+			return nil, fmt.Errorf("notebook ID not found for notebook '%s'", notebookName)
+		}
+
+		logging.MainLogger.Debug("Retrieved notebook ID for pages", 
+			"notebook_name", notebookName,
+			"notebook_id", notebookID)
+
+		// Resolve the path within the notebook to ensure it's a section
+		pathItem, err := resolvePathInNotebook(notebookID, notebookName, sectionPath, sectionClient)
+		if err != nil {
+			logging.MainLogger.Error("Failed to resolve section path for pages", 
+				"notebook_name", notebookName,
+				"section_path", sectionPath,
+				"error", err)
+			return nil, fmt.Errorf("failed to resolve path '%s' in notebook '%s': %v", sectionPath, notebookName, err)
+		}
+
+		// Verify that the path leads to a section (which can contain pages)
+		if pathItem.Type != "section" {
+			logging.MainLogger.Error("Path does not lead to section for pages request", 
+				"notebook_name", notebookName,
+				"section_path", sectionPath,
+				"resolved_type", pathItem.Type)
+			return nil, fmt.Errorf("path '%s' leads to %s, not a section. Only sections can contain pages", sectionPath, pathItem.Type)
+		}
+
+		if !pathItem.CanContainPages {
+			logging.MainLogger.Error("Resolved item cannot contain pages", 
+				"notebook_name", notebookName,
+				"section_path", sectionPath,
+				"item_type", pathItem.Type)
+			return nil, fmt.Errorf("path '%s' leads to item that cannot contain pages", sectionPath)
+		}
+
+		logging.MainLogger.Debug("Resolved path to section for pages", 
+			"notebook_name", notebookName,
+			"section_path", sectionPath,
+			"section_id", pathItem.ID,
+			"section_name", pathItem.Name)
+
+		// Get pages in this section
+		logging.MainLogger.Debug("Listing pages in section", 
+			"section_id", pathItem.ID,
+			"section_name", pathItem.Name,
+			"section_path", sectionPath)
+		pages, err := pageClient.ListPages(pathItem.ID)
+		if err != nil {
+			logging.MainLogger.Error("Failed to list pages in section", 
+				"section_id", pathItem.ID,
+				"section_name", pathItem.Name,
+				"section_path", sectionPath,
+				"notebook_name", notebookName,
+				"error", err)
+			return nil, fmt.Errorf("failed to list pages in section at path '%s': %v", sectionPath, err)
+		}
+
+		logging.MainLogger.Debug("Retrieved pages from section", 
+			"section_path", sectionPath,
+			"section_name", pathItem.Name,
+			"pages_count", len(pages))
+
+		// Create comprehensive response with pages and context
+		pagesResponse := map[string]interface{}{
+			"notebookName": notebookName,
+			"notebookId": notebookID,
+			"sectionName": pathItem.Name,
+			"sectionId": pathItem.ID,
+			"sectionPath": pathItem.Path,
+			"pages": pages,
+			"pagesCount": len(pages),
+		}
+
+		logging.MainLogger.Debug("Marshaling pages response to JSON", 
+			"section_path", sectionPath,
+			"section_name", pathItem.Name,
+			"notebook_name", notebookName)
+		jsonData, err := json.Marshal(pagesResponse)
+		if err != nil {
+			logging.MainLogger.Error("Failed to marshal pages response to JSON", 
+				"error", err,
+				"section_path", sectionPath,
+				"section_name", pathItem.Name,
+				"notebook_name", notebookName)
+			return nil, fmt.Errorf("failed to marshal pages response: %v", err)
+		}
+
+		responseSize := len(jsonData)
+		logging.MainLogger.Debug("Successfully prepared pages response", 
+			"notebook_name", notebookName,
+			"section_path", sectionPath,
+			"section_name", pathItem.Name,
+			"request_uri", request.Params.URI,
+			"response_size_bytes", responseSize,
+			"pages_count", len(pages))
+
+		return []mcp.ResourceContents{
+			mcp.TextResourceContents{
+				URI:      request.Params.URI,
+				MIMEType: "application/json",
+				Text:     string(jsonData),
+			},
+		}, nil
+	})
+	logging.MainLogger.Debug("Registered pages resource template successfully", 
+		"template_pattern", "onenote://notebooks/{name}/sections/{path}/pages")
+
+	logging.MainLogger.Debug("Resource registration completed successfully", 
+		"resources_registered", 5,
+		"static_resources", 1,
+		"template_resources", 4)
+}
+
+// extractNotebookIdFromURI extracts the notebook ID from a URI like "onenote://notebooks/{id}"
+func extractNotebookIdFromURI(uri string) string {
+	// URI format: onenote://notebooks/{id}
+	parts := strings.Split(uri, "/")
+	if len(parts) >= 3 && parts[0] == "onenote:" && parts[2] == "notebooks" && len(parts) >= 4 {
+		return parts[3]
+	}
+	return ""
+}
+
+// extractNotebookNameFromURI extracts the notebook name from a URI like "onenote://notebooks/{name}"
+func extractNotebookNameFromURI(uri string) string {
+	// URI format: onenote://notebooks/{name}
+	parts := strings.Split(uri, "/")
+	if len(parts) >= 4 && parts[0] == "onenote:" && parts[2] == "notebooks" {
+		// URL decode the notebook name since it's part of a URI
+		decodedName, err := url.QueryUnescape(parts[3])
+		if err != nil {
+			logging.MainLogger.Warn("Failed to URL decode notebook name, using raw value", 
+				"raw_name", parts[3], 
+				"error", err)
+			return parts[3] // fallback to raw value
+		}
+		logging.MainLogger.Debug("URL decoded notebook name", 
+			"raw_name", parts[3], 
+			"decoded_name", decodedName)
+		return decodedName
+	}
+	return ""
+}
+
+// extractNotebookNameFromSectionsURI extracts the notebook name from a URI like "onenote://notebooks/{name}/sections"
+func extractNotebookNameFromSectionsURI(uri string) string {
+	// URI format: onenote://notebooks/{name}/sections  
+	parts := strings.Split(uri, "/")
+	if len(parts) >= 5 && parts[0] == "onenote:" && parts[2] == "notebooks" && parts[4] == "sections" {
+		// URL decode the notebook name since it's part of a URI
+		decodedName, err := url.QueryUnescape(parts[3])
+		if err != nil {
+			logging.MainLogger.Warn("Failed to URL decode notebook name from sections URI, using raw value", 
+				"raw_name", parts[3], 
+				"error", err,
+				"uri", uri)
+			return parts[3] // fallback to raw value
+		}
+		logging.MainLogger.Debug("URL decoded notebook name from sections URI", 
+			"raw_name", parts[3], 
+			"decoded_name", decodedName,
+			"uri", uri)
+		return decodedName
+	}
+	return ""
+}
+
+// extractPathFromSectionsURI extracts the path from a URI like "onenote://notebooks/{name}/sections/{path}"
+func extractPathFromSectionsURI(uri string) string {
+	// URI format: onenote://notebooks/{name}/sections/{path}
+	// {path} can contain forward slashes for nested navigation
+	parts := strings.Split(uri, "/")
+	if len(parts) >= 6 && parts[0] == "onenote:" && parts[2] == "notebooks" && parts[4] == "sections" {
+		// Everything after /sections/ is the path
+		pathParts := parts[5:]
+		// URL decode each part
+		decodedParts := make([]string, len(pathParts))
+		for i, part := range pathParts {
+			decoded, err := url.QueryUnescape(part)
+			if err != nil {
+				logging.MainLogger.Warn("Failed to URL decode path component, using raw value", 
+					"raw_part", part, 
+					"error", err,
+					"uri", uri)
+				decodedParts[i] = part // fallback to raw value
+			} else {
+				decodedParts[i] = decoded
+			}
+		}
+		return strings.Join(decodedParts, "/")
+	}
+	return ""
+}
+
+// extractNotebookAndPathFromSectionsURI extracts both notebook name and path from sections URI
+func extractNotebookAndPathFromSectionsURI(uri string) (string, string) {
+	notebookName := extractNotebookNameFromSectionsURI(uri)
+	path := extractPathFromSectionsURI(uri)
+	return notebookName, path
+}
+
+// extractNotebookAndPathFromPagesURI extracts notebook name and path from pages URI like "onenote://notebooks/{name}/sections/{path}/pages"
+func extractNotebookAndPathFromPagesURI(uri string) (string, string) {
+	// Remove /pages from the end and delegate to sections URI handler
+	if strings.HasSuffix(uri, "/pages") {
+		sectionsURI := strings.TrimSuffix(uri, "/pages")
+		return extractNotebookAndPathFromSectionsURI(sectionsURI)
+	}
+	return "", ""
+}
+
+// buildEncodedPath constructs a URI-encoded path from components.
+// This function ensures that path components containing spaces, special characters,
+// or Unicode characters are properly URL-encoded for use in MCP resource URIs.
+//
+// Example:
+//   buildEncodedPath("My Section", "Sub Section") -> "My%20Section/Sub%20Section"
+//   buildEncodedPath("Documents & Files") -> "Documents%20%26%20Files"
+//
+// The function filters out empty components and URL-encodes each non-empty component
+// using url.QueryEscape, then joins them with forward slashes.
+func buildEncodedPath(components ...string) string {
+	if len(components) == 0 {
+		return ""
+	}
+	
+	// Filter out empty components
+	nonEmptyComponents := make([]string, 0, len(components))
+	for _, component := range components {
+		if component != "" {
+			nonEmptyComponents = append(nonEmptyComponents, component)
+		}
+	}
+	
+	if len(nonEmptyComponents) == 0 {
+		return ""
+	}
+	
+	// URL encode each component to handle spaces, special chars, Unicode, etc.
+	encodedComponents := make([]string, len(nonEmptyComponents))
+	for i, component := range nonEmptyComponents {
+		encodedComponents[i] = url.QueryEscape(component)
+	}
+	
+	return strings.Join(encodedComponents, "/")
+}
+
+// PathItem represents an item in the OneNote hierarchy (section or section group)
+type PathItem struct {
+	Type         string                   `json:"type"`         // "section" or "sectionGroup"
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	Path         string                   `json:"path"`
+	NotebookID   string                   `json:"notebookId"`
+	NotebookName string                   `json:"notebookName"`
+	CanContainPages bool                  `json:"canContainPages"`
+	Contents     []PathItem               `json:"contents,omitempty"`     // Only for section groups
+	RawData      map[string]interface{}   `json:"-"`                      // Original API data
+}
+
+// resolvePathInNotebook resolves a path within a notebook to find the target item
+func resolvePathInNotebook(notebookID, notebookName, targetPath string, sectionClient *sections.SectionClient) (*PathItem, error) {
+	logging.MainLogger.Debug("Resolving path in notebook", 
+		"notebook_id", notebookID,
+		"notebook_name", notebookName, 
+		"target_path", targetPath)
+	
+	if targetPath == "" {
+		// Return notebook root contents
+		return buildNotebookRootContents(notebookID, notebookName, sectionClient)
+	}
+	
+	// Split path into components
+	pathComponents := strings.Split(targetPath, "/")
+	logging.MainLogger.Debug("Path components", "components", pathComponents, "count", len(pathComponents))
+	
+	// Start from notebook root and navigate down
+	return navigateToPath(notebookID, notebookName, pathComponents, sectionClient)
+}
+
+// buildNotebookRootContents builds the contents listing for a notebook root
+func buildNotebookRootContents(notebookID, notebookName string, sectionClient *sections.SectionClient) (*PathItem, error) {
+	logging.MainLogger.Debug("Building notebook root contents", "notebook_id", notebookID)
+	
+	// Get all sections in notebook (includes nested ones)
+	allSections, err := sectionClient.ListSections(notebookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sections: %v", err)
+	}
+	
+	// Get all section groups in notebook
+	allSectionGroups, err := sectionClient.ListSectionGroups(notebookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list section groups: %v", err)
+	}
+	
+	var contents []PathItem
+	
+	// Add direct sections (those not in section groups)
+	for _, section := range allSections {
+		// Skip sections that have a parent section group
+		if parentSG, exists := section["parentSectionGroup"]; exists && parentSG != nil {
+			continue // This section is inside a section group
+		}
+		
+		name := getDisplayName(section)
+		if name == "" {
+			continue
+		}
+		
+		contents = append(contents, PathItem{
+			Type:         "section",
+			ID:           getID(section),
+			Name:         name,
+			Path:         buildEncodedPath(name),
+			NotebookID:   notebookID,
+			NotebookName: notebookName,
+			CanContainPages: true,
+			RawData:      section,
+		})
+	}
+	
+	// Add direct section groups (those not nested in other section groups)
+	for _, sectionGroup := range allSectionGroups {
+		// For now, assume all section groups are direct (we can enhance this later for nested support)
+		name := getDisplayName(sectionGroup)
+		if name == "" {
+			continue
+		}
+		
+		contents = append(contents, PathItem{
+			Type:         "sectionGroup",
+			ID:           getID(sectionGroup),
+			Name:         name,
+			Path:         buildEncodedPath(name),
+			NotebookID:   notebookID,
+			NotebookName: notebookName,
+			CanContainPages: false,
+			RawData:      sectionGroup,
+		})
+	}
+	
+	logging.MainLogger.Debug("Built notebook root contents", 
+		"total_items", len(contents),
+		"notebook_id", notebookID)
+	
+	// Return the notebook as a special section group type
+	return &PathItem{
+		Type:         "notebook",
+		ID:           notebookID,
+		Name:         notebookName,
+		Path:         "",
+		NotebookID:   notebookID,
+		NotebookName: notebookName,
+		CanContainPages: false,
+		Contents:     contents,
+	}, nil
+}
+
+// navigateToPath navigates through path components to find the target
+func navigateToPath(notebookID, notebookName string, pathComponents []string, sectionClient *sections.SectionClient) (*PathItem, error) {
+	if len(pathComponents) == 0 {
+		return buildNotebookRootContents(notebookID, notebookName, sectionClient)
+	}
+	
+	targetName := pathComponents[0]
+	remainingPath := pathComponents[1:]
+	
+	logging.MainLogger.Debug("Navigating to path component", 
+		"target_name", targetName,
+		"remaining_components", len(remainingPath))
+	
+	// Search for the target in direct sections
+	allSections, err := sectionClient.ListSections(notebookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sections: %v", err)
+	}
+	
+	for _, section := range allSections {
+		name := getDisplayName(section)
+		if name == targetName {
+			// Found a matching section
+			if len(remainingPath) > 0 {
+				return nil, fmt.Errorf("path '%s' leads to a section, but additional path components provided: %v", targetName, remainingPath)
+			}
+			
+			return &PathItem{
+				Type:         "section",
+				ID:           getID(section),
+				Name:         name,
+				Path:         buildEncodedPath(pathComponents...),
+				NotebookID:   notebookID,
+				NotebookName: notebookName,
+				CanContainPages: true,
+				RawData:      section,
+			}, nil
+		}
+	}
+	
+	// Search for the target in section groups
+	allSectionGroups, err := sectionClient.ListSectionGroups(notebookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list section groups: %v", err)
+	}
+	
+	for _, sectionGroup := range allSectionGroups {
+		name := getDisplayName(sectionGroup)
+		if name == targetName {
+			// Found a matching section group
+			if len(remainingPath) == 0 {
+				// Return the section group with its contents
+				return buildSectionGroupContents(sectionGroup, notebookID, notebookName, buildEncodedPath(pathComponents...), sectionClient)
+			} else {
+				// Navigate deeper into the section group
+				return navigateIntoSectionGroup(sectionGroup, notebookID, notebookName, pathComponents, remainingPath, sectionClient)
+			}
+		}
+	}
+	
+	return nil, fmt.Errorf("path component '%s' not found in notebook", targetName)
+}
+
+// buildSectionGroupContents builds the contents of a section group
+func buildSectionGroupContents(sectionGroup map[string]interface{}, notebookID, notebookName, fullPath string, sectionClient *sections.SectionClient) (*PathItem, error) {
+	sgID := getID(sectionGroup)
+	sgName := getDisplayName(sectionGroup)
+	
+	logging.MainLogger.Debug("Building section group contents", 
+		"section_group_id", sgID,
+		"section_group_name", sgName)
+	
+	// Get sections within this section group
+	sgSections, err := sectionClient.ListSectionsInSectionGroup(sgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sections in section group: %v", err)
+	}
+	
+	var contents []PathItem
+	
+	// Add sections in this section group
+	for _, section := range sgSections {
+		name := getDisplayName(section)
+		if name == "" {
+			continue
+		}
+		
+		// Parse fullPath back to components for proper encoding
+		pathComponents := strings.Split(fullPath, "/")
+		fullPathComponents := append(pathComponents, name)
+		
+		contents = append(contents, PathItem{
+			Type:         "section",
+			ID:           getID(section),
+			Name:         name,
+			Path:         buildEncodedPath(fullPathComponents...),
+			NotebookID:   notebookID,
+			NotebookName: notebookName,
+			CanContainPages: true,
+			RawData:      section,
+		})
+	}
+	
+	// Note: We could add nested section groups here too if needed
+	
+	return &PathItem{
+		Type:         "sectionGroup",
+		ID:           sgID,
+		Name:         sgName,
+		Path:         fullPath, // fullPath is already encoded from the caller
+		NotebookID:   notebookID,
+		NotebookName: notebookName,
+		CanContainPages: false,
+		Contents:     contents,
+		RawData:      sectionGroup,
+	}, nil
+}
+
+// navigateIntoSectionGroup continues navigation within a section group
+func navigateIntoSectionGroup(sectionGroup map[string]interface{}, notebookID, notebookName string, fullPathComponents, remainingPath []string, sectionClient *sections.SectionClient) (*PathItem, error) {
+	sgID := getID(sectionGroup)
+	targetName := remainingPath[0]
+	nextRemainingPath := remainingPath[1:]
+	
+	logging.MainLogger.Debug("Navigating into section group", 
+		"section_group_id", sgID,
+		"target_name", targetName,
+		"remaining_components", len(nextRemainingPath))
+	
+	// Get sections in this section group
+	sgSections, err := sectionClient.ListSectionsInSectionGroup(sgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sections in section group: %v", err)
+	}
+	
+	// Look for matching section
+	for _, section := range sgSections {
+		name := getDisplayName(section)
+		if name == targetName {
+			if len(nextRemainingPath) > 0 {
+				return nil, fmt.Errorf("path '%s' leads to a section, but additional path components provided: %v", targetName, nextRemainingPath)
+			}
+			
+			return &PathItem{
+				Type:         "section",
+				ID:           getID(section),
+				Name:         name,
+				Path:         buildEncodedPath(fullPathComponents...),
+				NotebookID:   notebookID,
+				NotebookName: notebookName,
+				CanContainPages: true,
+				RawData:      section,
+			}, nil
+		}
+	}
+	
+	// Could add nested section group support here
+	
+	return nil, fmt.Errorf("path component '%s' not found in section group", targetName)
+}
+
+// getDisplayName extracts display name from OneNote API response, handling different field names
+func getDisplayName(item map[string]interface{}) string {
+	// Try different possible field names
+	if name, ok := item["displayName"].(string); ok && name != "" {
+		return name
+	}
+	if name, ok := item["name"].(string); ok && name != "" {
+		return name
+	}
+	return ""
+}
+
+// getID extracts ID from OneNote API response, handling different field names
+func getID(item map[string]interface{}) string {
+	// Try different possible field names
+	if id, ok := item["id"].(string); ok && id != "" {
+		return id
+	}
+	if id, ok := item["sectionId"].(string); ok && id != "" {
+		return id
+	}
+	return ""
+}
+
+// getMapKeys returns a slice of all keys in a map[string]interface{} for debugging purposes
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}

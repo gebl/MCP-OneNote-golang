@@ -1,0 +1,31 @@
+{
+  "name": "onenote-mcp-server",
+  "version": "1.0.0",
+  "description": "Microsoft OneNote MCP Server - Bridge between Model Context Protocol and OneNote API",
+  "scripts": {
+    "prepare": "husky",
+    "build": "go build -o onenote-mcp-server.exe ./cmd/onenote-mcp-server",
+    "test": "go test ./...",
+    "format": "gofmt -s -w .",
+    "format-check": "gofmt -d .",
+    "lint-install": "go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
+    "lint": "golangci-lint run",
+    "precommit": "npm run format-check && npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gebl/onenote-mcp-server"
+  },
+  "keywords": [
+    "mcp",
+    "onenote",
+    "microsoft-graph",
+    "go",
+    "server"
+  ],
+  "author": "Gabriel Roper",
+  "license": "MIT",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
