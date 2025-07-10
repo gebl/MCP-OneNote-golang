@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  onenote-mcp-server:
+    build: .
+    environment:
+      - ONENOTE_CLIENT_ID=${ONENOTE_CLIENT_ID}
+      - ONENOTE_CLIENT_SECRET=${ONENOTE_CLIENT_SECRET}
+      - ONENOTE_TENANT_ID=${ONENOTE_TENANT_ID}
+    stdin_open: true
+    tty: true 
