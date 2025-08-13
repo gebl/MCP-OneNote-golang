@@ -83,7 +83,7 @@ Before using the MCP tools, you'll need to authenticate with Microsoft:
 Once configured and authenticated, you'll have access to these OneNote tools:
 
 **Notebook Management:**
-- `listNotebooks` - List all your OneNote notebooks
+- `listNotebooks` - List all your OneNote notebooks with default status flags (API default and config default)
 - `searchPages` - Search for pages by title across notebooks
 
 **Section Management:**

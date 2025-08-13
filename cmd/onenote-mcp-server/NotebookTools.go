@@ -49,7 +49,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		startTime := time.Now()
 		logging.ToolsLogger.Debug("listNotebooks called with no parameters")
 
-		notebooks, err := notebookClient.ListNotebooks()
+		notebooks, err := notebookClient.ListNotebooksDetailed()
 		if err != nil {
 			logging.ToolsLogger.Error("listNotebooks failed", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to list notebooks: %v", err)), nil
@@ -63,20 +63,36 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			return mcp.NewToolResultText("[]"), nil
 		}
 
-		// Create a simplified JSON array with just id and name for each notebook
+		// Create a JSON array with id, name, and default status flags for each notebook
 		type NotebookInfo struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID                    string `json:"id"`
+			Name                  string `json:"name"`
+			IsAPIDefault          bool   `json:"isAPIDefault"`          // True if this is the default notebook according to Microsoft Graph API
+			IsConfigDefault       bool   `json:"isConfigDefault"`       // True if this matches the configured default notebook name
 		}
 
 		var notebookList []NotebookInfo
 		for _, notebook := range notebooks {
 			id, _ := notebook["id"].(string)
 			displayName, _ := notebook["displayName"].(string)
+			
+			// Check if this is the API default notebook
+			isAPIDefault := false
+			if apiDefaultValue, exists := notebook["isDefault"].(bool); exists {
+				isAPIDefault = apiDefaultValue
+			}
+			
+			// Check if this matches the configured default notebook name
+			isConfigDefault := false
+			if graphClient.Config != nil && graphClient.Config.NotebookName != "" {
+				isConfigDefault = displayName == graphClient.Config.NotebookName
+			}
 
 			notebookList = append(notebookList, NotebookInfo{
-				ID:   id,
-				Name: displayName,
+				ID:                    id,
+				Name:                  displayName,
+				IsAPIDefault:          isAPIDefault,
+				IsConfigDefault:       isConfigDefault,
 			})
 		}
 
