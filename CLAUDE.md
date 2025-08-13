@@ -69,13 +69,70 @@ The project follows a **modular MCP server architecture** with clear separation 
 
 **Global Notebook Cache**: A thread-safe notebook cache system maintains the currently selected notebook and its sections tree for improved performance and user experience. Cache is automatically updated when notebooks change.
 
-**Page Metadata Cache**: A comprehensive caching system for page metadata organized by section ID. Provides 5-minute cache expiration, automatic invalidation on page operations, and significant performance improvements for repeated page listings.
+**Multi-Layer Caching System**: A comprehensive caching architecture with three levels - page metadata by section ID, page search results by notebook:page key, and notebook lookup results by name. All cache layers provide 5-minute expiration, automatic invalidation on operations, cache-aware progress notifications, and significant performance improvements.
 
 **MCP Resources and Completions**: Server provides MCP resources for data discovery and completions for autocomplete support, enhancing the development experience.
 
 **Container Hierarchy Validation**: OneNote's strict container hierarchy (Notebooks → Section Groups → Sections → Pages) is enforced through `determineContainerType` validation in section operations.
 
 **Progress Notification System**: MCP tools support real-time progress notifications for long-running operations. Progress tokens are extracted from request metadata and used to send incremental progress updates to clients. HTTP request logging middleware is disabled in streamable mode to prevent interference with progress streaming.
+
+## Special Tools
+
+### QuickNote Tool
+
+The `quickNote` tool provides rapid note-taking functionality that appends timestamped entries to a pre-configured OneNote page. This tool is ideal for quick journaling, meeting notes, or capturing thoughts on the fly.
+
+**Features:**
+- **Timestamped entries**: Each note is prefixed with an H3 heading containing the current date/time
+- **Configurable formatting**: Date format is customizable via Go time layout strings
+- **Smart page lookup**: Finds the target page by searching through all sections using cached listPages calls with multi-layer result caching
+- **Performance optimized**: Leverages three-layer caching system (page metadata, search results, notebook lookups) for fast repeated operations
+- **Cache-aware progress notifications**: Provides real-time progress updates that differentiate between cached and API operations
+- **Append-only operation**: New content is always appended to the page body, preserving existing content
+
+**Configuration Required:**
+```json
+{
+  "quicknote": {
+    "notebook_name": "Personal Notes",    // Target notebook name (optional - falls back to notebook_name)
+    "page_name": "Daily Journal",         // Target page name (required)
+    "date_format": "January 2, 2006 - 3:04 PM"  // Go time format layout (optional)
+  }
+}
+```
+
+**Fallback Behavior:**
+- If `quicknote.notebook_name` is not specified, the tool will use the default `notebook_name` from the main configuration
+- If neither is specified, the tool will return an error
+- Only `page_name` is strictly required in the quicknote configuration
+
+**Usage Example:**
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "quickNote",
+    "arguments": {
+      "content": "Had a great idea for the project - implement real-time collaboration features"
+    }
+  }
+}
+```
+
+**Output Format:**
+The tool appends HTML content in the following format to the target page:
+```html
+<h3>January 15, 2025 - 2:30 PM</h3>
+<p>Had a great idea for the project - implement real-time collaboration features</p>
+```
+
+**Error Handling:**
+- Validates that page_name is configured in quicknote settings
+- Falls back to default notebook_name if quicknote.notebook_name is not set
+- Returns clear error messages if no notebook name is available (neither quicknote.notebook_name nor default notebook_name)
+- Returns clear error messages if target notebook or page cannot be found
+- Handles authentication and API errors gracefully with detailed logging
 
 ## Configuration Requirements
 
@@ -91,6 +148,11 @@ ONENOTE_REDIRECT_URI=http://localhost:8080/callback
 ONENOTE_DEFAULT_NOTEBOOK_NAME="My Notebook"  # Default notebook for operations
 ONENOTE_TOOLSETS="notebooks,sections,pages,content"  # Enabled toolsets
 ONENOTE_MCP_CONFIG="configs/config.json"  # JSON config file path
+
+# QuickNote Configuration
+QUICKNOTE_NOTEBOOK_NAME="Personal Notes"  # Target notebook for quicknote entries
+QUICKNOTE_PAGE_NAME="Daily Journal"       # Target page for quicknote entries  
+QUICKNOTE_DATE_FORMAT="January 2, 2006 - 3:04 PM"  # Go time format for timestamps
 
 # MCP Authentication Configuration (for HTTP mode only)
 MCP_AUTH_ENABLED="true"    # Enable bearer token authentication
@@ -111,6 +173,11 @@ CONTENT_LOG_LEVEL="DEBUG"  # Content logging verbosity: DEBUG, INFO, WARN, ERROR
   "redirect_uri": "http://localhost:8080/callback",
   "notebook_name": "My Default Notebook",
   "toolsets": ["notebooks", "sections", "pages", "content"],
+  "quicknote": {
+    "notebook_name": "Personal Notes",
+    "page_name": "Daily Journal",
+    "date_format": "January 2, 2006 - 3:04 PM"
+  },
   "mcp_auth": {
     "enabled": true,
     "bearer_token": "your-secret-bearer-token-here"
@@ -259,15 +326,19 @@ The server provides intelligent autocomplete support:
 - **Thread-Safe Cache**: Global notebook cache maintains current selection
 - **Authentication Aware**: Only initializes when authentication is available
 
-### Page Metadata Caching
-- **Section-Based Caching**: Pages are cached by section ID for efficient retrieval
-- **Fresh Cache Policy**: Cache expires after 5 minutes to ensure data freshness
-- **Automatic Population**: Cache is populated when `listPages` is called
-- **Smart Invalidation**: Cache is cleared when pages are created, deleted, or moved
-- **Performance Optimization**: Subsequent `listPages` calls for the same section return cached data instantly
-- **Memory Efficient**: Only caches page metadata (ID, title, dates) not full content
+### Multi-Layer Caching System
+- **Page Metadata Caching**: Pages are cached by section ID for efficient retrieval with 5-minute expiration
+- **Page Search Result Caching**: Caches page search results by notebook:page key for the `quickNote` tool and other page lookup operations
+- **Notebook Lookup Caching**: Caches detailed notebook information by name to avoid repeated API calls for notebook resolution
+- **Fresh Cache Policy**: All cache layers expire after 5 minutes to ensure data freshness
+- **Automatic Population**: Caches are populated during normal operations (`listPages`, page searches, notebook lookups)
+- **Smart Invalidation**: Caches are cleared when pages are created, deleted, or moved
+- **Cache-Aware Progress Notifications**: Progress notifications differentiate between cache hits and API operations for better user experience
+- **Performance Optimization**: Subsequent calls for the same data return cached results instantly
+- **Memory Efficient**: Only caches metadata (not full content) with proper memory management
 - **Thread-Safe Operations**: All cache operations are protected by read-write mutexes
-- **Cache Status Reporting**: `listPages` responses include cache hit/miss status and performance metrics
+- **Cache Status Reporting**: Responses include cache hit/miss status and performance metrics
+- **Structured Debug Logging**: Enhanced logging with key-value pairs for troubleshooting cache behavior
 
 ## Testing Strategy
 

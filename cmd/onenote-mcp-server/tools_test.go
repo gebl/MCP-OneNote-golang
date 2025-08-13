@@ -96,8 +96,8 @@ func createTestServer(t *testing.T) (*server.MCPServer, *MockGraphClient) {
 	mockGraphClient := &MockGraphClient{}
 	s := server.NewMCPServer("Test OneNote MCP Server", "1.0.0")
 
-	// Register tools with nil client, auth manager, and notebook cache for testing
-	registerTools(s, nil, nil, nil)
+	// Register tools with nil client, auth manager, notebook cache, and config for testing
+	registerTools(s, nil, nil, nil, nil)
 
 	return s, mockGraphClient
 }

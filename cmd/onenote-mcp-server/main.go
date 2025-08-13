@@ -79,26 +79,41 @@ const (
 	emptyJSONArray = "[]"
 )
 
+// PageSearchResult holds the result of a page search operation
+type PageSearchResult struct {
+	Page      map[string]interface{} // The found page data
+	SectionID string                 // Section ID where the page was found
+	Found     bool                   // Whether the page was found
+}
+
 // NotebookCache holds the currently selected notebook information and sections cache
 type NotebookCache struct {
-	mu             sync.RWMutex
-	notebook       map[string]interface{}
-	notebookID     string
-	displayName    string
-	isSet          bool
-	sectionsTree   map[string]interface{}              // Cached sections tree structure
-	sectionsCached bool                                // Whether sections have been cached
-	pagesCache     map[string][]map[string]interface{} // Pages cache by section ID
-	pagesCacheTime map[string]time.Time                // Cache timestamps by section ID
+	mu                  sync.RWMutex
+	notebook            map[string]interface{}
+	notebookID          string
+	displayName         string
+	isSet               bool
+	sectionsTree        map[string]interface{}              // Cached sections tree structure
+	sectionsCached      bool                                // Whether sections have been cached
+	pagesCache          map[string][]map[string]interface{} // Pages cache by section ID
+	pagesCacheTime      map[string]time.Time                // Cache timestamps by section ID
+	pageSearchCache     map[string]PageSearchResult         // Page search results cache by notebook:page key
+	pageSearchTime      map[string]time.Time                // Page search cache timestamps
+	notebookLookupCache map[string]map[string]interface{}   // Notebook lookup results cache by notebook name
+	notebookLookupTime  map[string]time.Time                // Notebook lookup cache timestamps
 }
 
 // NewNotebookCache creates a new notebook cache
 func NewNotebookCache() *NotebookCache {
 	return &NotebookCache{
-		notebook:       make(map[string]interface{}),
-		sectionsTree:   make(map[string]interface{}),
-		pagesCache:     make(map[string][]map[string]interface{}),
-		pagesCacheTime: make(map[string]time.Time),
+		notebook:            make(map[string]interface{}),
+		sectionsTree:        make(map[string]interface{}),
+		pagesCache:          make(map[string][]map[string]interface{}),
+		pagesCacheTime:      make(map[string]time.Time),
+		pageSearchCache:     make(map[string]PageSearchResult),
+		pageSearchTime:      make(map[string]time.Time),
+		notebookLookupCache: make(map[string]map[string]interface{}),
+		notebookLookupTime:  make(map[string]time.Time),
 	}
 }
 
@@ -117,6 +132,14 @@ func (nc *NotebookCache) SetNotebook(notebook map[string]interface{}) {
 	// Clear pages cache when notebook changes
 	nc.pagesCache = make(map[string][]map[string]interface{})
 	nc.pagesCacheTime = make(map[string]time.Time)
+
+	// Clear page search cache when notebook changes
+	nc.pageSearchCache = make(map[string]PageSearchResult)
+	nc.pageSearchTime = make(map[string]time.Time)
+
+	// Clear notebook lookup cache when notebook changes
+	nc.notebookLookupCache = make(map[string]map[string]interface{})
+	nc.notebookLookupTime = make(map[string]time.Time)
 
 	// Extract ID and display name for easy access
 	if id, ok := notebook["id"].(string); ok {
@@ -303,6 +326,174 @@ func (nc *NotebookCache) ClearAllCache() {
 	// Clear all pages cache
 	nc.pagesCache = make(map[string][]map[string]interface{})
 	nc.pagesCacheTime = make(map[string]time.Time)
+
+	// Clear page search cache
+	nc.pageSearchCache = make(map[string]PageSearchResult)
+	nc.pageSearchTime = make(map[string]time.Time)
+
+	// Clear notebook lookup cache
+	nc.notebookLookupCache = make(map[string]map[string]interface{})
+	nc.notebookLookupTime = make(map[string]time.Time)
+}
+
+// GetPageSearchCacheKey creates a cache key for page search results
+func (nc *NotebookCache) GetPageSearchCacheKey(notebookID, pageName string) string {
+	return fmt.Sprintf("%s:%s", notebookID, pageName)
+}
+
+// SetPageSearchCache sets the cached page search result
+func (nc *NotebookCache) SetPageSearchCache(notebookID, pageName string, result PageSearchResult) {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	key := nc.GetPageSearchCacheKey(notebookID, pageName)
+	nc.pageSearchCache[key] = result
+	nc.pageSearchTime[key] = time.Now()
+}
+
+// GetPageSearchCache returns the cached page search result
+func (nc *NotebookCache) GetPageSearchCache(notebookID, pageName string) (PageSearchResult, bool) {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+
+	key := nc.GetPageSearchCacheKey(notebookID, pageName)
+	result, exists := nc.pageSearchCache[key]
+	if !exists {
+		return PageSearchResult{}, false
+	}
+
+	// Check if cache is still fresh (within 5 minutes)
+	cacheTime, timeExists := nc.pageSearchTime[key]
+	if !timeExists || time.Since(cacheTime) > 5*time.Minute {
+		return PageSearchResult{}, false
+	}
+
+	return result, true
+}
+
+// IsPageSearchCached returns whether page search results are cached
+func (nc *NotebookCache) IsPageSearchCached(notebookID, pageName string) bool {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+
+	key := nc.GetPageSearchCacheKey(notebookID, pageName)
+	_, exists := nc.pageSearchCache[key]
+	if !exists {
+		return false
+	}
+
+	// Check if cache is still fresh
+	cacheTime, timeExists := nc.pageSearchTime[key]
+	if !timeExists || time.Since(cacheTime) > 5*time.Minute {
+		return false
+	}
+
+	return true
+}
+
+// ClearPageSearchCache clears the page search cache for a specific notebook/page combination
+func (nc *NotebookCache) ClearPageSearchCache(notebookID, pageName string) {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	key := nc.GetPageSearchCacheKey(notebookID, pageName)
+	delete(nc.pageSearchCache, key)
+	delete(nc.pageSearchTime, key)
+}
+
+// ClearAllPageSearchCache clears all page search cache
+func (nc *NotebookCache) ClearAllPageSearchCache() {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	nc.pageSearchCache = make(map[string]PageSearchResult)
+	nc.pageSearchTime = make(map[string]time.Time)
+}
+
+// SetNotebookLookupCache sets the cached notebook lookup result
+func (nc *NotebookCache) SetNotebookLookupCache(notebookName string, notebook map[string]interface{}) {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	logging.NotebookLogger.Debug("Storing notebook in cache", 
+		"notebook_name", notebookName, 
+		"notebook_id", notebook["id"], 
+		"notebook_data", notebook)
+
+	nc.notebookLookupCache[notebookName] = notebook
+	nc.notebookLookupTime[notebookName] = time.Now()
+}
+
+// GetNotebookLookupCache returns the cached notebook lookup result
+func (nc *NotebookCache) GetNotebookLookupCache(notebookName string) (map[string]interface{}, bool) {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+
+	notebook, exists := nc.notebookLookupCache[notebookName]
+	if !exists {
+		logging.NotebookLogger.Debug("Notebook lookup cache miss - not found in cache", "notebook_name", notebookName)
+		return nil, false
+	}
+
+	// Check if cache is still fresh (within 5 minutes)
+	cacheTime, timeExists := nc.notebookLookupTime[notebookName]
+	if !timeExists {
+		logging.NotebookLogger.Debug("Notebook lookup cache miss - no timestamp", "notebook_name", notebookName)
+		return nil, false
+	}
+	
+	age := time.Since(cacheTime)
+	if age > 5*time.Minute {
+		logging.NotebookLogger.Debug("Notebook lookup cache expired", "notebook_name", notebookName, "age", age)
+		return nil, false
+	}
+
+	logging.NotebookLogger.Debug("Notebook lookup cache hit", "notebook_name", notebookName, "age", age, "notebook_id", notebook["id"])
+
+	// Return a copy to prevent race conditions
+	notebookCopy := make(map[string]interface{})
+	for k, v := range notebook {
+		notebookCopy[k] = v
+	}
+
+	return notebookCopy, true
+}
+
+// IsNotebookLookupCached returns whether notebook lookup results are cached
+func (nc *NotebookCache) IsNotebookLookupCached(notebookName string) bool {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+
+	_, exists := nc.notebookLookupCache[notebookName]
+	if !exists {
+		return false
+	}
+
+	// Check if cache is still fresh
+	cacheTime, timeExists := nc.notebookLookupTime[notebookName]
+	if !timeExists || time.Since(cacheTime) > 5*time.Minute {
+		return false
+	}
+
+	return true
+}
+
+// ClearNotebookLookupCache clears the notebook lookup cache for a specific notebook name
+func (nc *NotebookCache) ClearNotebookLookupCache(notebookName string) {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	delete(nc.notebookLookupCache, notebookName)
+	delete(nc.notebookLookupTime, notebookName)
+}
+
+// ClearAllNotebookLookupCache clears all notebook lookup cache
+func (nc *NotebookCache) ClearAllNotebookLookupCache() {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+
+	nc.notebookLookupCache = make(map[string]map[string]interface{})
+	nc.notebookLookupTime = make(map[string]time.Time)
 }
 
 // Global notebook cache instance
@@ -473,7 +664,7 @@ func main() {
 		server.WithPromptCapabilities(false))
 
 	// Register MCP Tools, Resources, and Completions
-	registerTools(s, graphClient, authManager, globalNotebookCache)
+	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
 	registerResources(s, graphClient)
 	registerCompletions(s, graphClient)
 

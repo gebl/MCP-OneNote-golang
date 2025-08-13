@@ -89,6 +89,9 @@ type Config struct {
 	Toolsets     []string `json:"toolsets"`      // Enabled toolsets (e.g., notebooks, sections, pages)
 	NotebookName string   `json:"notebook_name"` // Default notebook name (optional) - maps to ONENOTE_DEFAULT_NOTEBOOK_NAME
 
+	// Quicknote configuration
+	QuickNote *QuickNoteConfig `json:"quicknote"` // Quicknote settings for rapid note-taking
+
 	// MCP Authentication configuration
 	MCPAuth *MCPAuthConfig `json:"mcp_auth"` // MCP server authentication settings
 
@@ -100,6 +103,13 @@ type Config struct {
 	LogFormat       string `json:"log_format"`        // Log format: "text" or "json"
 	LogFile         string `json:"log_file"`          // Optional log file path
 	ContentLogLevel string `json:"content_log_level"` // Content logging verbosity: DEBUG, INFO, WARN, ERROR, OFF
+}
+
+// QuickNoteConfig holds configuration for the quicknote tool.
+type QuickNoteConfig struct {
+	NotebookName string `json:"notebook_name"` // Target notebook name for quicknotes
+	PageName     string `json:"page_name"`     // Target page name for quicknotes
+	DateFormat   string `json:"date_format"`   // Date format string for timestamps (Go time format)
 }
 
 // MCPAuthConfig holds MCP server authentication configuration.
@@ -134,6 +144,13 @@ func Load() (*Config, error) {
 		RedirectURI:  os.Getenv("ONENOTE_REDIRECT_URI"),
 		NotebookName: os.Getenv("ONENOTE_DEFAULT_NOTEBOOK_NAME"),
 
+		// Quicknote configuration from environment variables
+		QuickNote: &QuickNoteConfig{
+			NotebookName: os.Getenv("QUICKNOTE_NOTEBOOK_NAME"),
+			PageName:     os.Getenv("QUICKNOTE_PAGE_NAME"),
+			DateFormat:   os.Getenv("QUICKNOTE_DATE_FORMAT"),
+		},
+
 		// MCP Authentication configuration from environment variables
 		MCPAuth: &MCPAuthConfig{
 			Enabled:     os.Getenv("MCP_AUTH_ENABLED") == "true",
@@ -155,6 +172,9 @@ func Load() (*Config, error) {
 		"tenant_id", cfg.TenantID,
 		"redirect_uri", cfg.RedirectURI,
 		"notebook_name", cfg.NotebookName,
+		"quicknote_notebook", cfg.QuickNote.NotebookName,
+		"quicknote_page", cfg.QuickNote.PageName,
+		"quicknote_date_format", cfg.QuickNote.DateFormat,
 		"mcp_auth_enabled", cfg.MCPAuth.Enabled,
 		"mcp_bearer_token", maskSensitiveData(cfg.MCPAuth.BearerToken),
 		"stateless", cfg.Stateless != nil && *cfg.Stateless,
@@ -171,6 +191,9 @@ func Load() (*Config, error) {
 		"ONENOTE_DEFAULT_NOTEBOOK_NAME", maskEnvironmentValue("ONENOTE_DEFAULT_NOTEBOOK_NAME"),
 		"ONENOTE_TOOLSETS", maskEnvironmentValue("ONENOTE_TOOLSETS"),
 		"ONENOTE_MCP_CONFIG", maskEnvironmentValue("ONENOTE_MCP_CONFIG"),
+		"QUICKNOTE_NOTEBOOK_NAME", maskEnvironmentValue("QUICKNOTE_NOTEBOOK_NAME"),
+		"QUICKNOTE_PAGE_NAME", maskEnvironmentValue("QUICKNOTE_PAGE_NAME"),
+		"QUICKNOTE_DATE_FORMAT", maskEnvironmentValue("QUICKNOTE_DATE_FORMAT"),
 		"MCP_AUTH_ENABLED", maskEnvironmentValue("MCP_AUTH_ENABLED"),
 		"MCP_BEARER_TOKEN", maskEnvironmentValue("MCP_BEARER_TOKEN"),
 		"MCP_STATELESS", maskEnvironmentValue("MCP_STATELESS"),
@@ -185,6 +208,11 @@ func Load() (*Config, error) {
 		logger.Debug("Loaded toolsets from environment", "toolsets", cfg.Toolsets)
 	} else {
 		logger.Debug("No toolsets specified in environment")
+	}
+
+	// Set default date format if not provided from environment
+	if cfg.QuickNote.DateFormat == "" {
+		cfg.QuickNote.DateFormat = "January 2, 2006 - 3:04 PM"
 	}
 
 	// Optionally load from config file if ONENOTE_MCP_CONFIG is set
@@ -217,12 +245,25 @@ func Load() (*Config, error) {
 			cfg.Stateless = &defaultStateless
 		}
 
+		// Ensure QuickNote has a default value if not set in JSON
+		if cfg.QuickNote == nil {
+			cfg.QuickNote = &QuickNoteConfig{}
+		}
+
+		// Set default date format if not provided
+		if cfg.QuickNote.DateFormat == "" {
+			cfg.QuickNote.DateFormat = "January 2, 2006 - 3:04 PM"
+		}
+
 		logger.Debug("Successfully loaded from config file",
 			"client_id", maskSensitiveData(cfg.ClientID),
 			"tenant_id", cfg.TenantID,
 			"redirect_uri", cfg.RedirectURI,
 			"toolsets", cfg.Toolsets,
 			"notebook_name", cfg.NotebookName,
+			"quicknote_notebook", cfg.QuickNote.NotebookName,
+			"quicknote_page", cfg.QuickNote.PageName,
+			"quicknote_date_format", cfg.QuickNote.DateFormat,
 			"mcp_auth_enabled", cfg.MCPAuth.Enabled,
 			"mcp_bearer_token", maskSensitiveData(cfg.MCPAuth.BearerToken),
 			"stateless", cfg.Stateless != nil && *cfg.Stateless,
@@ -272,6 +313,9 @@ func Load() (*Config, error) {
 		"tenant_id", cfg.TenantID,
 		"redirect_uri", cfg.RedirectURI,
 		"notebook_name", cfg.NotebookName,
+		"quicknote_notebook", cfg.QuickNote.NotebookName,
+		"quicknote_page", cfg.QuickNote.PageName,
+		"quicknote_date_format", cfg.QuickNote.DateFormat,
 		"toolsets", cfg.Toolsets,
 		"toolsets_count", len(cfg.Toolsets),
 		"mcp_auth_enabled", cfg.MCPAuth.Enabled,

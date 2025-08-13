@@ -11,15 +11,18 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
+	"github.com/gebl/onenote-mcp-server/internal/notebooks"
 	"github.com/gebl/onenote-mcp-server/internal/pages"
 	"github.com/gebl/onenote-mcp-server/internal/resources"
+	"github.com/gebl/onenote-mcp-server/internal/sections"
 	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
 
 // registerPageTools registers all page-related MCP tools
-func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache) {
+func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config) {
 	// listPages: List all pages in a section
 	listPagesTool := mcp.NewTool(
 		"listPages",
@@ -509,6 +512,198 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	})
 
+	// quickNote: Add a timestamped note to a configured page
+	quickNoteTool := mcp.NewTool(
+		"quickNote",
+		mcp.WithDescription("Add a timestamped note to a configured page. Uses quicknote settings from configuration file to determine target notebook, page, and date format. Appends content to the page with current timestamp."),
+		mcp.WithString("content", mcp.Required(), mcp.Description("Content to add to the quicknote page")),
+	)
+	s.AddTool(quickNoteTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		startTime := time.Now()
+		logging.ToolsLogger.Info("Adding quicknote entry", "operation", "quickNote", "type", "tool_invocation")
+
+		// Extract progress token from request metadata for progress notifications
+		var progressToken string
+		logging.ToolsLogger.Debug("Starting progress token extraction",
+			"has_meta", req.Params.Meta != nil,
+			"has_progress_token_field", req.Params.Meta != nil && req.Params.Meta.ProgressToken != nil)
+
+		if req.Params.Meta != nil && req.Params.Meta.ProgressToken != nil {
+			rawToken := req.Params.Meta.ProgressToken
+			logging.ToolsLogger.Debug("Raw progress token found",
+				"token_type", fmt.Sprintf("%T", rawToken),
+				"token_value", rawToken)
+
+			// Handle both string and numeric progress tokens
+			switch token := rawToken.(type) {
+			case string:
+				progressToken = token
+				logging.ToolsLogger.Debug("Progress token extracted as string", "progress_token", progressToken)
+			case int:
+				progressToken = fmt.Sprintf("%d", token)
+				logging.ToolsLogger.Debug("Progress token extracted as int", "progress_token", progressToken, "original_value", token)
+			case int64:
+				progressToken = fmt.Sprintf("%d", token)
+				logging.ToolsLogger.Debug("Progress token extracted as int64", "progress_token", progressToken, "original_value", token)
+			case float64:
+				// Check if it's a whole number and convert appropriately
+				if token == float64(int64(token)) {
+					progressToken = fmt.Sprintf("%d", int64(token))
+					logging.ToolsLogger.Debug("Progress token extracted as whole number from float64", "progress_token", progressToken, "original_value", token)
+				} else {
+					progressToken = fmt.Sprintf("%.0f", token)
+					logging.ToolsLogger.Debug("Progress token extracted as rounded float64", "progress_token", progressToken, "original_value", token)
+				}
+			default:
+				logging.ToolsLogger.Debug("Progress token has unsupported type, converting to string", "type", fmt.Sprintf("%T", token), "value", token)
+				progressToken = fmt.Sprintf("%v", token)
+			}
+		} else {
+			logging.ToolsLogger.Debug("No progress token found in request metadata")
+		}
+
+		content, err := req.RequireString("content")
+		if err != nil {
+			logging.ToolsLogger.Error("quickNote missing content", "error", err)
+			return mcp.NewToolResultError("content is required"), nil
+		}
+
+		// Check if quicknote is configured
+		if cfg.QuickNote == nil {
+			logging.ToolsLogger.Error("quickNote not configured")
+			return mcp.NewToolResultError("QuickNote is not configured. Please set page_name and optionally notebook_name and date_format in your configuration."), nil
+		}
+
+		if cfg.QuickNote.PageName == "" {
+			logging.ToolsLogger.Error("quickNote page name not configured", "page", cfg.QuickNote.PageName)
+			return mcp.NewToolResultError("QuickNote page_name is required in quicknote configuration."), nil
+		}
+
+		// Determine target notebook name - use quicknote-specific notebook or fall back to default
+		targetNotebookName := cfg.QuickNote.NotebookName
+		if targetNotebookName == "" {
+			targetNotebookName = cfg.NotebookName
+			logging.ToolsLogger.Debug("quickNote using default notebook name", "default_notebook", targetNotebookName)
+		}
+
+		if targetNotebookName == "" {
+			logging.ToolsLogger.Error("quickNote no notebook name available", "quicknote_notebook", cfg.QuickNote.NotebookName, "default_notebook", cfg.NotebookName)
+			return mcp.NewToolResultError("No notebook name configured. Please set either quicknote.notebook_name or notebook_name in your configuration."), nil
+		}
+
+		logging.ToolsLogger.Debug("quickNote parameters",
+			"content_length", len(content),
+			"target_notebook", targetNotebookName,
+			"quicknote_notebook_config", cfg.QuickNote.NotebookName,
+			"default_notebook_config", cfg.NotebookName,
+			"target_page", cfg.QuickNote.PageName,
+			"date_format", cfg.QuickNote.DateFormat)
+
+		// Send initial progress notification
+		sendProgressNotification(s, ctx, progressToken, 10, 100, "Starting quicknote operation...")
+
+		// Find the notebook by name using cached lookup
+		notebookClient := notebooks.NewNotebookClient(graphClient)
+		targetNotebook, fromCache, err := getDetailedNotebookByNameCached(notebookClient, notebookCache, targetNotebookName)
+		if err != nil {
+			logging.ToolsLogger.Error("quickNote failed to find target notebook", "notebook_name", targetNotebookName, "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to find notebook '%s': %v", targetNotebookName, err)), nil
+		}
+		
+		// Only send progress notification if we actually made an API call
+		if fromCache {
+			sendProgressNotification(s, ctx, progressToken, 25, 100, fmt.Sprintf("Found notebook in cache: %s", targetNotebookName))
+		} else {
+			sendProgressNotification(s, ctx, progressToken, 25, 100, fmt.Sprintf("Found notebook via API: %s", targetNotebookName))
+		}
+
+		// Find the page within the notebook
+		sectionClient := sections.NewSectionClient(graphClient)
+		notebookID, ok := targetNotebook["id"].(string)
+		if !ok {
+			logging.ToolsLogger.Error("quickNote notebook ID not found in response")
+			return mcp.NewToolResultError("Notebook ID not found in response"), nil
+		}
+
+		// Progress notification will be sent based on cache status inside findPageInNotebookWithCache
+		targetPage, targetSectionID, pageFromCache, err := findPageInNotebookWithCache(pageClient, sectionClient, notebookCache, s, notebookID, cfg.QuickNote.PageName, progressToken, ctx)
+		if err != nil {
+			logging.ToolsLogger.Error("quickNote failed to find target page", "page_name", cfg.QuickNote.PageName, "notebook_id", notebookID, "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to find page '%s' in notebook '%s': %v", cfg.QuickNote.PageName, targetNotebookName, err)), nil
+		}
+		
+		// Adjust progress based on cache usage
+		if pageFromCache {
+			sendProgressNotification(s, ctx, progressToken, 75, 100, "Found page in cache, preparing content...")
+		} else {
+			sendProgressNotification(s, ctx, progressToken, 75, 100, "Found page via search, preparing content...")
+		}
+
+		// Format the current time using the configured date format
+		currentTime := time.Now()
+		formattedDate := currentTime.Format(cfg.QuickNote.DateFormat)
+
+		// Create HTML content with timestamp header and content
+		htmlContent := fmt.Sprintf(`<h3>%s</h3><p>%s</p>`, formattedDate, content)
+
+		// Create update command to append to the body
+		commands := []pages.UpdateCommand{
+			{
+				Target:  "body",
+				Action:  "append",
+				Content: htmlContent,
+			},
+		}
+
+		// Update the page content
+		sendProgressNotification(s, ctx, progressToken, 80, 100, "Adding timestamped content to page...")
+		pageID, ok := targetPage["pageId"].(string)
+		if !ok {
+			logging.ToolsLogger.Error("quickNote page ID not found in response")
+			return mcp.NewToolResultError("Page ID not found in response"), nil
+		}
+
+		err = pageClient.UpdatePageContent(pageID, commands)
+		if err != nil {
+			logging.ToolsLogger.Error("quickNote failed to update page content", "page_id", pageID, "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to add quicknote to page: %v", err)), nil
+		}
+
+		// Clear pages cache for this section and page search cache
+		sendProgressNotification(s, ctx, progressToken, 90, 100, "Clearing cache and finalizing...")
+		notebookCache.ClearPagesCache(targetSectionID)
+		notebookCache.ClearAllPageSearchCache() // Clear page search cache since page content changed
+		// Note: We don't clear notebook lookup cache as notebook metadata shouldn't change from page updates
+		logging.ToolsLogger.Debug("quickNote cleared pages cache and page search cache", "section_id", targetSectionID)
+
+		elapsed := time.Since(startTime)
+		logging.ToolsLogger.Info("quickNote operation completed",
+			"duration", elapsed,
+			"notebook", targetNotebookName,
+			"page", cfg.QuickNote.PageName,
+			"timestamp", formattedDate,
+			"content_length", len(content))
+
+		response := map[string]interface{}{
+			"success":   true,
+			"timestamp": formattedDate,
+			"notebook":  targetNotebookName,
+			"page":      cfg.QuickNote.PageName,
+			"message":   "Quicknote added successfully",
+		}
+
+		jsonBytes, err := json.Marshal(response)
+		if err != nil {
+			logging.ToolsLogger.Error("quickNote failed to marshal response", "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
+		}
+
+		// Send final progress notification
+		sendProgressNotification(s, ctx, progressToken, 100, 100, "Quicknote added successfully!")
+
+		return mcp.NewToolResultText(string(jsonBytes)), nil
+	})
+
 	// NOTE: getOnenoteOperation tool is currently commented out in the original code
 	// Uncomment this section if you want to enable it
 	/*
@@ -549,6 +744,239 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 	*/
 
 	logging.ToolsLogger.Debug("Page tools registered successfully")
+}
+
+
+// findPageInNotebookWithCache searches for a page by name using cached listPages calls
+// This leverages the existing page cache and progress notification system
+// Returns the page data, section ID where the page was found, whether result was from cache, and any error
+func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *sections.SectionClient, notebookCache *NotebookCache, s *server.MCPServer, notebookID string, pageName string, progressToken string, ctx context.Context) (map[string]interface{}, string, bool, error) {
+	logging.ToolsLogger.Debug("Searching for page in notebook using cached listPages", "notebook_id", notebookID, "page_name", pageName)
+
+	// Check if page search results are already cached
+	if cachedResult, cached := notebookCache.GetPageSearchCache(notebookID, pageName); cached {
+		logging.ToolsLogger.Debug("Found cached page search result", 
+			"notebook_id", notebookID, 
+			"page_name", pageName,
+			"found", cachedResult.Found)
+		
+		if cachedResult.Found {
+			sendProgressNotification(s, ctx, progressToken, 30, 100, "Page found in search cache")
+			logging.ToolsLogger.Info("Found target page from search cache",
+				"page_title", pageName,
+				"section_id", cachedResult.SectionID)
+			return cachedResult.Page, cachedResult.SectionID, true, nil
+		} else {
+			// Cached result indicates page was not found
+			sendProgressNotification(s, ctx, progressToken, 30, 100, "Page not found (from cache)")
+			return nil, "", true, fmt.Errorf("page '%s' not found in notebook (from cache)", pageName)
+		}
+	}
+
+	logging.ToolsLogger.Debug("No cached search result found, performing fresh search")
+	sendProgressNotification(s, ctx, progressToken, 30, 100, fmt.Sprintf("Searching for page: %s", pageName))
+
+	// Get all sections in the notebook
+	sections, err := sectionClient.ListSections(notebookID)
+	if err != nil {
+		return nil, "", false, fmt.Errorf("failed to list sections in notebook: %v", err)
+	}
+
+	totalSections := len(sections)
+	logging.ToolsLogger.Debug("Found sections in notebook for cached search", "notebook_id", notebookID, "sections_count", totalSections)
+
+	// Search through each section using cached listPages calls
+	for i, section := range sections {
+		sectionID, ok := section["id"].(string)
+		if !ok {
+			logging.ToolsLogger.Debug("Skipping section with invalid ID in cached search", "section_index", i+1)
+			continue // Skip if ID is not available
+		}
+
+		sectionName, ok := section["displayName"].(string)
+		if !ok {
+			sectionName = "unknown"
+		}
+
+		// Send progress notification if available (progress from 30-70%)
+		if totalSections > 1 {
+			progress := 30 + int(float64(i)/float64(totalSections)*40) // 30% to 70%
+			sendProgressNotification(s, ctx, progressToken, progress, 100, fmt.Sprintf("Searching in section: %s", sectionName))
+		}
+
+		logging.ToolsLogger.Debug("Searching in section using cached listPages",
+			"section_index", i+1,
+			"total_sections", totalSections,
+			"section_id", sectionID,
+			"section_name", sectionName)
+
+		// Use the same cache logic as the listPages tool
+		var pages []map[string]interface{}
+		var fromCache bool
+
+		if notebookCache.IsPagesCached(sectionID) {
+			cachedPages, cached := notebookCache.GetPagesCache(sectionID)
+			if cached {
+				pages = cachedPages
+				fromCache = true
+				logging.ToolsLogger.Debug("Using cached pages for section",
+					"section_id", sectionID,
+					"section_name", sectionName,
+					"pages_count", len(pages))
+			}
+		}
+
+		if !fromCache {
+			// Cache miss - fetch from API
+			logging.ToolsLogger.Debug("Cache miss, fetching pages from API",
+				"section_id", sectionID,
+				"section_name", sectionName)
+			pagesFromAPI, err := pageClient.ListPages(sectionID)
+			if err != nil {
+				logging.ToolsLogger.Warn("Failed to list pages in section during cached search",
+					"section_id", sectionID,
+					"section_name", sectionName,
+					"error", err)
+				continue // Continue searching other sections
+			}
+			pages = pagesFromAPI
+			// Cache the results
+			notebookCache.SetPagesCache(sectionID, pages)
+			logging.ToolsLogger.Debug("Cached fresh pages data",
+				"section_id", sectionID,
+				"section_name", sectionName,
+				"pages_count", len(pages))
+		}
+
+		// Extract page names for logging
+		var pageNames []string
+		for _, page := range pages {
+			if pageTitle, ok := page["title"].(string); ok {
+				pageNames = append(pageNames, pageTitle)
+			} else {
+				pageNames = append(pageNames, "<invalid title>")
+			}
+		}
+
+		logging.ToolsLogger.Debug("Found pages in section (cached search)",
+			"section_id", sectionID,
+			"section_name", sectionName,
+			"pages_count", len(pages),
+			"page_names", pageNames,
+			"from_cache", fromCache)
+
+		// Look for the page by name
+		for j, page := range pages {
+			pageTitle, ok := page["title"].(string)
+			if !ok {
+				logging.ToolsLogger.Debug("Skipping page with invalid title in cached search",
+					"section_name", sectionName,
+					"page_index", j+1)
+				continue // Skip if title is not available
+			}
+
+			logging.ToolsLogger.Debug("Examining page in cached search",
+				"section_name", sectionName,
+				"page_index", j+1,
+				"total_pages", len(pages),
+				"page_title", pageTitle,
+				"target_page", pageName,
+				"title_match", pageTitle == pageName,
+				"from_cache", fromCache)
+
+			if pageTitle == pageName {
+				pageID, ok := page["pageId"].(string)
+				if !ok {
+					logging.ToolsLogger.Debug("Found matching page but invalid ID in cached search",
+						"page_title", pageTitle,
+						"section_name", sectionName)
+					continue // Skip if ID is not available
+				}
+
+				// Cache the successful search result
+				searchResult := PageSearchResult{
+					Page:      page,
+					SectionID: sectionID,
+					Found:     true,
+				}
+				notebookCache.SetPageSearchCache(notebookID, pageName, searchResult)
+				logging.ToolsLogger.Debug("Cached successful page search result",
+					"notebook_id", notebookID,
+					"page_name", pageName,
+					"section_id", sectionID)
+
+				// Send completion notification if available
+				sendProgressNotification(s, ctx, progressToken, 70, 100, "Page found successfully")
+
+				logging.ToolsLogger.Info("Found target page using cached search",
+					"page_id", pageID,
+					"page_title", pageTitle,
+					"section_id", sectionID,
+					"section_name", sectionName,
+					"from_cache", fromCache)
+				return page, sectionID, false, nil
+			}
+		}
+
+		logging.ToolsLogger.Debug("Page not found in section (cached search)",
+			"section_name", sectionName,
+			"target_page", pageName,
+			"searched_pages", len(pages),
+			"from_cache", fromCache)
+	}
+
+	// Cache the failed search result
+	searchResult := PageSearchResult{
+		Page:      nil,
+		SectionID: "",
+		Found:     false,
+	}
+	notebookCache.SetPageSearchCache(notebookID, pageName, searchResult)
+	logging.ToolsLogger.Debug("Cached failed page search result",
+		"notebook_id", notebookID,
+		"page_name", pageName)
+
+	return nil, "", false, fmt.Errorf("page '%s' not found in notebook", pageName)
+}
+
+// getDetailedNotebookByNameCached retrieves comprehensive notebook information by display name with caching
+// This is a cached wrapper around notebooks.GetDetailedNotebookByName
+// Returns the notebook data and a boolean indicating if it was from cache
+func getDetailedNotebookByNameCached(notebookClient *notebooks.NotebookClient, notebookCache *NotebookCache, notebookName string) (map[string]interface{}, bool, error) {
+	logging.ToolsLogger.Debug("Getting detailed notebook by name with caching", "notebook_name", notebookName)
+
+	// Check if notebook lookup is already cached
+	if cachedNotebook, cached := notebookCache.GetNotebookLookupCache(notebookName); cached {
+		logging.ToolsLogger.Debug("Found cached notebook lookup result", 
+			"notebook_name", notebookName,
+			"cached_notebook_id", cachedNotebook["id"],
+			"cached_notebook_data", cachedNotebook)
+		logging.ToolsLogger.Info("Found notebook from lookup cache",
+			"notebook_name", notebookName,
+			"notebook_id", cachedNotebook["id"])
+		return cachedNotebook, true, nil
+	}
+
+	logging.ToolsLogger.Debug("No cached notebook lookup found, performing fresh lookup")
+
+	// Cache miss - fetch from API
+	notebook, err := notebookClient.GetDetailedNotebookByName(notebookName)
+	if err != nil {
+		logging.ToolsLogger.Debug("Failed to get notebook by name", "notebook_name", notebookName, "error", err)
+		return nil, false, err
+	}
+
+	// Log the fresh notebook data before caching
+	logging.ToolsLogger.Debug("Fresh notebook lookup result", 
+		"notebook_name", notebookName,
+		"fresh_notebook_id", notebook["id"],
+		"fresh_notebook_data", notebook)
+
+	// Cache the successful result
+	notebookCache.SetNotebookLookupCache(notebookName, notebook)
+	logging.ToolsLogger.Debug("Cached notebook lookup result", "notebook_name", notebookName, "notebook_id", notebook["id"])
+
+	return notebook, false, nil
 }
 
 // Helper functions are shared from NotebookTools.go
