@@ -643,8 +643,15 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		currentTime := time.Now()
 		formattedDate := currentTime.Format(cfg.QuickNote.DateFormat)
 
-		// Create HTML content with timestamp header and content
-		htmlContent := fmt.Sprintf(`<h3>%s</h3><p>%s</p>`, formattedDate, content)
+		// Detect format and convert content to HTML
+		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
+		logging.ToolsLogger.Debug("quickNote content format detection",
+			"detected_format", detectedFormat.String(),
+			"original_length", len(content),
+			"converted_length", len(convertedHTML))
+
+		// Create HTML content with timestamp header and converted content
+		htmlContent := fmt.Sprintf(`<h3>%s</h3>%s`, formattedDate, convertedHTML)
 
 		// Create update command to append to the body
 		commands := []pages.UpdateCommand{
@@ -685,11 +692,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			"content_length", len(content))
 
 		response := map[string]interface{}{
-			"success":   true,
-			"timestamp": formattedDate,
-			"notebook":  targetNotebookName,
-			"page":      cfg.QuickNote.PageName,
-			"message":   "Quicknote added successfully",
+			"success":         true,
+			"timestamp":       formattedDate,
+			"notebook":        targetNotebookName,
+			"page":            cfg.QuickNote.PageName,
+			"message":         "Quicknote added successfully",
+			"detected_format": detectedFormat.String(),
+			"content_length":  len(content),
+			"html_length":     len(convertedHTML),
 		}
 
 		jsonBytes, err := json.Marshal(response)

@@ -57,7 +57,7 @@ The project follows a **modular MCP server architecture** with clear separation 
 - `config/`: Multi-source configuration (env vars, JSON files, defaults)
 - `graph/`: Microsoft Graph SDK integration and HTTP client
 - `notebooks/`, `pages/`, `sections/`: Domain-specific OneNote operations
-- `utils/`: Validation and image processing utilities
+- `utils/`: Validation, image processing, and text format detection utilities
 
 ### Key Architectural Patterns
 
@@ -77,6 +77,8 @@ The project follows a **modular MCP server architecture** with clear separation 
 
 **Progress Notification System**: MCP tools support real-time progress notifications for long-running operations. Progress tokens are extracted from request metadata and used to send incremental progress updates to clients. HTTP request logging middleware is disabled in streamable mode to prevent interference with progress streaming.
 
+**Intelligent Text Format Detection**: Advanced text processing utilities automatically detect content format (HTML, Markdown, ASCII) and convert to appropriate HTML for OneNote. Uses `gomarkdown` library for high-quality Markdown to HTML conversion with support for tables, code blocks, lists, and other common Markdown features.
+
 ## Special Tools
 
 ### QuickNote Tool
@@ -85,6 +87,8 @@ The `quickNote` tool provides rapid note-taking functionality that appends times
 
 **Features:**
 - **Timestamped entries**: Each note is prefixed with an H3 heading containing the current date/time
+- **Intelligent format detection**: Automatically detects if content is HTML, Markdown, or plain ASCII text
+- **Multi-format support**: Converts Markdown to HTML, preserves HTML as-is, and wraps ASCII text in proper HTML paragraphs
 - **Configurable formatting**: Date format is customizable via Go time layout strings
 - **Smart page lookup**: Finds the target page by searching through all sections using cached listPages calls with multi-layer result caching
 - **Performance optimized**: Leverages three-layer caching system (page metadata, search results, notebook lookups) for fast repeated operations
@@ -107,7 +111,9 @@ The `quickNote` tool provides rapid note-taking functionality that appends times
 - If neither is specified, the tool will return an error
 - Only `page_name` is strictly required in the quicknote configuration
 
-**Usage Example:**
+**Usage Examples:**
+
+*Plain Text:*
 ```json
 {
   "method": "tools/call",
@@ -120,11 +126,56 @@ The `quickNote` tool provides rapid note-taking functionality that appends times
 }
 ```
 
+*Markdown Content:*
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "quickNote",
+    "arguments": {
+      "content": "# Meeting Notes\n\n- Discussed new features\n- **Action item**: Review API design\n- *Deadline*: End of week"
+    }
+  }
+}
+```
+
+*HTML Content:*
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "quickNote",
+    "arguments": {
+      "content": "<p>This is <strong>HTML</strong> content with <em>formatting</em></p>"
+    }
+  }
+}
+```
+
 **Output Format:**
-The tool appends HTML content in the following format to the target page:
+The tool detects the content format and converts it appropriately:
+
+*Plain Text Output:*
 ```html
 <h3>January 15, 2025 - 2:30 PM</h3>
 <p>Had a great idea for the project - implement real-time collaboration features</p>
+```
+
+*Markdown Content Output:*
+```html
+<h3>January 15, 2025 - 2:30 PM</h3>
+<h1 id="meeting-notes">Meeting Notes</h1>
+<ul>
+<li>Discussed new features</li>
+<li><strong>Action item</strong>: Review API design</li>
+<li><em>Deadline</em>: End of week</li>
+</ul>
+```
+
+*HTML Content Output:*
+```html
+<h3>January 15, 2025 - 2:30 PM</h3>
+<p>This is <strong>HTML</strong> content with <em>formatting</em></p>
 ```
 
 **Error Handling:**
