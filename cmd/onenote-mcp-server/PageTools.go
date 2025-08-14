@@ -263,7 +263,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		"updatePageContentAdvanced",
 		mcp.WithDescription(resources.MustGetToolDescription("updatePageContentAdvanced")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
-		mcp.WithString("commands", mcp.Required(), mcp.Description("JSON STRING containing an array of command objects. MUST be a string, not an array. Example: \"[{\\\"target\\\": \\\"body\\\", \\\"action\\\": \\\"append\\\", \\\"content\\\": \\\"<p>Hello</p>\\\"}]\"")),
+		mcp.WithString("commands", mcp.Required(), mcp.Description("JSON STRING containing an array of command objects. MUST be a string, not an array. Content in commands supports HTML, Markdown, or plain text (automatically detected and converted). Example: \"[{\\\"target\\\": \\\"body\\\", \\\"action\\\": \\\"append\\\", \\\"content\\\": \\\"# Header\\n- Item 1\\\"}]\"")),
 	)
 	s.AddTool(updatePageContentAdvancedTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -292,6 +292,34 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		logging.ToolsLogger.Debug("updatePageContentAdvanced commands parsed", "command_count", len(commands))
 
+		// Apply format detection and conversion to each command's content
+		var formatDetectionResults []map[string]interface{}
+		for i, command := range commands {
+			if command.Content != "" {
+				originalContent := command.Content
+				convertedHTML, detectedFormat := utils.ConvertToHTML(command.Content)
+				commands[i].Content = convertedHTML
+
+				// Track format detection results
+				formatDetectionResults = append(formatDetectionResults, map[string]interface{}{
+					"command_index":    i,
+					"target":          command.Target,
+					"action":          command.Action,
+					"detected_format": detectedFormat.String(),
+					"original_length": len(originalContent),
+					"html_length":     len(convertedHTML),
+				})
+
+				logging.ToolsLogger.Debug("updatePageContentAdvanced command content format detection",
+					"command_index", i,
+					"target", command.Target,
+					"action", command.Action,
+					"detected_format", detectedFormat.String(),
+					"original_length", len(originalContent),
+					"converted_length", len(convertedHTML))
+			}
+		}
+
 		err = pageClient.UpdatePageContent(pageID, commands)
 		if err != nil {
 			logging.ToolsLogger.Error("updatePageContentAdvanced operation failed", "page_id", pageID, "error", err, "operation", "updatePageContentAdvanced")
@@ -300,7 +328,21 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("updatePageContentAdvanced operation completed", "duration", elapsed)
-		return mcp.NewToolResultText("Page content updated successfully with advanced commands"), nil
+		
+		response := map[string]interface{}{
+			"success":                true,
+			"message":               "Page content updated successfully with advanced commands",
+			"commands_processed":    len(commands),
+			"format_detection":      formatDetectionResults,
+		}
+
+		jsonBytes, err := json.Marshal(response)
+		if err != nil {
+			logging.ToolsLogger.Error("updatePageContentAdvanced failed to marshal response", "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
+		}
+
+		return mcp.NewToolResultText(string(jsonBytes)), nil
 	})
 
 	// deletePage: Delete a page by ID
