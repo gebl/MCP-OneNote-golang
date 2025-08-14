@@ -28,7 +28,7 @@ import (
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
 	md "github.com/JohannesKaufmann/html-to-markdown"
-	htmlparser "golang.org/x/net/html"
+	"github.com/PuerkitoBio/goquery"
 	
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
@@ -453,35 +453,44 @@ func ConvertHTMLToMarkdown(htmlContent string) (string, error) {
 	return cleanMarkdown, nil
 }
 
-// ConvertHTMLToText converts HTML content to plain text format
+// ConvertHTMLToText converts HTML content to plain text format using goquery
 func ConvertHTMLToText(htmlContent string) (string, error) {
-	logging.UtilsLogger.Debug("Starting HTML to plain text conversion",
+	logging.UtilsLogger.Debug("Starting HTML to plain text conversion with goquery",
 		"input_length", len(htmlContent),
 		"input_preview", truncateString(htmlContent, 100))
 
-	// Parse the HTML
-	doc, err := htmlparser.Parse(strings.NewReader(htmlContent))
+	// Parse the HTML with goquery
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
-		logging.UtilsLogger.Error("HTML parsing failed", "error", err)
-		return "", fmt.Errorf("failed to parse HTML: %v", err)
+		logging.UtilsLogger.Error("HTML parsing with goquery failed", "error", err)
+		return "", fmt.Errorf("failed to parse HTML with goquery: %v", err)
 	}
 
-	// Extract text from the HTML document
 	var textBuilder strings.Builder
-	extractText(doc, &textBuilder)
-	
+
+	// Process specific elements in order to avoid duplication
+	processElement(doc.Find("body"), &textBuilder)
+
 	plainText := textBuilder.String()
 
-	// Clean up the text - remove excessive whitespace
+	// Clean up the text - remove excessive whitespace and normalize spacing
 	cleanText := strings.TrimSpace(plainText)
+	
 	// Replace multiple consecutive spaces with single space
-	re := regexp.MustCompile(`\s+`)
+	re := regexp.MustCompile(`[ \t]+`)
 	cleanText = re.ReplaceAllString(cleanText, " ")
+	
 	// Replace multiple consecutive newlines with just two (paragraph breaks)
 	re = regexp.MustCompile(`\n{3,}`)
 	cleanText = re.ReplaceAllString(cleanText, "\n\n")
+	
+	// Clean up spacing around newlines
+	re = regexp.MustCompile(`\n[ \t]+`)
+	cleanText = re.ReplaceAllString(cleanText, "\n")
+	re = regexp.MustCompile(`[ \t]+\n`)
+	cleanText = re.ReplaceAllString(cleanText, "\n")
 
-	logging.UtilsLogger.Debug("HTML to plain text conversion completed",
+	logging.UtilsLogger.Debug("HTML to plain text conversion completed with goquery",
 		"input_length", len(htmlContent),
 		"output_length", len(cleanText),
 		"output_preview", truncateString(cleanText, 100))
@@ -489,41 +498,88 @@ func ConvertHTMLToText(htmlContent string) (string, error) {
 	return cleanText, nil
 }
 
-// extractText recursively extracts text from HTML nodes
-func extractText(n *htmlparser.Node, textBuilder *strings.Builder) {
-	if n.Type == htmlparser.TextNode {
-		textBuilder.WriteString(n.Data)
-	}
-	
-	// Add line breaks for certain block elements
-	if n.Type == htmlparser.ElementNode {
-		switch n.Data {
-		case "br":
-			textBuilder.WriteString("\n")
-		case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6":
-			// Add spacing around block elements
+// processElement recursively processes HTML elements to build text with proper structure
+func processElement(selection *goquery.Selection, textBuilder *strings.Builder) {
+	selection.Contents().Each(func(i int, s *goquery.Selection) {
+		// If it's a text node, add it directly
+		if goquery.NodeName(s) == "#text" {
+			text := strings.TrimSpace(s.Text())
+			if text != "" {
+				if textBuilder.Len() > 0 && !strings.HasSuffix(textBuilder.String(), " ") && !strings.HasSuffix(textBuilder.String(), "\n") {
+					textBuilder.WriteString(" ")
+				}
+				textBuilder.WriteString(text)
+			}
+			return
+		}
+
+		tagName := goquery.NodeName(s)
+		
+		// Handle different elements with appropriate formatting
+		switch tagName {
+		case "h1", "h2", "h3", "h4", "h5", "h6":
+			// Headers: add spacing and the text
 			if textBuilder.Len() > 0 {
 				textBuilder.WriteString("\n\n")
 			}
+			textBuilder.WriteString(strings.TrimSpace(s.Text()))
+			textBuilder.WriteString("\n")
+			
+		case "p":
+			// Paragraphs: add spacing and process contents
+			if textBuilder.Len() > 0 {
+				textBuilder.WriteString("\n\n")
+			}
+			processElement(s, textBuilder)
+			
+		case "div":
+			// Divs: process contents with spacing
+			if textBuilder.Len() > 0 && !strings.HasSuffix(textBuilder.String(), "\n") {
+				textBuilder.WriteString("\n\n")
+			}
+			processElement(s, textBuilder)
+			
+		case "br":
+			// Line breaks
+			textBuilder.WriteString("\n")
+			
+		case "ul", "ol":
+			// Lists: add spacing and process list items
+			if textBuilder.Len() > 0 {
+				textBuilder.WriteString("\n")
+			}
+			processElement(s, textBuilder)
+			
 		case "li":
+			// List items: add bullet point and process contents
 			textBuilder.WriteString("\n- ")
+			processElement(s, textBuilder)
+			
+		case "table":
+			// Tables: add spacing and process table contents
+			if textBuilder.Len() > 0 {
+				textBuilder.WriteString("\n")
+			}
+			processElement(s, textBuilder)
+			
 		case "tr":
-			textBuilder.WriteString("\n")
+			// Table rows: add newline and process cells
+			if textBuilder.Len() > 0 && !strings.HasSuffix(textBuilder.String(), "\n") {
+				textBuilder.WriteString("\n")
+			}
+			processElement(s, textBuilder)
+			
 		case "td", "th":
-			textBuilder.WriteString("\t")
+			// Table cells: add tab separation and process contents
+			if textBuilder.Len() > 0 && !strings.HasSuffix(textBuilder.String(), "\n") && !strings.HasSuffix(textBuilder.String(), "\t") {
+				textBuilder.WriteString("\t")
+			}
+			processElement(s, textBuilder)
+			
+		default:
+			// For other elements, just process their contents
+			processElement(s, textBuilder)
 		}
-	}
-
-	// Recursively process child nodes
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		extractText(c, textBuilder)
-	}
-	
-	// Add closing line breaks for certain block elements
-	if n.Type == htmlparser.ElementNode {
-		switch n.Data {
-		case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6":
-			textBuilder.WriteString("\n")
-		}
-	}
+	})
 }
+
