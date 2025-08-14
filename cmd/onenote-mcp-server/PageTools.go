@@ -120,7 +120,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription(resources.MustGetToolDescription("createPage")),
 		mcp.WithString("sectionID", mcp.Required(), mcp.Description("Section ID to create page in")),
 		mcp.WithString("title", mcp.Required(), mcp.Description("Page title (cannot contain: ?*\\/:<>|&#''%%~)")),
-		mcp.WithString("content", mcp.Required(), mcp.Description("HTML content for the page")),
+		mcp.WithString("content", mcp.Required(), mcp.Description("Content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
 	)
 	s.AddTool(createPageTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -157,7 +157,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 		logging.ToolsLogger.Debug("createPage title validation passed")
 
-		result, err := pageClient.CreatePage(sectionID, title, content)
+		// Detect format and convert content to HTML
+		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
+		logging.ToolsLogger.Debug("createPage content format detection",
+			"detected_format", detectedFormat.String(),
+			"original_length", len(content),
+			"converted_length", len(convertedHTML))
+
+		result, err := pageClient.CreatePage(sectionID, title, convertedHTML)
 		if err != nil {
 			logging.ToolsLogger.Error("createPage operation failed", "section_id", sectionID, "error", err, "operation", "createPage")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create page: %v", err)), nil
@@ -175,8 +182,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		response := map[string]interface{}{
-			"success": true,
-			"pageID":  pageID,
+			"success":         true,
+			"pageID":          pageID,
+			"detected_format": detectedFormat.String(),
+			"content_length":  len(content),
+			"html_length":     len(convertedHTML),
 		}
 
 		jsonBytes, err := json.Marshal(response)
@@ -195,7 +205,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		"updatePageContent",
 		mcp.WithDescription(resources.MustGetToolDescription("updatePageContent")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
-		mcp.WithString("content", mcp.Required(), mcp.Description("New HTML content for the page")),
+		mcp.WithString("content", mcp.Required(), mcp.Description("New content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
 	)
 	s.AddTool(updatePageContentTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -215,7 +225,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		logging.ToolsLogger.Debug("updatePageContent parameters", "pageID", pageID, "content_length", len(content))
 
-		err = pageClient.UpdatePageContentSimple(pageID, content)
+		// Detect format and convert content to HTML
+		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
+		logging.ToolsLogger.Debug("updatePageContent content format detection",
+			"detected_format", detectedFormat.String(),
+			"original_length", len(content),
+			"converted_length", len(convertedHTML))
+
+		err = pageClient.UpdatePageContentSimple(pageID, convertedHTML)
 		if err != nil {
 			logging.ToolsLogger.Error("updatePageContent operation failed", "page_id", pageID, "error", err, "operation", "updatePageContent")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to update page content: %v", err)), nil
@@ -223,7 +240,22 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("updatePageContent operation completed", "duration", elapsed)
-		return mcp.NewToolResultText("Page content updated successfully"), nil
+		
+		response := map[string]interface{}{
+			"success":         true,
+			"message":         "Page content updated successfully",
+			"detected_format": detectedFormat.String(),
+			"content_length":  len(content),
+			"html_length":     len(convertedHTML),
+		}
+
+		jsonBytes, err := json.Marshal(response)
+		if err != nil {
+			logging.ToolsLogger.Error("updatePageContent failed to marshal response", "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
+		}
+
+		return mcp.NewToolResultText(string(jsonBytes)), nil
 	})
 
 	// updatePageContentAdvanced: Update page content with advanced commands
