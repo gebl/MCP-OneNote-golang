@@ -384,6 +384,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription(resources.MustGetToolDescription("getPageContent")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to fetch content for")),
 		mcp.WithString("forUpdate", mcp.Description("Optional: set to 'true' to include includeIDs=true parameter for update operations")),
+		mcp.WithString("format", mcp.Description("Optional: output format - 'HTML' (default), 'Markdown', or 'Text'. Note: forUpdate only works with HTML format.")),
 	)
 	s.AddTool(getPageContentTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -397,18 +398,90 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		forUpdateStr := req.GetString("forUpdate", "")
 		forUpdate := forUpdateStr == "true"
+		
+		formatStr := req.GetString("format", "HTML")
+		format := strings.ToUpper(strings.TrimSpace(formatStr))
+		
+		// Validate format parameter
+		validFormats := []string{"HTML", "MARKDOWN", "TEXT"}
+		isValidFormat := false
+		for _, validFormat := range validFormats {
+			if format == validFormat {
+				isValidFormat = true
+				break
+			}
+		}
+		if !isValidFormat {
+			logging.ToolsLogger.Error("getPageContent invalid format", "format", format, "valid_formats", validFormats)
+			return mcp.NewToolResultError(fmt.Sprintf("Invalid format '%s'. Valid formats are: HTML, Markdown, Text", formatStr)), nil
+		}
+		
+		// Check for incompatible parameter combinations
+		if forUpdate && format != "HTML" {
+			logging.ToolsLogger.Error("getPageContent forUpdate incompatible with non-HTML format", "forUpdate", forUpdate, "format", format)
+			return mcp.NewToolResultError("forUpdate parameter can only be used with HTML format (for page updates)"), nil
+		}
 
-		logging.ToolsLogger.Debug("getPageContent parameters", "pageID", pageID, "forUpdate", forUpdate)
+		logging.ToolsLogger.Debug("getPageContent parameters", "pageID", pageID, "forUpdate", forUpdate, "format", format)
 
-		content, err := pageClient.GetPageContent(pageID, forUpdate)
+		// Always get HTML content first
+		htmlContent, err := pageClient.GetPageContent(pageID, forUpdate)
 		if err != nil {
 			logging.ToolsLogger.Error("getPageContent operation failed", "page_id", pageID, "error", err, "operation", "getPageContent")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to get page content: %v", err)), nil
 		}
 
+		var finalContent string
+		var conversionError error
+
+		// Convert content based on requested format
+		switch format {
+		case "HTML":
+			finalContent = htmlContent
+			logging.ToolsLogger.Debug("getPageContent returning HTML content as-is")
+		case "MARKDOWN":
+			logging.ToolsLogger.Debug("getPageContent converting HTML to Markdown")
+			finalContent, conversionError = utils.ConvertHTMLToMarkdown(htmlContent)
+			if conversionError != nil {
+				logging.ToolsLogger.Error("getPageContent HTML to Markdown conversion failed", "error", conversionError)
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert content to Markdown: %v", conversionError)), nil
+			}
+		case "TEXT":
+			logging.ToolsLogger.Debug("getPageContent converting HTML to plain text")
+			finalContent, conversionError = utils.ConvertHTMLToText(htmlContent)
+			if conversionError != nil {
+				logging.ToolsLogger.Error("getPageContent HTML to plain text conversion failed", "error", conversionError)
+				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert content to plain text: %v", conversionError)), nil
+			}
+		}
+
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("getPageContent operation completed", "duration", elapsed, "content_length", len(content))
-		return mcp.NewToolResultText(content), nil
+		logging.ToolsLogger.Debug("getPageContent operation completed", 
+			"duration", elapsed, 
+			"original_html_length", len(htmlContent), 
+			"final_content_length", len(finalContent),
+			"output_format", format)
+		
+		// Create response with format information
+		response := map[string]interface{}{
+			"content":            finalContent,
+			"format":            format,
+			"original_html_length": len(htmlContent),
+			"final_content_length": len(finalContent),
+		}
+		
+		// Add forUpdate info if applicable
+		if forUpdate {
+			response["for_update"] = true
+		}
+
+		jsonBytes, err := json.Marshal(response)
+		if err != nil {
+			logging.ToolsLogger.Error("getPageContent failed to marshal response", "error", err)
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
+		}
+
+		return mcp.NewToolResultText(string(jsonBytes)), nil
 	})
 
 	// getPageItemContent: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type

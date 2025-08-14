@@ -27,6 +27,8 @@ import (
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
+	md "github.com/JohannesKaufmann/html-to-markdown"
+	htmlparser "golang.org/x/net/html"
 	
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
@@ -424,4 +426,104 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// ConvertHTMLToMarkdown converts HTML content to Markdown format
+func ConvertHTMLToMarkdown(htmlContent string) (string, error) {
+	logging.UtilsLogger.Debug("Starting HTML to Markdown conversion",
+		"input_length", len(htmlContent),
+		"input_preview", truncateString(htmlContent, 100))
+
+	converter := md.NewConverter("", true, nil)
+	
+	markdownText, err := converter.ConvertString(htmlContent)
+	if err != nil {
+		logging.UtilsLogger.Error("HTML to Markdown conversion failed", "error", err)
+		return "", fmt.Errorf("failed to convert HTML to Markdown: %v", err)
+	}
+
+	// Clean up the markdown - remove excessive whitespace
+	cleanMarkdown := strings.TrimSpace(markdownText)
+
+	logging.UtilsLogger.Debug("HTML to Markdown conversion completed",
+		"input_length", len(htmlContent),
+		"output_length", len(cleanMarkdown),
+		"output_preview", truncateString(cleanMarkdown, 100))
+
+	return cleanMarkdown, nil
+}
+
+// ConvertHTMLToText converts HTML content to plain text format
+func ConvertHTMLToText(htmlContent string) (string, error) {
+	logging.UtilsLogger.Debug("Starting HTML to plain text conversion",
+		"input_length", len(htmlContent),
+		"input_preview", truncateString(htmlContent, 100))
+
+	// Parse the HTML
+	doc, err := htmlparser.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		logging.UtilsLogger.Error("HTML parsing failed", "error", err)
+		return "", fmt.Errorf("failed to parse HTML: %v", err)
+	}
+
+	// Extract text from the HTML document
+	var textBuilder strings.Builder
+	extractText(doc, &textBuilder)
+	
+	plainText := textBuilder.String()
+
+	// Clean up the text - remove excessive whitespace
+	cleanText := strings.TrimSpace(plainText)
+	// Replace multiple consecutive spaces with single space
+	re := regexp.MustCompile(`\s+`)
+	cleanText = re.ReplaceAllString(cleanText, " ")
+	// Replace multiple consecutive newlines with just two (paragraph breaks)
+	re = regexp.MustCompile(`\n{3,}`)
+	cleanText = re.ReplaceAllString(cleanText, "\n\n")
+
+	logging.UtilsLogger.Debug("HTML to plain text conversion completed",
+		"input_length", len(htmlContent),
+		"output_length", len(cleanText),
+		"output_preview", truncateString(cleanText, 100))
+
+	return cleanText, nil
+}
+
+// extractText recursively extracts text from HTML nodes
+func extractText(n *htmlparser.Node, textBuilder *strings.Builder) {
+	if n.Type == htmlparser.TextNode {
+		textBuilder.WriteString(n.Data)
+	}
+	
+	// Add line breaks for certain block elements
+	if n.Type == htmlparser.ElementNode {
+		switch n.Data {
+		case "br":
+			textBuilder.WriteString("\n")
+		case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6":
+			// Add spacing around block elements
+			if textBuilder.Len() > 0 {
+				textBuilder.WriteString("\n\n")
+			}
+		case "li":
+			textBuilder.WriteString("\n- ")
+		case "tr":
+			textBuilder.WriteString("\n")
+		case "td", "th":
+			textBuilder.WriteString("\t")
+		}
+	}
+
+	// Recursively process child nodes
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		extractText(c, textBuilder)
+	}
+	
+	// Add closing line breaks for certain block elements
+	if n.Type == htmlparser.ElementNode {
+		switch n.Data {
+		case "p", "div", "h1", "h2", "h3", "h4", "h5", "h6":
+			textBuilder.WriteString("\n")
+		}
+	}
 }
