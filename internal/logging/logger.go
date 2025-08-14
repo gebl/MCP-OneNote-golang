@@ -276,5 +276,6 @@ var (
 	PageLogger     = GetLogger("page")
 	SectionLogger  = GetLogger("section")
 	ToolsLogger    = GetLogger("tools")
+	UtilsLogger    = GetLogger("utils")
 	MainLogger     = GetLogger("main")
 )
