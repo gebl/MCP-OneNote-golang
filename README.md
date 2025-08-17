@@ -347,59 +347,78 @@ The server includes completion infrastructure that is **prepared but not yet act
 
 ### Notebook Operations
 - **`listNotebooks`**: List all OneNote notebooks for the user
-  - Returns: Array of notebook metadata (ID, display name)
+  - Parameters: None
+  - Returns: Array of notebook metadata with ID, name, isAPIDefault, and isConfigDefault flags
   - **Note:** Automatically handles pagination to return all notebooks
 
+- **`selectNotebook`**: Select a notebook by name or ID to use as the active notebook
+  - Parameters: `identifier` (required) - Notebook name or ID to select as active
+  - Returns: Success confirmation with selected notebook metadata
+  - **Note:** Sets the notebook in the global cache for use by other operations
+
+- **`getSelectedNotebook`**: Get currently selected notebook metadata from cache
+  - Parameters: None
+  - Returns: Currently selected notebook metadata
+  - **Note:** Returns error if no notebook is currently selected
+
+- **`getNotebookSections`**: Get hierarchical sections and section groups from selected notebook
+  - Parameters: None (uses currently selected notebook)
+  - Returns: Notebook root with nested sections and section groups as children
+  - **Features:**
+    - Multi-layer caching with 5-minute expiration
+    - Real-time progress notifications for long-running operations
+    - Cache-aware progress updates (differentiates between cached and API operations)
+    - Hierarchical tree structure showing complete notebook organization
+  - **Note:** Requires a notebook to be selected first via `selectNotebook`
+
 ### Section Operations
-- **`listSections`**: List all sections in a notebook or section group
-      - Parameters: `containerId` (optional) - notebook ID or section group ID. If not provided, uses the default notebook from config
-  - Returns: Array of section metadata (ID, display name)
-  - **Note:** Automatically handles pagination to return all sections
-
 - **`createSection`**: Create a new section in a notebook or section group
-    - Parameters: `containerId` (optional), `displayName` (required) - containerId can be notebook ID or section group ID. If not provided, uses the default notebook from config
-    - Returns: Created section metadata
-    - **Note:** Display name cannot contain: ?*\\/:<>|&#''%%~
-    - **Container Hierarchy:** Sections can only be created inside notebooks or section groups, not inside other sections
-
-### Section Group Operations
-- **`listSectionGroups`**: List all section groups in a notebook or section group
-    - Parameters: `containerId` (optional) - notebook ID or section group ID. If not provided, uses the default notebook from config
-    - Returns: Array of section group metadata with parent information
-    - **Note:** Each section group includes parent notebook, parent section group, or direct parent container details to show hierarchy
-    - **Container Hierarchy:** Section groups can only be listed from notebooks or other section groups, not from sections
+  - Parameters: `containerID` (optional), `displayName` (required)
+  - Returns: Created section metadata with success status and section ID
+  - **Notes:** 
+    - If containerID is not provided, uses the server's configured default notebook
+    - Display name cannot contain: ?*\\/:<>|&#''%%~
+    - Container Hierarchy: Sections can only be created inside notebooks or section groups, not inside other sections
 
 - **`createSectionGroup`**: Create a new section group in a notebook or section group
-    - Parameters: `containerId` (optional), `displayName` (required) - containerId can be notebook ID or section group ID. If not provided, uses the default notebook from config
-    - Returns: Created section group metadata
-    - **Note:** Display name cannot contain: ?*\\/:<>|&#''%%~
-    - **Container Hierarchy:** Section groups can only be created inside notebooks or other section groups, not inside sections
-
-### Copy Operations
-- **`copyPage`**: Copy a page to another section (asynchronous)
-      - Parameters: `pageId` (required), `targetSectionId` (required)
-  - Returns: Operation status and new page ID
+  - Parameters: `containerID` (optional), `displayName` (required)
+  - Returns: Created section group metadata with success status and section group ID
+  - **Notes:**
+    - If containerID is not provided, uses the server's configured default notebook
+    - Display name cannot contain: ?*\\/:<>|&#''%%~
+    - Container Hierarchy: Section groups can only be created inside notebooks or other section groups, not inside sections
 
 ### Page Operations
 - **`listPages`**: List all pages in a section
-  - Parameters: `sectionId` (required)
-  - Returns: Array of page metadata (ID, title)
+  - Parameters: `sectionID` (required) - MUST be actual section ID, NOT a section name
+  - Returns: Structured response with pages array, cache status, and performance metrics
+  - **Features:**
+    - Multi-layer caching with 5-minute expiration and automatic invalidation
+    - Authorization filtering integration
+    - Progress notification support for long-running operations
+    - Cache hit/miss status reporting with performance metrics
   - **Note:** Automatically handles pagination to return all pages
 
 - **`createPage`**: Create a new page in a section
-    - Parameters: `sectionId`, `title`, `content` (all required)
-    - Returns: Created page metadata
-    - **Note:** Title cannot contain: ?*\\/:<>|&#''%%~
+  - Parameters: `sectionID` (required), `title` (required), `content` (required)
+  - Returns: Created page metadata
+  - **Features:**
+    - Intelligent text format detection (HTML, Markdown, ASCII)
+    - Automatic HTML conversion with gomarkdown library support
+    - Illegal character validation with suggested alternatives
+  - **Note:** Title cannot contain: ?*\\/:<>|&#''%%~
 
 - **`updatePageContent`**: Update page HTML content (simple replacement)
-  - Parameters: `pageId`, `content` (all required)
+  - Parameters: `pageID` (required), `content` (required)
   - Returns: Success confirmation
+  - **Note:** Replaces entire page content. Use `updatePageContentAdvanced` for targeted updates
+
 - **`updatePageContentAdvanced`**: Update specific parts of a page using advanced commands (preferred method)
-  - Parameters: `pageId` (required), `commands` (required JSON array)
+  - Parameters: `pageID` (required), `commands` (required JSON array)
   - Returns: Success confirmation
-  - **How to get data-id values:** Use `getPageContent` with `forUpdate=true` to retrieve HTML with `data-id` attributes. These values can be used as targets in your update commands.
-  - **Preferred Usage:** Use this tool to add, change, or delete parts of a page. Only use a full page update if you intend to replace the entire page content.
-  - **CRITICAL: Table Update Restrictions:** Tables must be updated as complete units. You CANNOT update individual table cells (td), headers (th), or rows (tr). Always target the entire table element and replace with complete table HTML to prevent layout corruption.
+  - **How to get data-id values:** Use `getPageContent` with `forUpdate=true` to retrieve HTML with `data-id` attributes
+  - **Preferred Usage:** Use this tool to add, change, or delete parts of a page. Only use full page update if you intend to replace entire page content
+  - **CRITICAL: Table Update Restrictions:** Tables must be updated as complete units. You CANNOT update individual table cells (td), headers (th), or rows (tr). Always target the entire table element and replace with complete table HTML to prevent layout corruption
   - **How to use the data-tag attribute for built-in note tags:**
     - Use the `data-tag` attribute to add and update check boxes, stars, and other built-in note tags on a OneNote page.
     - To add or update a built-in note tag, just use the `data-tag` attribute on a supported element.
@@ -452,41 +471,46 @@ The server includes completion infrastructure that is **prepared but not yet act
     - **Note:** For `append` actions, do not include the `position` parameter as it will be automatically excluded from the API request.
 
 - **`deletePage`**: Delete a page by ID
-  - Parameters: `pageId` (required)
+  - Parameters: `pageID` (required)
   - Returns: Success confirmation
 
-- **`searchPages`**: Search pages by title within a specific notebook
-  - Parameters: `query` (required), `notebookId` (optional)
-  - Returns: Array of matching page metadata with section context
-  - **Note:** Recursively searches all sections and section groups in the notebook. If notebookId is not provided, uses the default notebook from config
-
 - **`copyPage`**: Copy a page from one section to another using Microsoft Graph API (asynchronous)
-  - Parameters: `pageId`, `targetSectionId` (both required)
+  - Parameters: `pageID` (required), `targetSectionID` (required)
   - Returns: New page ID and operation metadata
   - **Note:** Automatically handles asynchronous operation polling and completion
 
+- **`movePage`**: Move a page from one section to another (copy then delete)
+  - Parameters: `pageID` (required), `targetSectionID` (required)
+  - Returns: Moved page metadata with operation details
+  - **Note:** Implements move as copy-then-delete for reliable operation
+
 - **`getOnenoteOperation`**: Get status of asynchronous OneNote operations
-  - Parameters: `operationId` (required)
+  - Parameters: `operationID` (required)
   - Returns: Operation status and metadata
   - **Note:** Primarily used internally, but available for manual operation tracking
 
-- **`movePage`**: Move a page from one section to another (copy then delete)
-  - Parameters: `pageId`, `targetSectionId` (both required)
-  - Returns: Moved page metadata with operation details
-
 ### Content Operations
 - **`getPageContent`**: Get HTML content of a page
-  - Parameters: `pageId` (required), `forUpdate` (optional string, set to 'true' to include data-id attributes for advanced updates)
+  - Parameters: `pageID` (required), `forUpdate` (optional string, set to 'true' to include data-id attributes for advanced updates)
   - Returns: HTML content as string
-  - **Tip:** Use `forUpdate=true` to extract `data-id` values for use with advanced page updates (see below).
+  - **Features:**
+    - Optional data-id attribute inclusion for advanced update targeting
+    - Content processing and conversion utilities
+  - **Tip:** Use `forUpdate=true` to extract `data-id` values for use with advanced page updates
 
 - **`listPageItems`**: List embedded items (images, files) in a page
-  - Parameters: `pageId` (required)
+  - Parameters: `pageID` (required)
   - Returns: Array of page item metadata with HTML attributes
+  - **Note:** Identifies all embedded objects within page content
 
-- **`getPageItem`**: Get complete page item data (content + metadata)
-  - Parameters: `pageId`, `pageItemId` (both required)
+- **`getPageItemContent`**: Get complete page item data (content + metadata)
+  - Parameters: `pageID` (required), `pageItemID` (required), `fullSize` (optional)
   - Returns: JSON with base64-encoded content and metadata
+  - **Features:**
+    - Automatic image optimization with configurable size limits
+    - Smart filename generation with proper extensions
+    - Content-Type detection from HTML attributes and HTTP headers
+    - Optional full-size retrieval bypassing automatic scaling
 
 ### Special Tools
 - **`quickNote`**: Rapid note-taking with automatic timestamping and format detection
@@ -498,8 +522,19 @@ The server includes completion infrastructure that is **prepared but not yet act
     - Configurable target notebook and page via configuration
     - Append-only operation preserving existing content
     - Multi-layer caching for fast repeated operations
+    - Performance optimized with cache-aware progress notifications
   - **Configuration Required:** Set `quicknote.notebook_name` and `quicknote.page_name` in config
   - **Note:** Falls back to default notebook if `quicknote.notebook_name` not configured
+
+### Cache Management
+- **`clearCache`**: Clear all cached data (notebook sections and pages)
+  - Parameters: None
+  - Returns: Success confirmation with details of cleared cache layers
+  - **Features:**
+    - Clears notebook sections cache
+    - Clears page metadata cache for all sections
+    - Forces fresh data retrieval on next requests
+    - System maintenance operation (no authorization required)
 
 ### Authentication Operations
 - **`getAuthStatus`**: Get current authentication status and token information
@@ -521,6 +556,15 @@ The server includes completion infrastructure that is **prepared but not yet act
   - Parameters: None
   - Returns: Success confirmation
   - **Note:** Requires `initiateAuth` to re-authenticate after clearing
+
+### Testing and Utilities
+- **`testProgress`**: Test tool for progress notification functionality
+  - Parameters: None
+  - Returns: Success confirmation after completing progress test
+  - **Features:**
+    - Emits progress messages from 0 to 10 over 10 seconds
+    - Tests progress notification system functionality
+    - Useful for debugging progress streaming in different transport modes
 
 ## 🔐 Authentication Flow
 
