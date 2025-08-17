@@ -36,7 +36,6 @@ This server enables AI assistants and other MCP clients to read, create, update,
 
 ### 🌐 MCP Protocol Integration
 - **MCP Resources**: Hierarchical URI-based resource discovery (`onenote://notebooks`, `onenote://sections`, etc.)
-- **MCP Completions**: Intelligent autocomplete support for notebook names and context-aware suggestions
 - **Streamlined MCP Protocol**: Focused on tools and resources following current MCP specification
 - **Multi-Mode Support**: stdio and streamable HTTP protocols with built-in SSE streaming
 
@@ -332,17 +331,6 @@ The server provides hierarchical URI-based resources for data discovery:
 
 **Features**: Dynamic content generation from live OneNote data, progress notifications for long-running requests, proper URI encoding, and seamless MCP client integration.
 
-### MCP Completions
-
-The server includes completion infrastructure that is **prepared but not yet active**:
-- **Notebook Name Completion**: Full implementation ready for notebook name autocomplete
-- **Context-Aware Logic**: Fuzzy matching and relevance sorting algorithms implemented
-- **Performance Optimized**: Cached results with intelligent filtering
-- **⚠️ Status**: Waiting for completion support in the mcp-go library
-- **Ready for Activation**: Complete handler implementation exists in `completions.go`
-
-*Note: Completion functionality will be automatically enabled when the underlying mcp-go library adds completion support.*
-
 ### MCP Tools
 
 ### Notebook Operations
@@ -627,8 +615,7 @@ MCP-OneNote-golang/
 │   ├── resources.go                # Main MCP resource registration orchestrator
 │   ├── NotebookResources.go        # Notebook-related MCP resources
 │   ├── SectionResources.go         # Section-related MCP resources
-│   ├── PageResources.go            # Page-related MCP resources
-│   └── completions.go              # MCP completion definitions
+│   └── PageResources.go            # Page-related MCP resources
 ├── internal/                       # Domain-specific modules
 │   ├── auth/                       # OAuth2 authentication and token management
 │   │   └── auth.go                 # PKCE flow, token refresh, secure storage

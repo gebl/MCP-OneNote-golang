@@ -1069,10 +1069,9 @@ func main() {
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(false))
 
-	// Register MCP Tools, Resources, and Completions
+	// Register MCP Tools and Resources
 	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
 	registerResources(s, graphClient)
-	registerCompletions(s, graphClient)
 
 	// Initialize default notebook if authentication is available
 	initializeDefaultNotebook(graphClient, cfg, globalNotebookCache, logger)

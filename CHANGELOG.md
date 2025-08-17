@@ -24,17 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Major Architecture Refactor**: Complete reorganization of MCP tool structure for better maintainability and performance
   - **Modular Tool Architecture**: Split monolithic `tools.go` into specialized modules (`AuthTools.go`, `NotebookTools.go`, `PageTools.go`)
   - **MCP Resources Support**: Added `resources.go` providing `notebooks` resource for data discovery and client integration
-  - **MCP Completions Support**: Added `completions.go` providing intelligent autocomplete for notebook names and other parameters
   - **Global Notebook Cache**: Implemented thread-safe notebook cache system with automatic initialization and management
   - **Default Notebook Initialization**: Server automatically selects and caches a default notebook on startup when authenticated
-- **Enhanced MCP Capabilities**: Full support for MCP resources and completions specification
+- **Enhanced MCP Capabilities**: Full support for MCP resources specification
   - **Resource Discovery**: Clients can discover available notebooks through MCP resources
-  - **Intelligent Autocomplete**: Context-aware completions based on live OneNote data
-  - **Performance Optimizations**: Cached notebook data for fast autocomplete responses
+  - **Performance Optimizations**: Cached notebook data for fast resource responses
 - **Code Organization Improvements**: Better separation of concerns and maintainability
   - **Removed Deprecated Code**: Eliminated `prompts.go` file as prompts functionality is deprecated in current MCP specification
   - **Focused Tool Modules**: Each tool module handles a specific domain (auth, notebooks, pages)
-  - **Improved Test Coverage**: Updated test suite to cover new architecture and resource/completion functionality
+  - **Improved Test Coverage**: Updated test suite to cover new architecture and resource functionality
 - **Enhanced Tool Descriptions**: Significantly improved user-friendliness and clarity of all MCP tool descriptions
   - **Centralized Description System**: Created `internal/resources/descriptions.go` for consistent tool description management
   - **User-Friendly Language**: Replaced technical jargon with clear, accessible explanations
@@ -54,12 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Configuration Priority**: Respects `ONENOTE_DEFAULT_NOTEBOOK_NAME` configuration for default selection
 - **Updated Documentation**: Comprehensive updates to CLAUDE.md reflecting new architecture
   - **Architecture Overview**: Updated to reflect modular tool organization
-  - **MCP Features Section**: New section documenting resources and completions capabilities
+  - **MCP Features Section**: New section documenting resources capabilities
   - **Testing Strategy**: Updated test documentation to reflect new architecture
 
 ### Removed
 - **Deprecated Prompts System**: Removed `prompts.go` file as prompts are deprecated in current MCP specification
-  - **Focus on Tools**: Resources and completions provide better integration than prompts
+  - **Focus on Tools**: Resources provide better integration than prompts
   - **Cleaner Architecture**: Removes unused functionality and reduces complexity
   - **Better MCP Compliance**: Aligns with current MCP specification standards
 - **Deprecated Section Copy Tool**: Removed `copySection` tool from NotebookTools.go and related functionality
@@ -70,7 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical Improvements
 - **Thread-Safe Caching**: Robust notebook cache implementation with proper concurrency handling
 - **Resource Generation**: Dynamic resource generation from live OneNote data
-- **Completion Engine**: Fast autocomplete engine with caching for performance
 - **Error Recovery**: Enhanced error handling in tool modules with graceful degradation
 - **Memory Management**: Improved memory usage through better data structure organization
 - **Client Delegation Pattern**: Improved notebooks.go to properly delegate to section and page clients

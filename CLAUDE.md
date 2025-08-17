@@ -61,7 +61,7 @@ The project follows a **modular MCP server architecture** with clear separation 
 
 **Entry Point (`cmd/onenote-mcp-server/`)**:
 - `main.go`: Server initialization, mode selection (stdio/streamable), token management, notebook cache
-- `tools.go`: Main MCP registration orchestrator (tools, resources, completions)
+- `tools.go`: Main MCP registration orchestrator (tools, resources)
 - `AuthTools.go`: Authentication-related MCP tools
 - `NotebookTools.go`: Notebook and section management MCP tools  
 - `PageTools.go`: Page content and item management MCP tools
@@ -69,7 +69,6 @@ The project follows a **modular MCP server architecture** with clear separation 
 - `NotebookResources.go`: Notebook-related MCP resources (notebooks list, notebook details, notebook sections)
 - `SectionResources.go`: Section-related MCP resources (global sections, notebook sections)
 - `PageResources.go`: Page-related MCP resources (pages by section, page content for updates)
-- `completions.go`: MCP completion definitions for autocomplete support
 
 **Domain-Specific Modules (`internal/`)**:
 - `auth/`: OAuth 2.0 PKCE flow, token refresh, secure storage
@@ -90,7 +89,7 @@ The project follows a **modular MCP server architecture** with clear separation 
 
 **Multi-Layer Caching System**: A comprehensive caching architecture with three levels - page metadata by section ID, page search results by notebook:page key, and notebook lookup results by name. All cache layers provide 5-minute expiration, automatic invalidation on operations, cache-aware progress notifications, and significant performance improvements.
 
-**MCP Resources and Completions**: Server provides MCP resources for data discovery and completions for autocomplete support, enhancing the development experience.
+**MCP Resources**: Server provides MCP resources for data discovery, enhancing the development experience.
 
 **Container Hierarchy Validation**: OneNote's strict container hierarchy (Notebooks → Section Groups → Sections → Pages) is enforced through `determineContainerType` validation in section operations.
 
@@ -840,11 +839,6 @@ The server provides resources for data discovery through a hierarchical URI stru
 - **URI Encoding**: All names and IDs are properly URL-encoded in resource URIs
 - **Integration**: MCP clients can discover and access OneNote information through standardized resource URIs
 
-### MCP Completions  
-The server provides intelligent autocomplete support:
-- **Notebook Name Completion**: Autocomplete notebook names in tool parameters
-- **Context-Aware**: Completions based on current user's OneNote data
-- **Performance**: Cached results for fast autocomplete responses
 
 ### Default Notebook Management
 - **Automatic Initialization**: Server attempts to set a default notebook on startup
@@ -871,7 +865,7 @@ The server provides intelligent autocomplete support:
 
 ### Test Coverage
 The project has comprehensive unit tests covering core functionality:
-- **`cmd/onenote-mcp-server/`**: Configuration loading, tool registration, resources, completions
+- **`cmd/onenote-mcp-server/`**: Configuration loading, tool registration, resources
 - **`internal/notebooks/`**: Notebook operations and Microsoft Graph integration
 - **`internal/pages/`**: Page CRUD operations, content handling, image processing
 - **`internal/sections/`**: Section operations, container hierarchy validation
@@ -888,7 +882,7 @@ The project has comprehensive unit tests covering core functionality:
 go test ./...
 
 # Specific components
-go test ./cmd/onenote-mcp-server -v    # Server initialization, tools, resources, completions
+go test ./cmd/onenote-mcp-server -v    # Server initialization, tools, resources
 go test ./internal/notebooks -v        # Notebook operations
 go test ./internal/pages -v           # Page operations
 go test ./internal/sections -v        # Section operations
