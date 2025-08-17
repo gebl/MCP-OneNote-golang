@@ -1,36 +1,57 @@
 # OneNote MCP Server
 
-A Go-based Model Context Protocol (MCP) server that provides seamless integration with Microsoft OneNote via the Microsoft Graph API. This server enables AI assistants and other MCP clients to read, create, update, and manage OneNote notebooks, sections, pages, and embedded content.
+**Created by Gabriel Lawrence**
+
+A Go-based Model Context Protocol (MCP) server that provides seamless integration with Microsoft OneNote via the Microsoft Graph API. This project was created to experiment with AI-assisted development using Claude, GitHub Copilot, and Cursor, while learning about MCP server architecture and capabilities.
+
+This server enables AI assistants and other MCP clients to read, create, update, and manage OneNote notebooks, sections, pages, and embedded content with enterprise-grade features including comprehensive authorization, caching, and intelligent content processing.
 
 ## 🚀 Features
 
-### Core OneNote Operations
-- **Notebook Management**: List all OneNote notebooks for the authenticated user
-- **Section Operations**: List sections within notebooks
-- **Page Operations**: Create, read, update, and delete OneNote pages
-- **Content Management**: Full HTML content support with rich formatting
-- **Page Item Handling**: Extract and manage embedded images, files, and objects
-- **Search Capabilities**: Recursive search through all sections and section groups within a notebook
-- **MCP Prompts**: 11 comprehensive prompts providing contextual guidance for OneNote operations
+### 🎯 Rapid Note-Taking
+- **QuickNote Tool**: Intelligent rapid note-taking with automatic timestamping, format detection (HTML/Markdown/ASCII), and smart page lookup
+- **Multi-Format Support**: Automatic conversion between Markdown, HTML, and plain text with proper formatting preservation
+- **Configurable Templates**: Customizable date formats and target notebook/page configurations
 
-### Authentication & Security
-- **OAuth 2.0 PKCE Flow**: Secure authentication using Proof Key for Code Exchange
-- **Automatic Token Refresh**: Handles token expiration and renewal automatically
-- **Input Validation**: Sanitizes and validates all OneNote IDs to prevent injection attacks
-- **Secure Token Storage**: Local token persistence with automatic refresh
-- **Security Hardened**: Git history cleaned of any sensitive credentials or tokens
+### 🔐 Enterprise Security & Authorization
+- **Granular Authorization System**: Comprehensive permission-based access control with hierarchical inheritance
+- **OAuth 2.0 PKCE Flow**: Secure authentication using Proof Key for Code Exchange with non-blocking startup
+- **Default-Deny Security Model**: Secure defaults with explicit permission grants following principle of least privilege
+- **Audit Logging**: Complete authorization decision logging with security monitoring capabilities
+- **MCP Authentication Tools**: Built-in tools for authentication management (`getAuthStatus`, `initiateAuth`, `refreshToken`, `clearAuth`)
 
-### Content Processing
-- **Image Optimization**: Automatic scaling of large images for better performance
-- **Metadata Extraction**: Rich HTML metadata extraction from OneNote content
-- **Content Type Detection**: Intelligent content type detection from HTML attributes
-- **Binary Content Handling**: Full support for embedded files and media
+### 🚀 High-Performance Architecture
+- **Multi-Layer Caching System**: Three-tier caching (page metadata, search results, notebook lookups) with 5-minute expiration
+- **Progress Notification System**: Real-time progress updates for long-running operations with cache-aware notifications
+- **Thread-Safe Operations**: Global notebook cache with concurrent-safe access patterns
+- **Smart Cache Invalidation**: Automatic cache updates when content changes occur
 
-### Developer Experience
-- **Comprehensive Logging**: Detailed debug and operation logs
-- **Error Handling**: Robust error handling with meaningful error messages
-- **Docker Support**: Containerized deployment with Docker and Docker Compose
-- **Configuration Management**: Flexible configuration via environment variables or JSON files
+### 📚 Core OneNote Operations
+- **Notebook Management**: Complete notebook operations with automatic pagination and caching
+- **Section & Section Group Operations**: Full hierarchical container management with strict validation
+- **Advanced Page Operations**: Create, read, update, delete with intelligent content targeting and table handling
+- **Content Management**: Rich HTML content support with format detection and absolute positioning
+- **Page Item Handling**: Extract and manage embedded images, files, and objects with optimization
+- **Search Capabilities**: Recursive search through all sections and section groups within notebooks
+
+### 🌐 MCP Protocol Integration
+- **MCP Resources**: Hierarchical URI-based resource discovery (`onenote://notebooks`, `onenote://sections`, etc.)
+- **MCP Completions**: Intelligent autocomplete support for notebook names and context-aware suggestions
+- **Streamlined MCP Protocol**: Focused on tools and resources following current MCP specification
+- **Multi-Mode Support**: stdio, SSE (Server-Sent Events), and streamable HTTP protocols
+
+### 🧠 Intelligent Content Processing
+- **Format Detection**: Automatic detection and conversion between HTML, Markdown, and ASCII text
+- **Image Optimization**: Smart image scaling and processing with configurable size limits
+- **Table Handling**: Advanced table update restrictions to prevent layout corruption
+- **Note Tags Support**: Built-in OneNote note tags with data-tag attribute support
+- **Absolute Positioning**: Support for absolutely positioned elements on OneNote pages
+
+### 🐳 Production-Ready Deployment
+- **Docker Support**: Multi-stage builds with security-first design and non-root execution
+- **Docker Compose**: Simplified orchestration with environment file support and multiple profiles
+- **Configuration Management**: Multi-source configuration (environment variables, JSON files, defaults)
+- **Health Monitoring**: Built-in health checks and comprehensive logging with configurable verbosity
 
 ## 📋 Prerequisites
 
@@ -130,44 +151,206 @@ The OneNote MCP Server supports three different modes for client communication:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
+| **Core Configuration** | | | |
 | `ONENOTE_CLIENT_ID` | Azure App Registration Client ID | Yes | - |
 | `ONENOTE_TENANT_ID` | Azure Tenant ID (use "common" for multi-tenant) | Yes | - |
 | `ONENOTE_REDIRECT_URI` | OAuth2 redirect URI | Yes | - |
 | `ONENOTE_DEFAULT_NOTEBOOK_NAME` | Default notebook name | No | - |
 | `ONENOTE_TOOLSETS` | Comma-separated list of enabled toolsets | No | All |
+| `ONENOTE_MCP_CONFIG` | Path to JSON configuration file | No | - |
+| **QuickNote Configuration** | | | |
+| `QUICKNOTE_NOTEBOOK_NAME` | Target notebook for quick notes | No | Falls back to default |
+| `QUICKNOTE_PAGE_NAME` | Target page for quick notes | No | - |
+| `QUICKNOTE_DATE_FORMAT` | Go time format for timestamps | No | Default format |
+| **Authorization Configuration** | | | |
+| `AUTHORIZATION_ENABLED` | Enable authorization system | No | false |
+| `AUTHORIZATION_DEFAULT_MODE` | Global default permission | No | read |
+| `AUTHORIZATION_CONFIG` | Path to authorization JSON config | No | - |
+| **MCP Authentication (HTTP mode)** | | | |
+| `MCP_AUTH_ENABLED` | Enable bearer token auth for HTTP mode | No | false |
+| `MCP_BEARER_TOKEN` | Bearer token for HTTP authentication | No | - |
+| **Logging Configuration** | | | |
+| `LOG_LEVEL` | General logging level (DEBUG/INFO/WARN/ERROR) | No | INFO |
+| `LOG_FORMAT` | Log format (text/json) | No | text |
 | `MCP_LOG_FILE` | Path to log file | No | Console only |
+| `CONTENT_LOG_LEVEL` | Content logging verbosity (DEBUG/INFO/WARN/ERROR/OFF) | No | INFO |
 
 ### Configuration File
 
-Create `configs/config.json`:
+Create `configs/config.json` with full feature support:
 ```json
 {
   "client_id": "your-azure-app-client-id",
-  "tenant_id": "your-azure-tenant-id",
+  "tenant_id": "your-azure-tenant-id", 
   "redirect_uri": "http://localhost:8080/callback",
-  "notebook_name": "My Notebook",  // Maps to ONENOTE_DEFAULT_NOTEBOOK_NAME
-  "toolsets": ["notebooks", "sections", "pages", "content"]
+  "notebook_name": "My Default Notebook",
+  "toolsets": ["notebooks", "sections", "pages", "content"],
+  
+  "quicknote": {
+    "notebook_name": "Personal Notes",
+    "page_name": "Daily Journal", 
+    "date_format": "January 2, 2006 - 3:04 PM"
+  },
+  
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "read", 
+    "default_notebook_mode": "none",
+    "default_section_mode": "read",
+    "default_page_mode": "none",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write",
+      "notebook_management": "read"
+    },
+    "notebook_permissions": {
+      "Personal Notes": "write",
+      "Work Notes": "read" 
+    },
+    "section_permissions": {
+      "Meeting Notes": "write",
+      "Projects": "read"
+    },
+    "page_permissions": {
+      "Daily Journal": "write",
+      "Quick Notes": "write"
+    }
+  },
+  
+  "mcp_auth": {
+    "enabled": true,
+    "bearer_token": "your-secret-bearer-token"
+  },
+  
+  "log_level": "INFO",
+  "log_format": "text",
+  "content_log_level": "INFO"
 }
 ```
 
-## 🎯 Available MCP Tools & Prompts
+## ⚡ QuickNote Tool
 
-### MCP Prompts
-The server provides 11 contextual prompts that offer guidance for OneNote operations:
+The `quickNote` tool provides rapid note-taking functionality with intelligent format detection and automatic timestamping:
 
-- **explore-onenote-structure**: Navigate and understand OneNote structure
-- **navigate-to-section**: Find specific sections within notebooks
-- **create-structured-page**: Create pages with proper templates and formatting
-- **update-page-content**: Modify page content with precise targeting
-- **search-onenote-content**: Advanced content search across notebooks
-- **organize-onenote-structure**: Reorganize OneNote structure
-- **backup-and-migrate**: Backup and move content between locations
-- **extract-media-content**: Extract embedded media from pages
-- **create-content-workflow**: Set up automated content workflows
-- **batch-content-operations**: Perform operations on multiple items
-- **validate-onenote-operation**: Troubleshoot and validate operations
+### Features
+- **Automatic Timestamping**: Each note gets an H3 timestamp heading in configurable format
+- **Smart Format Detection**: Automatically detects and converts HTML, Markdown, or ASCII text  
+- **Configurable Target**: Set specific notebook and page for quick notes via configuration
+- **Performance Optimized**: Uses multi-layer caching for fast repeated operations
+- **Append-Only**: New content is always appended, preserving existing page content
 
-Each prompt provides contextual guidance, best practices, and step-by-step instructions for OneNote operations.
+### Configuration
+```json
+{
+  "quicknote": {
+    "notebook_name": "Personal Notes",        // Target notebook (optional - falls back to default)
+    "page_name": "Daily Journal",             // Target page (required)
+    "date_format": "January 2, 2006 - 3:04 PM"  // Go time format (optional)
+  }
+}
+```
+
+### Usage Examples
+```bash
+# Plain text note
+{"name": "quickNote", "arguments": {"content": "Had a great idea for the project"}}
+
+# Markdown note  
+{"name": "quickNote", "arguments": {"content": "# Meeting Notes\n\n- Action item: Review API\n- **Deadline**: EOW"}}
+
+# HTML note
+{"name": "quickNote", "arguments": {"content": "<p>This is <strong>formatted</strong> content</p>"}}
+```
+
+Each note automatically gets formatted with timestamp and proper HTML conversion:
+```html
+<h3>January 15, 2025 - 2:30 PM</h3>
+<p>Your note content here...</p>
+```
+
+## 🔐 Authorization System
+
+The server includes a comprehensive authorization system providing fine-grained access control over all operations:
+
+### Permission Modes
+- **`none`**: No access - operations are denied
+- **`read`**: Read-only access - view operations only  
+- **`write`**: Full read/write access - all operations allowed
+- **`full`**: Administrative access (for tool permissions only)
+
+### Hierarchical Permission Structure
+1. **Tool-Level Permissions**: Control access to MCP tool categories (`auth_tools`, `notebook_management`, `page_write`, etc.)
+2. **Resource-Level Permissions**: Specific permissions for notebooks, sections, and pages by name
+3. **Default Permissions**: Fallback permissions for resource types
+4. **Global Default**: Ultimate fallback permission level
+
+### Security Features
+- **Default-Deny Model**: Secure defaults with explicit permission grants
+- **Principle of Least Privilege**: Minimum necessary permissions
+- **Audit Logging**: All authorization decisions logged with context
+- **OAuth Integration**: Works seamlessly with authentication flow
+
+### Example Configurations
+
+**Restrictive Setup** (Default-deny):
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "none",
+    "tool_permissions": {"auth_tools": "full", "page_read": "read"},
+    "notebook_permissions": {"Public Notes": "read"},
+    "page_permissions": {"Daily Journal": "write"}
+  }
+}
+```
+
+**QuickNote-Focused Setup**:
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_notebook_mode": "none",
+    "tool_permissions": {"auth_tools": "full", "page_write": "write"},
+    "notebook_permissions": {"Personal Notes": "write"},
+    "page_permissions": {"Daily Journal": "write"}
+  }
+}
+```
+
+## 🎯 Available MCP Tools & Resources
+
+### MCP Resources
+
+The server provides hierarchical URI-based resources for data discovery:
+
+#### Notebook Resources
+- **`onenote://notebooks`**: Lists all available notebooks with metadata
+- **`onenote://notebooks/{name}`**: Get specific notebook details by display name  
+- **`onenote://notebooks/{name}/sections`**: Hierarchical view of sections and section groups within a notebook
+
+#### Section Resources
+- **`onenote://sections`**: Get all sections across all notebooks using global sections endpoint
+- **`onenote://notebooks/{name}/sections`**: Get sections within a specific notebook
+
+#### Page Resources  
+- **`onenote://pages/{sectionIdOrName}`**: List all pages in a specific section by either section ID or display name
+- **`onenote://page/{pageId}`**: Get HTML content for a specific page with data-id attributes for update operations
+
+**Features**: Dynamic content generation from live OneNote data, progress notifications for long-running requests, proper URI encoding, and seamless MCP client integration.
+
+### MCP Completions
+
+The server includes completion infrastructure that is **prepared but not yet active**:
+- **Notebook Name Completion**: Full implementation ready for notebook name autocomplete
+- **Context-Aware Logic**: Fuzzy matching and relevance sorting algorithms implemented
+- **Performance Optimized**: Cached results with intelligent filtering
+- **⚠️ Status**: Waiting for completion support in the mcp-go library
+- **Ready for Activation**: Complete handler implementation exists in `completions.go`
+
+*Note: Completion functionality will be automatically enabled when the underlying mcp-go library adds completion support.*
 
 ### MCP Tools
 
@@ -314,6 +497,19 @@ Each prompt provides contextual guidance, best practices, and step-by-step instr
   - Parameters: `pageId`, `pageItemId` (both required)
   - Returns: JSON with base64-encoded content and metadata
 
+### Special Tools
+- **`quickNote`**: Rapid note-taking with automatic timestamping and format detection
+  - Parameters: `content` (required) - Text content in HTML, Markdown, or plain text format
+  - Returns: Success confirmation with formatted content preview
+  - **Features:**
+    - Automatic timestamp header in configurable format
+    - Smart format detection and conversion (HTML/Markdown/ASCII)
+    - Configurable target notebook and page via configuration
+    - Append-only operation preserving existing content
+    - Multi-layer caching for fast repeated operations
+  - **Configuration Required:** Set `quicknote.notebook_name` and `quicknote.page_name` in config
+  - **Note:** Falls back to default notebook if `quicknote.notebook_name` not configured
+
 ### Authentication Operations
 - **`getAuthStatus`**: Get current authentication status and token information
   - Parameters: None
@@ -386,26 +582,65 @@ mcp > listNotebooks
 
 ```
 MCP-OneNote-golang/
-├── cmd/onenote-mcp-server/     # Main application entry point
-│   └── main.go                 # Server setup and tool registration
-├── internal/
-│   ├── auth/                   # OAuth2 authentication and token management
-│   │   └── auth.go             # PKCE flow, token refresh, secure storage
-│   ├── config/                 # Configuration management
-│   │   └── config.go           # Environment and file-based config loading
-│   └── graph/                  # Microsoft Graph API client
-│       └── graph.go            # OneNote operations, content processing
-├── configs/                    # Configuration files and examples
-│   └── example-config.json     # Example configuration template
-├── docker/                     # Containerization files
-│   ├── Dockerfile              # Multi-stage Docker build
-│   └── docker-compose.yml      # Docker Compose configuration
-├── docs/                       # Documentation
-│   ├── api.md                  # API reference
-│   ├── setup.md                # Detailed setup instructions
+├── cmd/onenote-mcp-server/         # Main application entry point
+│   ├── main.go                     # Server initialization, mode selection, caching
+│   ├── tools.go                    # Main MCP tool registration orchestrator
+│   ├── AuthTools.go                # Authentication-related MCP tools
+│   ├── NotebookTools.go            # Notebook and section management tools
+│   ├── PageTools.go                # Page content and item management tools  
+│   ├── TestTools.go                # Testing and diagnostic tools
+│   ├── resources.go                # Main MCP resource registration orchestrator
+│   ├── NotebookResources.go        # Notebook-related MCP resources
+│   ├── SectionResources.go         # Section-related MCP resources
+│   ├── PageResources.go            # Page-related MCP resources
+│   └── completions.go              # MCP completion definitions
+├── internal/                       # Domain-specific modules
+│   ├── auth/                       # OAuth2 authentication and token management
+│   │   └── auth.go                 # PKCE flow, token refresh, secure storage
+│   ├── authorization/              # Granular permission system
+│   │   └── authorization.go        # Permission evaluation and enforcement
+│   ├── config/                     # Multi-source configuration management
+│   │   └── config.go               # Environment vars, JSON files, defaults
+│   ├── graph/                      # Microsoft Graph SDK integration
+│   │   └── client.go               # HTTP client and authentication
+│   ├── notebooks/                  # Notebook domain operations
+│   │   └── notebooks.go            # Notebook CRUD and management
+│   ├── pages/                      # Page domain operations
+│   │   └── pages.go                # Page content, items, and formatting
+│   ├── sections/                   # Section domain operations
+│   │   └── sections.go             # Section and section group operations
+│   ├── utils/                      # Shared utilities
+│   │   ├── validation.go           # Input validation and sanitization
+│   │   └── image.go                # Image processing and optimization
+│   └── logging/                    # Structured logging system
+│       └── logger.go               # Configurable logging with levels
+├── configs/                        # Configuration files and examples
+│   ├── example-config.json         # Example configuration template
+│   └── authorization-examples.json # Authorization configuration examples
+├── docker/                         # Production-ready containerization
+│   ├── Dockerfile                  # Multi-stage security-first build
+│   ├── docker-compose.yml          # Multi-mode orchestration
+│   └── .env.example                # Environment configuration template
+├── docs/                           # Comprehensive documentation
+│   ├── api.md                      # API reference and examples
+│   ├── setup.md                    # Detailed setup instructions
+│   ├── authorization-integration.md # Authorization system guide
 │   └── tool-to-resource-conversion.md
-└── README.md                   # This file
+├── CLAUDE.md                       # AI development guidance and architecture
+└── README.md                       # This file
 ```
+
+### Architecture Highlights
+
+**Modular MCP Server Design**: Clear separation between entry point (`cmd/`), domain logic (`internal/`), and configuration (`configs/`) following Go best practices.
+
+**Client Composition Pattern**: Core `graph.Client` composed into specialized domain clients (`NotebookClient`, `PageClient`, `SectionClient`) sharing HTTP/auth functionality.
+
+**Comprehensive Authorization**: Hierarchical permission system with tool-level, resource-level, and default permissions supporting fine-grained access control.
+
+**Multi-Layer Caching**: Thread-safe caching system with page metadata, search results, and notebook lookup caches providing 5-minute expiration and automatic invalidation.
+
+**Progressive Enhancement**: Starts with basic MCP functionality and adds enterprise features like authorization, caching, progress notifications, and intelligent content processing.
 
 ## 🚀 Usage Examples
 
@@ -425,6 +660,39 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{"name": "createSection", "arguments": {"containerId": "notebook-id", "displayName": "New Section"}}'
+```
+
+### QuickNote Usage
+```bash
+# Plain text quick note
+curl -X POST http://localhost:8080/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "quickNote",
+    "arguments": {
+      "content": "Had a breakthrough idea for the user interface design!"
+    }
+  }'
+
+# Markdown quick note with formatting
+curl -X POST http://localhost:8080/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "quickNote", 
+    "arguments": {
+      "content": "# Meeting Summary\n\n- **Decision**: Use React for frontend\n- **Action Item**: Research component libraries\n- *Deadline*: Friday EOD"
+    }
+  }'
+
+# HTML quick note  
+curl -X POST http://localhost:8080/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "quickNote",
+    "arguments": {
+      "content": "<p>Important: <strong>Server maintenance</strong> scheduled for <em>tonight at 11 PM</em></p>"
+    }
+  }'
 ```
 
 ### Page Management
