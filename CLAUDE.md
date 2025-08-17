@@ -30,8 +30,27 @@ go test ./internal/pages             # Page operations
 go test ./internal/sections          # Section operations
 
 # Build for Docker
-docker build -t onenote-mcp-server .
-docker run -p 8080:8080 onenote-mcp-server
+docker build -f docker/Dockerfile -t onenote-mcp-server .
+
+# Run in stdio mode
+docker run --rm \
+  -e ONENOTE_CLIENT_ID=your-client-id \
+  -e ONENOTE_TENANT_ID=common \
+  -e ONENOTE_REDIRECT_URI=http://localhost:8080/callback \
+  onenote-mcp-server
+
+# Run in HTTP mode
+docker run -d -p 8080:8080 \
+  -e ONENOTE_CLIENT_ID=your-client-id \
+  -e ONENOTE_TENANT_ID=common \
+  -e ONENOTE_REDIRECT_URI=http://localhost:8080/callback \
+  -e MCP_AUTH_ENABLED=true \
+  -e MCP_BEARER_TOKEN=your-secret-token \
+  onenote-mcp-server -mode=streamable
+
+# Using Docker Compose
+cd docker && docker-compose up onenote-mcp-server       # Stdio mode
+cd docker && docker-compose --profile http up           # HTTP mode
 ```
 
 ## Architecture Overview
@@ -499,6 +518,216 @@ Allow broader access for development while protecting sensitive notebooks:
 1. **Caching**: Permission decisions are cached per request for performance
 2. **Early Termination**: Authorization failures fail fast without expensive operations
 3. **Logging Efficiency**: Use appropriate log levels to balance security and performance
+
+## Docker Deployment
+
+### Container Features
+
+The OneNote MCP Server includes production-ready Docker configuration with:
+
+**Security-First Design:**
+- Non-root execution with dedicated `mcpuser` account
+- Minimal Alpine Linux base image for reduced attack surface
+- Read-only configuration mounting
+- Secure token persistence via Docker volumes
+
+**Multi-Mode Support:**
+- **Stdio Mode**: For local development and Claude Desktop integration
+- **HTTP Mode**: For remote access and web-based MCP clients
+- **Docker Compose**: Simplified orchestration with environment file support
+
+**Configuration Management:**
+- Complete environment variable support for all settings
+- JSON configuration file mounting for authorization settings
+- Automatic token persistence across container restarts
+- Comprehensive logging with configurable verbosity
+
+### Docker Build and Deployment
+
+#### Basic Container Usage
+
+**Stdio Mode (Local Development):**
+```bash
+docker run --rm \
+  -e ONENOTE_CLIENT_ID=your-client-id \
+  -e ONENOTE_TENANT_ID=common \
+  -e ONENOTE_REDIRECT_URI=http://localhost:8080/callback \
+  -v tokens_volume:/app \
+  onenote-mcp-server
+```
+
+**HTTP Mode (Production):**
+```bash
+docker run -d -p 8080:8080 \
+  -e ONENOTE_CLIENT_ID=your-client-id \
+  -e ONENOTE_TENANT_ID=common \
+  -e ONENOTE_REDIRECT_URI=http://localhost:8080/callback \
+  -e MCP_AUTH_ENABLED=true \
+  -e MCP_BEARER_TOKEN=your-secret-token \
+  -e AUTHORIZATION_ENABLED=true \
+  -v /path/to/config.json:/app/config.json \
+  -v tokens_volume:/app \
+  onenote-mcp-server -mode=streamable
+```
+
+#### Docker Compose Deployment
+
+**Environment Configuration (`docker/.env`):**
+```bash
+# Azure App Registration
+ONENOTE_CLIENT_ID=your-azure-app-client-id
+ONENOTE_TENANT_ID=common
+ONENOTE_REDIRECT_URI=http://localhost:8080/callback
+
+# Authorization (when using JSON config)
+AUTHORIZATION_ENABLED=true
+AUTHORIZATION_DEFAULT_MODE=read
+
+# MCP Authentication
+MCP_AUTH_ENABLED=true
+MCP_BEARER_TOKEN=your-secret-bearer-token
+
+# Logging
+LOG_LEVEL=INFO
+CONTENT_LOG_LEVEL=INFO
+```
+
+**Service Deployment:**
+```bash
+cd docker
+
+# Stdio mode (default)
+docker-compose up onenote-mcp-server
+
+# HTTP mode with authentication
+docker-compose --profile http up onenote-mcp-server-http
+
+# Background deployment
+docker-compose up -d onenote-mcp-server-http
+```
+
+#### Authorization with Docker
+
+**Configuration File Mounting:**
+```bash
+# Create authorization config
+cat > docker/configs/auth-config.json << 'EOF'
+{
+  "client_id": "your-client-id",
+  "tenant_id": "common",
+  "redirect_uri": "http://localhost:8080/callback",
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write"
+    },
+    "notebook_permissions": {
+      "Work Notes": "write",
+      "Personal": "read"
+    }
+  }
+}
+EOF
+
+# Run with authorization
+docker run -d -p 8080:8080 \
+  -v $(pwd)/docker/configs:/app/configs:ro \
+  -v tokens_volume:/app \
+  -e ONENOTE_MCP_CONFIG=/app/configs/auth-config.json \
+  onenote-mcp-server -mode=streamable
+```
+
+### Production Deployment Recommendations
+
+#### Security Hardening
+1. **Use HTTPS**: Always use HTTPS in production with proper TLS certificates
+2. **Network Isolation**: Deploy in private networks with restricted access
+3. **Secrets Management**: Use Docker secrets or external secret management
+4. **Resource Limits**: Set appropriate CPU and memory limits
+5. **Health Monitoring**: Implement health checks and monitoring
+
+#### Example Production Setup
+```yaml
+version: '3.8'
+services:
+  onenote-mcp-server:
+    image: onenote-mcp-server:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - ONENOTE_CLIENT_ID=${ONENOTE_CLIENT_ID}
+      - ONENOTE_TENANT_ID=${ONENOTE_TENANT_ID}
+      - ONENOTE_REDIRECT_URI=https://your-domain.com/callback
+      - MCP_AUTH_ENABLED=true
+      - AUTHORIZATION_ENABLED=true
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    volumes:
+      - ./configs:/app/configs:ro
+      - tokens_data:/app
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["-mode=streamable"]
+
+volumes:
+  tokens_data:
+    driver: local
+```
+
+#### Container Image Management
+```bash
+# Build versioned image
+docker build -f docker/Dockerfile -t onenote-mcp-server:1.7.0 .
+docker tag onenote-mcp-server:1.7.0 onenote-mcp-server:latest
+
+# Multi-architecture build
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f docker/Dockerfile -t onenote-mcp-server:1.7.0 .
+
+# Registry deployment
+docker tag onenote-mcp-server:1.7.0 your-registry.com/onenote-mcp-server:1.7.0
+docker push your-registry.com/onenote-mcp-server:1.7.0
+```
+
+### Container Monitoring
+
+**Health Checks:**
+```bash
+# Check container status
+docker ps
+docker logs onenote-mcp-server
+
+# Monitor resource usage
+docker stats onenote-mcp-server
+
+# Execute health checks
+curl -H "Authorization: Bearer your-token" \
+  http://localhost:8080/mcp/v1/health
+```
+
+**Log Analysis:**
+```bash
+# Follow logs with JSON formatting
+docker logs -f onenote-mcp-server | jq '.'
+
+# Filter authorization events
+docker logs onenote-mcp-server 2>&1 | grep authorization
+
+# Export logs for analysis
+docker logs onenote-mcp-server > onenote-mcp.log
+```
 
 ## OneNote Operations Architecture
 
