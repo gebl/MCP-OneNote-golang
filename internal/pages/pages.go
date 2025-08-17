@@ -197,6 +197,121 @@ func (c *PageClient) ListPages(sectionID string) ([]map[string]interface{}, erro
 	return pages, nil
 }
 
+// ListPagesWithProgress fetches all pages in a section with progress updates for long-running operations.
+// Provides granular progress notifications during pagination to prevent client timeouts.
+func (c *PageClient) ListPagesWithProgress(sectionID string, progressCallback func(progress int, message string)) ([]map[string]interface{}, error) {
+	logging.PageLogger.Info("Starting ListPagesWithProgress operation", "section_id", sectionID)
+
+	if progressCallback != nil {
+		progressCallback(0, "Initializing page listing...")
+	}
+
+	if c.TokenManager != nil && c.TokenManager.IsExpired() {
+		logging.PageLogger.Debug("Token expired, refreshing before ListPagesWithProgress", "section_id", sectionID)
+		if progressCallback != nil {
+			progressCallback(5, "Refreshing authentication token...")
+		}
+		if err := c.RefreshTokenIfNeeded(); err != nil {
+			logging.PageLogger.Error("Token refresh failed during ListPagesWithProgress", "section_id", sectionID, "error", err)
+			return nil, fmt.Errorf("token expired and refresh failed: %v", err)
+		}
+		logging.PageLogger.Debug("Token refreshed successfully for ListPagesWithProgress", "section_id", sectionID)
+	}
+
+	ctx := context.Background()
+	if progressCallback != nil {
+		progressCallback(10, "Making initial API request...")
+	}
+	
+	logging.PageLogger.Debug("Making Graph API call to list pages with progress", "section_id", sectionID)
+	result, err := c.GraphClient.Me().Onenote().Sections().ByOnenoteSectionId(sectionID).Pages().Get(ctx, nil)
+	if err != nil {
+		logging.PageLogger.Debug("Initial Graph API call failed", "section_id", sectionID, "error", err)
+		if strings.Contains(err.Error(), "JWT") || strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
+			logging.PageLogger.Debug("Authentication error detected, attempting token refresh", "section_id", sectionID)
+			if progressCallback != nil {
+				progressCallback(15, "Authentication error, refreshing token...")
+			}
+			if c.TokenManager != nil && c.OAuthConfig != nil {
+				if refreshErr := c.RefreshTokenIfNeeded(); refreshErr != nil {
+					logging.PageLogger.Error("Token refresh failed after auth error", "section_id", sectionID, "refresh_error", refreshErr, "original_error", err)
+					return nil, fmt.Errorf("authentication failed and token refresh failed: %v", refreshErr)
+				}
+				if progressCallback != nil {
+					progressCallback(20, "Token refreshed, retrying API request...")
+				}
+				logging.PageLogger.Debug("Token refreshed, retrying Graph API call", "section_id", sectionID)
+				result, err = c.GraphClient.Me().Onenote().Sections().ByOnenoteSectionId(sectionID).Pages().Get(ctx, nil)
+				if err != nil {
+					logging.PageLogger.Error("Graph API call failed after token refresh", "section_id", sectionID, "error", err)
+					return nil, err
+				}
+				logging.PageLogger.Debug("Graph API call succeeded after token refresh", "section_id", sectionID)
+			} else {
+				logging.PageLogger.Error("Authentication error but no token manager available", "section_id", sectionID, "error", err)
+				return nil, err
+			}
+		} else {
+			logging.PageLogger.Error("Graph API call failed with non-auth error", "section_id", sectionID, "error", err)
+			return nil, err
+		}
+	}
+
+	var pages []map[string]interface{}
+	if result != nil {
+		pages = append(pages, extractOnenotePageList(result)...)
+		logging.PageLogger.Debug("Initial page batch retrieved", "section_id", sectionID, "page_count", len(pages))
+		if progressCallback != nil {
+			progressCallback(30, fmt.Sprintf("Retrieved initial batch: %d pages", len(pages)))
+		}
+	}
+	
+	nextLink := result.GetOdataNextLink()
+	paginationCount := 0
+	totalExpectedProgress := 70 // Reserve 30% for pagination, 70% total for completion
+	
+	// Estimate pagination progress - we don't know total pages yet, so we'll increment gradually
+	for nextLink != nil {
+		paginationCount++
+		// Progressive pagination progress: 30% + (paginationCount * 10%) up to 70%
+		currentProgress := 30 + (paginationCount * 10)
+		if currentProgress > totalExpectedProgress {
+			currentProgress = totalExpectedProgress
+		}
+		
+		if progressCallback != nil {
+			progressCallback(currentProgress, fmt.Sprintf("Loading page batch %d...", paginationCount+1))
+		}
+		
+		logging.PageLogger.Debug("Processing pagination with progress", "section_id", sectionID, "pagination_count", paginationCount, "progress", currentProgress)
+		requestInfo := abstractions.NewRequestInformation()
+		requestInfo.UrlTemplate = *nextLink
+		requestInfo.Method = abstractions.GET
+		resp, err := c.GraphClient.GetAdapter().Send(ctx, requestInfo, msgraphmodels.CreateOnenotePageCollectionResponseFromDiscriminatorValue, nil)
+		if err != nil {
+			logging.PageLogger.Error("Pagination request failed", "section_id", sectionID, "pagination_count", paginationCount, "error", err)
+			return nil, fmt.Errorf("failed to fetch next page of pages: %v", err)
+		}
+		pageResp := resp.(msgraphmodels.OnenotePageCollectionResponseable)
+		batchPages := extractOnenotePageList(pageResp)
+		pages = append(pages, batchPages...)
+		logging.PageLogger.Debug("Pagination batch retrieved with progress", "section_id", sectionID, "pagination_count", paginationCount, "batch_size", len(batchPages), "total_pages", len(pages))
+		
+		if progressCallback != nil {
+			progressCallback(currentProgress+5, fmt.Sprintf("Processed batch %d: %d total pages", paginationCount+1, len(pages)))
+		}
+		
+		nextLink = pageResp.GetOdataNextLink()
+	}
+	
+	if progressCallback != nil {
+		progressCallback(100, fmt.Sprintf("Completed: %d pages loaded", len(pages)))
+	}
+	
+	logging.PageLogger.Info("ListPagesWithProgress completed successfully", "section_id", sectionID, "total_pages", len(pages), "pagination_requests", paginationCount)
+	return pages, nil
+}
+
 // extractOnenotePageList extracts page info from a OnenotePageCollectionResponseable
 func extractOnenotePageList(result msgraphmodels.OnenotePageCollectionResponseable) []map[string]interface{} {
 	var pages []map[string]interface{}

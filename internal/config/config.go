@@ -78,6 +78,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
@@ -94,6 +95,9 @@ type Config struct {
 
 	// MCP Authentication configuration
 	MCPAuth *MCPAuthConfig `json:"mcp_auth"` // MCP server authentication settings
+
+	// Authorization configuration
+	Authorization *authorization.AuthorizationConfig `json:"authorization"` // Tool and resource authorization settings
 
 	// Server configuration
 	Stateless *bool `json:"stateless"` // Enable stateless mode for HTTP server
@@ -116,6 +120,28 @@ type QuickNoteConfig struct {
 type MCPAuthConfig struct {
 	Enabled     bool   `json:"enabled"`      // Enable MCP authentication for HTTP/SSE modes
 	BearerToken string `json:"bearer_token"` // Bearer token for authentication
+}
+
+// GetNotebookName returns the quicknote-specific notebook name
+func (qc *QuickNoteConfig) GetNotebookName() string {
+	if qc == nil {
+		return ""
+	}
+	return qc.NotebookName
+}
+
+// GetDefaultNotebook returns the default notebook name from the main config
+// This method should be called from the main Config struct
+func (c *Config) GetDefaultNotebook() string {
+	return c.NotebookName
+}
+
+// GetPageName returns the target page name for quicknote
+func (qc *QuickNoteConfig) GetPageName() string {
+	if qc == nil {
+		return ""
+	}
+	return qc.PageName
 }
 
 // Load reads configuration from environment variables and optionally from a JSON config file.
@@ -156,6 +182,9 @@ func Load() (*Config, error) {
 			Enabled:     os.Getenv("MCP_AUTH_ENABLED") == "true",
 			BearerToken: os.Getenv("MCP_BEARER_TOKEN"),
 		},
+
+		// Authorization configuration - will be initialized after JSON loading
+		Authorization: authorization.NewAuthorizationConfig(),
 
 		// Server configuration from environment variables
 		Stateless: statelessPtr,
@@ -255,6 +284,11 @@ func Load() (*Config, error) {
 			cfg.QuickNote.DateFormat = "January 2, 2006 - 3:04 PM"
 		}
 
+		// Ensure Authorization has a default value if not set in JSON
+		if cfg.Authorization == nil {
+			cfg.Authorization = authorization.NewAuthorizationConfig()
+		}
+
 		logger.Debug("Successfully loaded from config file",
 			"client_id", maskSensitiveData(cfg.ClientID),
 			"tenant_id", cfg.TenantID,
@@ -293,6 +327,16 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	logger.Debug("Configuration validation passed")
+
+	// Compile authorization matchers if authorization is configured
+	if cfg.Authorization != nil {
+		logger.Debug("Compiling authorization matchers")
+		if err := cfg.Authorization.CompileMatchers(); err != nil {
+			logger.Error("Authorization matcher compilation failed", "error", err)
+			return nil, fmt.Errorf("failed to compile authorization matchers: %v", err)
+		}
+		logger.Debug("Authorization matchers compiled successfully")
+	}
 
 	elapsed := time.Since(startTime)
 
@@ -464,6 +508,16 @@ func validateConfig(cfg *Config) error {
 		} else {
 			logger.Debug("Content log level validation passed", "content_log_level", cfg.ContentLogLevel)
 		}
+	}
+
+	// Validate authorization configuration if present
+	if cfg.Authorization != nil {
+		logger.Debug("Validating authorization configuration")
+		if err := authorization.ValidateAuthorizationConfig(cfg.Authorization); err != nil {
+			logger.Error("Authorization configuration validation failed", "error", err)
+			return fmt.Errorf("authorization configuration is invalid: %v", err)
+		}
+		logger.Debug("Authorization configuration validation passed")
 	}
 
 	logger.Debug("Configuration validation completed successfully")

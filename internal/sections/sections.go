@@ -32,6 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gebl/onenote-mcp-server/internal/graph"
@@ -39,9 +40,8 @@ import (
 	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
 
-// Context keys for progress notification system
+// Context keys for progress notification system - using consistent types for cross-package compatibility
 type contextKey string
-
 const (
 	mcpServerKey     contextKey = "mcpServer"
 	progressTokenKey contextKey = "progressToken"
@@ -144,8 +144,7 @@ func (c *SectionClient) ListSections(containerID string) ([]map[string]interface
 func (c *SectionClient) ListSectionsWithContext(ctx context.Context, containerID string) ([]map[string]interface{}, error) {
 	logging.SectionLogger.Info("Listing sections with context", "container_id", containerID)
 
-	// Send progress notification if available
-	c.sendProgressNotification(ctx, "Fetching sections from container: "+containerID)
+	// Note: Progress notifications handled at the NotebookTools layer
 
 	// Sanitize and validate the containerID to prevent injection attacks
 	sanitizedContainerID, err := c.Client.SanitizeOneNoteID(containerID, "containerID")
@@ -158,6 +157,9 @@ func (c *SectionClient) ListSectionsWithContext(ctx context.Context, containerID
 	notebookURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sections", sanitizedContainerID)
 	logging.SectionLogger.Debug("Trying notebook URL", "url", notebookURL)
 
+	// Send progress notification before notebook API call
+	c.sendProgressNotification(ctx, "Making notebook sections API call...")
+
 	notebookResp, err := c.Client.MakeAuthenticatedRequest("GET", notebookURL, nil, nil)
 	if err != nil {
 		logging.SectionLogger.Debug("Notebook endpoint failed, trying section group endpoint", "error", err)
@@ -165,6 +167,10 @@ func (c *SectionClient) ListSectionsWithContext(ctx context.Context, containerID
 		defer notebookResp.Body.Close()
 		if notebookResp.StatusCode == 200 {
 			logging.SectionLogger.Debug("Successfully found sections in notebook")
+			
+			// Send progress notification after successful API call
+			c.sendProgressNotification(ctx, "Processing notebook sections response...")
+			
 			// Get immediate sections from notebook
 			directSections, errSections := c.processSectionsResponse(notebookResp, "ListSections")
 			if errSections != nil {
@@ -175,7 +181,9 @@ func (c *SectionClient) ListSectionsWithContext(ctx context.Context, containerID
 			var allItems []map[string]interface{}
 			allItems = append(allItems, directSections...)
 
-			c.sendProgressNotification(ctx, "Fetching section groups from notebook: "+containerID)
+			// Send progress notification before section groups API call
+			c.sendProgressNotification(ctx, "Fetching section groups...")
+			
 			sectionGroups, groupsErr := c.ListSectionGroupsWithContext(ctx, containerID)
 			if groupsErr != nil {
 				logging.SectionLogger.Debug("Failed to get section groups from notebook", "container_id", containerID, "error", groupsErr)
@@ -214,7 +222,7 @@ func (c *SectionClient) ListSectionsWithContext(ctx context.Context, containerID
 	var allItems []map[string]interface{}
 	allItems = append(allItems, directSections...)
 
-	c.sendProgressNotification(ctx, "Fetching nested section groups from section group: "+containerID)
+	// Note: Progress notifications handled at the NotebookTools layer
 	nestedSectionGroups, err := c.ListSectionGroupsWithContext(ctx, containerID)
 	if err != nil {
 		logging.SectionLogger.Debug("Failed to get nested section groups from section group", "container_id", containerID, "error", err)
@@ -224,6 +232,157 @@ func (c *SectionClient) ListSectionsWithContext(ctx context.Context, containerID
 	}
 
 	return allItems, nil
+}
+
+// ListSectionsWithProgress fetches immediate sections and section groups with progress updates.
+// Provides granular progress notifications during API calls to prevent client timeouts.
+func (c *SectionClient) ListSectionsWithProgress(containerID string, progressCallback func(progress int, message string)) ([]map[string]interface{}, error) {
+	logging.SectionLogger.Info("Listing immediate sections and section groups for container with progress", "container_id", containerID)
+
+	if progressCallback != nil {
+		progressCallback(0, "Initializing section listing...")
+	}
+
+	// Sanitize and validate the containerID to prevent injection attacks
+	sanitizedContainerID, err := c.Client.SanitizeOneNoteID(containerID, "containerID")
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine if this is a notebook or section group by checking the response from both endpoints
+	// Try notebook endpoint first
+	notebookURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sections", sanitizedContainerID)
+	logging.SectionLogger.Debug("Trying notebook URL with progress", "url", notebookURL)
+
+	if progressCallback != nil {
+		progressCallback(10, "Checking if container is notebook...")
+	}
+
+	notebookResp, err := c.Client.MakeAuthenticatedRequest("GET", notebookURL, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Debug("Notebook endpoint failed, trying section group endpoint", "error", err)
+		if progressCallback != nil {
+			progressCallback(20, "Not a notebook, checking if section group...")
+		}
+	} else {
+		defer notebookResp.Body.Close()
+		if notebookResp.StatusCode == 200 {
+			logging.SectionLogger.Debug("Successfully found sections in notebook")
+			if progressCallback != nil {
+				progressCallback(30, "Container is notebook, getting sections...")
+			}
+			
+			// Get immediate sections from notebook
+			directSections, errSections := c.processSectionsResponse(notebookResp, "ListSectionsWithProgress")
+			if errSections != nil {
+				return nil, errSections
+			}
+
+			if progressCallback != nil {
+				progressCallback(60, fmt.Sprintf("Found %d sections, getting section groups...", len(directSections)))
+			}
+
+			// Get immediate section groups from the notebook
+			var allItems []map[string]interface{}
+			allItems = append(allItems, directSections...)
+
+			sectionGroups, groupsErr := c.ListSectionGroupsWithProgress(containerID, func(progress int, message string) {
+				// Map section group progress from 60-90%
+				adjustedProgress := 60 + (progress * 30 / 100)
+				if progressCallback != nil {
+					progressCallback(adjustedProgress, fmt.Sprintf("Section groups: %s", message))
+				}
+			})
+			if groupsErr != nil {
+				logging.SectionLogger.Debug("Failed to get section groups from notebook", "container_id", containerID, "error", groupsErr)
+			} else {
+				// Add section groups to the result (immediate children only)
+				allItems = append(allItems, sectionGroups...)
+			}
+
+			if progressCallback != nil {
+				progressCallback(100, fmt.Sprintf("Completed: %d sections and section groups", len(allItems)))
+			}
+
+			return allItems, nil
+		}
+	}
+
+	// Try section group endpoint
+	sectionGroupURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sectionGroups/%s/sections", sanitizedContainerID)
+	logging.SectionLogger.Debug("Trying section group URL with progress", "url", sectionGroupURL)
+
+	if progressCallback != nil {
+		progressCallback(30, "Getting sections from section group...")
+	}
+
+	sectionGroupResp, err := c.Client.MakeAuthenticatedRequest("GET", sectionGroupURL, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Debug("Section group endpoint also failed", "error", err)
+		return nil, fmt.Errorf("container ID %s is not a valid notebook or section group ID: %v", containerID, err)
+	}
+	defer sectionGroupResp.Body.Close()
+
+	if sectionGroupResp.StatusCode != 200 {
+		return nil, fmt.Errorf("container ID %s is not a valid notebook or section group ID", containerID)
+	}
+
+	logging.SectionLogger.Debug("Successfully found sections in section group")
+	if progressCallback != nil {
+		progressCallback(50, "Processing section group sections...")
+	}
+	
+	// Get immediate sections from section group
+	directSections, err := c.processSectionsResponse(sectionGroupResp, "ListSectionsWithProgress")
+	if err != nil {
+		return nil, err
+	}
+
+	if progressCallback != nil {
+		progressCallback(70, fmt.Sprintf("Found %d sections, getting nested section groups...", len(directSections)))
+	}
+
+	// Get immediate section groups from this section group
+	var allItems []map[string]interface{}
+	allItems = append(allItems, directSections...)
+
+	nestedSectionGroups, err := c.ListSectionGroupsWithProgress(containerID, func(progress int, message string) {
+		// Map nested section group progress from 70-95%
+		adjustedProgress := 70 + (progress * 25 / 100)
+		if progressCallback != nil {
+			progressCallback(adjustedProgress, fmt.Sprintf("Nested groups: %s", message))
+		}
+	})
+	if err != nil {
+		logging.SectionLogger.Debug("Failed to get nested section groups from section group", "container_id", containerID, "error", err)
+	} else {
+		// Add section groups to the result (immediate children only)
+		allItems = append(allItems, nestedSectionGroups...)
+	}
+
+	if progressCallback != nil {
+		progressCallback(100, fmt.Sprintf("Completed: %d sections and section groups", len(allItems)))
+	}
+
+	return allItems, nil
+}
+
+// makeProgressAwareRequest wraps MakeAuthenticatedRequest with progress notifications
+func (c *SectionClient) makeProgressAwareRequest(ctx context.Context, method, url string, body io.Reader, headers map[string]string, preMessage, postMessage string) (*http.Response, error) {
+	// Send pre-request progress notification
+	if preMessage != "" {
+		c.sendProgressNotification(ctx, preMessage)
+	}
+	
+	// Make the actual request
+	resp, err := c.Client.MakeAuthenticatedRequest(method, url, body, headers)
+	
+	// Send post-request progress notification
+	if postMessage != "" {
+		c.sendProgressNotification(ctx, postMessage)
+	}
+	
+	return resp, err
 }
 
 // sendProgressNotification sends a progress notification if context contains MCP server info
@@ -326,6 +485,58 @@ func (c *SectionClient) processSectionsResponse(resp *http.Response, operation s
 
 // determineContainerType determines if a container ID is a notebook or section group by making test requests
 func (c *SectionClient) determineContainerType(containerID string) (string, error) {
+	logging.SectionLogger.Debug("Determining container type", "container_id", containerID)
+
+	// Try notebook endpoint first
+	notebookURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s", containerID)
+	logging.SectionLogger.Debug("Testing notebook endpoint", "url", notebookURL)
+
+	notebookResp, err := c.Client.MakeAuthenticatedRequest("GET", notebookURL, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Debug("Notebook endpoint failed", "error", err)
+	} else {
+		defer notebookResp.Body.Close()
+		if notebookResp.StatusCode == 200 {
+			logging.SectionLogger.Debug("Container is a notebook")
+			return "notebook", nil
+		}
+	}
+
+	// Try section group endpoint
+	sectionGroupURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sectionGroups/%s", containerID)
+	logging.SectionLogger.Debug("Testing section group endpoint", "url", sectionGroupURL)
+
+	sectionGroupResp, err := c.Client.MakeAuthenticatedRequest("GET", sectionGroupURL, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Debug("Section group endpoint failed", "error", err)
+	} else {
+		defer sectionGroupResp.Body.Close()
+		if sectionGroupResp.StatusCode == 200 {
+			logging.SectionLogger.Debug("Container is a section group")
+			return "sectionGroup", nil
+		}
+	}
+
+	// Try section endpoint as well (for completeness)
+	sectionURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s", containerID)
+	logging.SectionLogger.Debug("Testing section endpoint", "url", sectionURL)
+
+	sectionResp, err := c.Client.MakeAuthenticatedRequest("GET", sectionURL, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Debug("Section endpoint failed", "error", err)
+	} else {
+		defer sectionResp.Body.Close()
+		if sectionResp.StatusCode == 200 {
+			logging.SectionLogger.Debug("Container is a section")
+			return "section", nil
+		}
+	}
+
+	return "", fmt.Errorf("container ID %s is not a valid notebook, section group, or section", containerID)
+}
+
+// determineContainerTypeWithContext determines container type with progress notifications
+func (c *SectionClient) determineContainerTypeWithContext(ctx context.Context, containerID string) (string, error) {
 	logging.SectionLogger.Debug("Determining container type", "container_id", containerID)
 
 	// Try notebook endpoint first
@@ -534,4 +745,61 @@ func (c *SectionClient) ListAllSectionsWithContext(ctx context.Context) ([]map[s
 	c.sendProgressNotification(ctx, "Fetching all sections from global endpoint...")
 
 	return c.ListAllSections()
+}
+
+// GetSectionByID fetches a specific section by its ID
+func (c *SectionClient) GetSectionByID(sectionID string) (map[string]interface{}, error) {
+	logging.SectionLogger.Info("Getting section by ID", "section_id", sectionID)
+
+	// Sanitize and validate the sectionID to prevent injection attacks
+	sanitizedSectionID, err := c.Client.SanitizeOneNoteID(sectionID, "sectionID")
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the specific section endpoint
+	sectionURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s", sanitizedSectionID)
+	logging.SectionLogger.Debug("Fetching section details", "url", sectionURL)
+
+	resp, err := c.Client.MakeAuthenticatedRequest("GET", sectionURL, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Error("Failed to fetch section by ID", "section_id", sectionID, "error", err)
+		return nil, fmt.Errorf("failed to fetch section %s: %v", sectionID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		logging.SectionLogger.Warn("Section not found or access denied", "section_id", sectionID, "status_code", resp.StatusCode)
+		return nil, fmt.Errorf("failed to fetch section %s: HTTP %d", sectionID, resp.StatusCode)
+	}
+
+	// Read response body
+	content, err := c.Client.ReadResponseBody(resp, "GetSectionByID")
+	if err != nil {
+		logging.SectionLogger.Debug("Failed to read response body", "error", err)
+		return nil, err
+	}
+
+	logging.SectionLogger.Debug("Response body", "content", string(content))
+
+	// Parse the response JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal(content, &result); err != nil {
+		logging.SectionLogger.Debug("Failed to unmarshal response", "error", err)
+		return nil, fmt.Errorf("failed to parse section response: %v", err)
+	}
+
+	// Validate the response contains required fields
+	if _, hasID := result["id"].(string); !hasID {
+		logging.SectionLogger.Error("Section response missing ID field")
+		return nil, fmt.Errorf("section response missing ID field")
+	}
+
+	if displayName, hasName := result["displayName"].(string); hasName {
+		logging.SectionLogger.Debug("Successfully retrieved section", "section_id", sectionID, "section_name", displayName)
+	} else {
+		logging.SectionLogger.Debug("Successfully retrieved section (no display name)", "section_id", sectionID)
+	}
+
+	return result, nil
 }

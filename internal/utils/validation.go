@@ -24,9 +24,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gomarkdown/markdown"
-	"github.com/gomarkdown/markdown/html"
-	"github.com/gomarkdown/markdown/parser"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
 	
@@ -168,99 +171,135 @@ func hasHTMLTags(content string) bool {
 	return hasMatch
 }
 
-// hasMarkdownSyntax checks if the content contains Markdown syntax at the beginning of lines
+// hasMarkdownSyntax checks if the content contains Markdown syntax using goldmark parser
 func hasMarkdownSyntax(content string) bool {
+	logging.UtilsLogger.Debug("Starting Markdown syntax detection with goldmark",
+		"content_length", len(content),
+		"content_preview", truncateString(content, 100))
+	
+	// First check for common markdown patterns using regex (fast check)
+	if hasCommonMarkdownPatterns(content) {
+		logging.UtilsLogger.Debug("Common markdown patterns detected via regex")
+		return true
+	}
+	
+	// Create goldmark parser with extensions for more thorough parsing
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,
+			extension.Table,
+			extension.Strikethrough,
+			extension.TaskList,
+		),
+	)
+	
+	// Parse the content
+	reader := text.NewReader([]byte(content))
+	doc := md.Parser().Parse(reader)
+	
+	// Count meaningful markdown nodes
+	markdownNodes := 0
+	detectedTypes := []string{}
+	
+	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering {
+			switch n.Kind() {
+			case ast.KindHeading:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "heading")
+			case ast.KindList:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "list")
+			case ast.KindEmphasis:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "emphasis")
+			case ast.KindLink:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "link")
+			case ast.KindCodeBlock:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "codeblock")
+			case ast.KindFencedCodeBlock:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "fenced_codeblock")
+			case ast.KindBlockquote:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "blockquote")
+			case ast.KindThematicBreak:
+				markdownNodes++
+				detectedTypes = append(detectedTypes, "horizontal_rule")
+			}
+		}
+		return ast.WalkContinue, nil
+	})
+	
+	if err != nil {
+		logging.UtilsLogger.Debug("Error walking AST", "error", err)
+		return false
+	}
+	
+	hasMarkdown := markdownNodes > 0
+	
+	logging.UtilsLogger.Debug("Markdown syntax detection completed with goldmark",
+		"markdown_nodes_found", markdownNodes,
+		"detected_types", detectedTypes,
+		"has_markdown_syntax", hasMarkdown)
+	
+	return hasMarkdown
+}
+
+// hasCommonMarkdownPatterns checks for common markdown patterns using regex
+func hasCommonMarkdownPatterns(content string) bool {
+	patterns := []struct {
+		name    string
+		regex   *regexp.Regexp
+	}{
+		{"headers", regexp.MustCompile(`^#{1,6}\s`)},
+		{"unordered_lists", regexp.MustCompile(`^[-*+]\s`)},
+		{"ordered_lists", regexp.MustCompile(`^\d+\.\s`)},
+		{"blockquotes", regexp.MustCompile(`^>\s`)},
+		{"code_blocks", regexp.MustCompile("^```|^~~~")},
+		{"horizontal_rules", regexp.MustCompile(`^(---+|\*\*\*+|___+)$`)},
+		{"tables", regexp.MustCompile(`^\|.*\|.*$`)},
+		{"strikethrough", regexp.MustCompile(`~~.*?~~`)},
+		{"emphasis", regexp.MustCompile(`\*\*.*?\*\*|\*.*?\*|__.*?__|_.*?_`)},
+		{"inline_code", regexp.MustCompile("`.*?`")},
+		{"links", regexp.MustCompile(`\[.*?\]\(.*?\)`)},
+	}
+	
 	lines := strings.Split(content, "\n")
-	totalLines := len(lines)
-	nonEmptyLines := 0
-	markdownLines := []string{}
 	
-	logging.UtilsLogger.Debug("Starting Markdown syntax detection",
-		"total_lines", totalLines,
-		"content_length", len(content))
-	
-	for i, line := range lines {
-		originalLine := line
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
-			logging.UtilsLogger.Debug("Skipping empty line", "line_number", i+1)
 			continue
 		}
 		
-		nonEmptyLines++
-		logging.UtilsLogger.Debug("Checking line for Markdown patterns",
-			"line_number", i+1,
-			"original_line", truncateString(originalLine, 50),
-			"trimmed_line", truncateString(line, 50))
-		
-		// Check for common Markdown patterns at the beginning of lines
-		if hasMarkdownLinePattern(line) {
-			markdownLines = append(markdownLines, line)
-			logging.UtilsLogger.Debug("Markdown pattern detected in line",
-				"line_number", i+1,
-				"line_content", truncateString(line, 50),
-				"pattern_matched", true)
-			logging.UtilsLogger.Debug("Markdown syntax confirmed, found patterns",
-				"total_lines", totalLines,
-				"non_empty_lines", nonEmptyLines,
-				"markdown_lines_found", len(markdownLines),
-				"detected_lines", markdownLines)
-			return true
+		// Check line-based patterns
+		for _, p := range patterns {
+			if p.name == "strikethrough" || p.name == "emphasis" || p.name == "inline_code" || p.name == "links" {
+				// These can appear anywhere in the content, not just at line start
+				if p.regex.MatchString(content) {
+					logging.UtilsLogger.Debug("Markdown pattern detected via regex",
+						"pattern_name", p.name,
+						"content_preview", truncateString(content, 50))
+					return true
+				}
+			} else {
+				// These must appear at the start of lines
+				if p.regex.MatchString(line) {
+					logging.UtilsLogger.Debug("Markdown pattern detected via regex",
+						"pattern_name", p.name,
+						"line_content", truncateString(line, 50))
+					return true
+				}
+			}
 		}
 	}
-	
-	logging.UtilsLogger.Debug("Markdown syntax detection completed",
-		"total_lines", totalLines,
-		"non_empty_lines", nonEmptyLines,
-		"markdown_lines_found", len(markdownLines),
-		"has_markdown_syntax", false)
 	
 	return false
 }
 
-// hasMarkdownLinePattern checks if a line starts with Markdown syntax
-func hasMarkdownLinePattern(line string) bool {
-	patterns := []struct {
-		name    string
-		regex   string
-		pattern *regexp.Regexp
-	}{
-		{"headers", `^#{1,6}\s`, regexp.MustCompile(`^#{1,6}\s`)},
-		{"unordered_lists", `^[-*+]\s`, regexp.MustCompile(`^[-*+]\s`)},
-		{"ordered_lists", `^\d+\.\s`, regexp.MustCompile(`^\d+\.\s`)},
-		{"blockquotes", `^>\s`, regexp.MustCompile(`^>\s`)},
-		{"code_blocks", `^` + "```" + `|^~~~`, regexp.MustCompile(`^` + "```" + `|^~~~`)},
-		{"horizontal_rules", `^(---+|\*\*\*+|___+)$`, regexp.MustCompile(`^(---+|\*\*\*+|___+)$`)},
-		{"tables", `^\|.*\|`, regexp.MustCompile(`^\|.*\|`)},
-	}
-	
-	logging.UtilsLogger.Debug("Checking line for Markdown patterns",
-		"line_content", truncateString(line, 50),
-		"patterns_to_check", len(patterns))
-	
-	for _, p := range patterns {
-		if p.pattern.MatchString(line) {
-			logging.UtilsLogger.Debug("Markdown pattern matched",
-				"pattern_name", p.name,
-				"pattern_regex", p.regex,
-				"line_content", truncateString(line, 50),
-				"matched", true)
-			return true
-		} else {
-			logging.UtilsLogger.Debug("Markdown pattern not matched",
-				"pattern_name", p.name,
-				"pattern_regex", p.regex,
-				"line_content", truncateString(line, 50),
-				"matched", false)
-		}
-	}
-	
-	logging.UtilsLogger.Debug("No Markdown patterns matched for line",
-		"line_content", truncateString(line, 50),
-		"patterns_checked", len(patterns))
-	
-	return false
-}
 
 // ConvertToHTML converts text content to HTML based on its detected format
 func ConvertToHTML(content string) (string, TextFormat) {
@@ -307,32 +346,45 @@ func ConvertToHTML(content string) (string, TextFormat) {
 	return convertedHTML, format
 }
 
-// convertMarkdownToHTML converts Markdown text to HTML using gomarkdown
+// convertMarkdownToHTML converts Markdown text to HTML using goldmark
 func convertMarkdownToHTML(markdownText string) string {
-	logging.UtilsLogger.Debug("Starting Markdown to HTML conversion",
+	logging.UtilsLogger.Debug("Starting Markdown to HTML conversion with goldmark",
 		"input_length", len(markdownText),
 		"input_preview", truncateString(markdownText, 100))
 	
-	// Set up parser with common extensions
-	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock
-	p := parser.NewWithExtensions(extensions)
+	// Set up goldmark with extensions and options suitable for OneNote
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,           // GitHub Flavored Markdown
+			extension.Table,         // Table support
+			extension.Strikethrough, // Strikethrough support
+			extension.TaskList,      // Task list support
+		),
+		goldmark.WithParserOptions(
+			parser.WithAutoHeadingID(), // Auto-generate heading IDs
+		),
+		goldmark.WithRendererOptions(
+			html.WithHardWraps(), // Convert line breaks to <br>
+			html.WithUnsafe(),    // Allow raw HTML (needed for OneNote)
+		),
+	)
 	
-	logging.UtilsLogger.Debug("Markdown parser configured",
-		"extensions", "CommonExtensions|AutoHeadingIDs|NoEmptyLineBeforeBlock")
-	
-	// Set up HTML renderer with options suitable for OneNote
-	htmlFlags := html.CommonFlags | html.HrefTargetBlank
-	opts := html.RendererOptions{Flags: htmlFlags}
-	renderer := html.NewRenderer(opts)
-	
-	logging.UtilsLogger.Debug("HTML renderer configured",
-		"flags", "CommonFlags|HrefTargetBlank")
+	logging.UtilsLogger.Debug("Goldmark configured",
+		"extensions", "GFM, Table, Strikethrough, TaskList",
+		"options", "AutoHeadingID, HardWraps, Unsafe")
 	
 	// Convert markdown to HTML
-	htmlBytes := markdown.ToHTML([]byte(markdownText), p, renderer)
-	resultHTML := string(htmlBytes)
+	var buf strings.Builder
+	err := md.Convert([]byte(markdownText), &buf)
+	if err != nil {
+		logging.UtilsLogger.Error("Markdown conversion failed", "error", err)
+		// Fallback to treating as plain text
+		return convertASCIIToHTML(markdownText)
+	}
 	
-	logging.UtilsLogger.Debug("Markdown to HTML conversion completed",
+	resultHTML := buf.String()
+	
+	logging.UtilsLogger.Debug("Markdown to HTML conversion completed with goldmark",
 		"input_length", len(markdownText),
 		"output_length", len(resultHTML),
 		"output_preview", truncateString(resultHTML, 100))

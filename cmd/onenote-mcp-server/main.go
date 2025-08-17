@@ -54,6 +54,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -71,6 +72,7 @@ import (
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/notebooks"
+	"github.com/gebl/onenote-mcp-server/internal/sections"
 )
 
 const (
@@ -182,6 +184,225 @@ func (nc *NotebookCache) GetDisplayName() (string, bool) {
 	defer nc.mu.RUnlock()
 
 	return nc.displayName, nc.isSet
+}
+
+// GetSectionName returns the section name for a given section ID by searching through the cached sections tree
+func (nc *NotebookCache) GetSectionName(sectionID string) (string, bool) {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+
+	if !nc.sectionsCached {
+		return "", false
+	}
+
+	// Search through the sections tree to find the section with the given ID
+	return nc.findSectionNameInTree(nc.sectionsTree, sectionID)
+}
+
+// GetSectionNameWithAutoFetch returns the section name for a given section ID, 
+// optionally fetching sections if they're not cached (for authorization context)
+func (nc *NotebookCache) GetSectionNameWithAutoFetch(sectionID string, graphClient interface{}, enableAutoFetch bool) (string, bool) {
+	// First try the fast cache lookup
+	if name, found := nc.GetSectionName(sectionID); found {
+		return name, true
+	}
+
+	// If not found and auto-fetch is disabled, return false
+	if !enableAutoFetch {
+		return "", false
+	}
+
+	// If sections aren't cached and we have a graph client, try to fetch them
+	// This is primarily for authorization context when sections haven't been loaded yet
+	if !nc.IsSectionsCached() && graphClient != nil {
+		// This is a simplified auto-fetch - in a real implementation we would:
+		// 1. Create a notebook client from the graph client
+		// 2. Fetch sections with progress notifications
+		// 3. Cache the results
+		// 4. Retry the lookup
+		// For now, we'll just return false to avoid complexity
+		return "", false
+	}
+
+	return "", false
+}
+
+// GetSectionNameWithProgress returns the section name for a given section ID with progress notification support.
+// If not found in cache, it will perform a live API lookup with progress notifications.
+func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, sectionID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool) {
+	
+	logging.ToolsLogger.Debug("Looking up section name with progress support",
+		"section_id", sectionID,
+		"has_progress_token", progressToken != "",
+		"progress_token", progressToken)
+
+	// First try the fast cache lookup
+	if name, found := nc.GetSectionName(sectionID); found {
+		logging.ToolsLogger.Debug("Section name found in cache",
+			"section_id", sectionID,
+			"section_name", name)
+		return name, true
+	}
+
+	logging.ToolsLogger.Debug("Section name not found in cache, attempting live API lookup",
+		"section_id", sectionID,
+		"sections_cached", nc.IsSectionsCached())
+
+	// Cast the graph client and MCP server
+	graphClientTyped, ok := graphClient.(*graph.Client)
+	if !ok {
+		logging.ToolsLogger.Warn("Invalid graph client type for section lookup",
+			"section_id", sectionID,
+			"client_type", fmt.Sprintf("%T", graphClient))
+		return "", false
+	}
+
+	var mcpServerTyped *server.MCPServer
+	if mcpServer != nil {
+		mcpServerTyped, _ = mcpServer.(*server.MCPServer)
+	}
+
+	// Send progress notification for API lookup
+	if mcpServerTyped != nil && progressToken != "" {
+		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			"progressToken": progressToken,
+			"progress":      5,
+			"total":         100,
+			"message":       fmt.Sprintf("Looking up section name for %s via API...", sectionID),
+		})
+		if err != nil {
+			logging.ToolsLogger.Warn("Failed to send progress notification for section lookup",
+				"error", err,
+				"section_id", sectionID)
+		}
+	}
+
+	// Create section client for direct API call
+	sectionClient := sections.NewSectionClient(graphClientTyped)
+
+	// Try to fetch section details directly by ID
+	logging.ToolsLogger.Debug("Attempting direct section lookup by ID",
+		"section_id", sectionID)
+
+	// Send progress notification for API call
+	if mcpServerTyped != nil && progressToken != "" {
+		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			"progressToken": progressToken,
+			"progress":      10,
+			"total":         100,
+			"message":       "Fetching section details from OneNote API...",
+		})
+		if err != nil {
+			logging.ToolsLogger.Warn("Failed to send API progress notification",
+				"error", err,
+				"section_id", sectionID)
+		}
+	}
+
+	// Try to get section details using the section ID directly
+	// This uses the Microsoft Graph API endpoint: /me/onenote/sections/{section-id}
+	sectionDetails, err := sectionClient.GetSectionByID(sectionID)
+	if err != nil {
+		logging.ToolsLogger.Warn("Failed to fetch section details by ID",
+			"section_id", sectionID,
+			"error", err)
+
+		// Send failure progress notification
+		if mcpServerTyped != nil && progressToken != "" {
+			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+				"progressToken": progressToken,
+				"progress":      15,
+				"total":         100,
+				"message":       "Section lookup failed, section name unavailable",
+			})
+			if err != nil {
+				logging.ToolsLogger.Warn("Failed to send failure progress notification", "error", err)
+			}
+		}
+
+		return "", false
+	}
+
+	// Extract section name from the response
+	sectionName := ""
+	if displayName, ok := sectionDetails["displayName"].(string); ok {
+		sectionName = displayName
+	}
+
+	if sectionName == "" {
+		logging.ToolsLogger.Warn("Section details retrieved but displayName is missing",
+			"section_id", sectionID,
+			"section_details", sectionDetails)
+
+		// Send failure progress notification
+		if mcpServerTyped != nil && progressToken != "" {
+			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+				"progressToken": progressToken,
+				"progress":      20,
+				"total":         100,
+				"message":       "Section found but name is missing",
+			})
+			if err != nil {
+				logging.ToolsLogger.Warn("Failed to send missing name progress notification", "error", err)
+			}
+		}
+
+		return "", false
+	}
+
+	// Send success progress notification
+	if mcpServerTyped != nil && progressToken != "" {
+		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			"progressToken": progressToken,
+			"progress":      25,
+			"total":         100,
+			"message":       fmt.Sprintf("Section name resolved: %s", sectionName),
+		})
+		if err != nil {
+			logging.ToolsLogger.Warn("Failed to send success progress notification", "error", err)
+		}
+	}
+
+	logging.ToolsLogger.Debug("Successfully resolved section name via API",
+		"section_id", sectionID,
+		"section_name", sectionName)
+
+	return sectionName, true
+}
+
+// findSectionNameInTree recursively searches through a sections tree structure to find a section by ID
+func (nc *NotebookCache) findSectionNameInTree(tree map[string]interface{}, targetSectionID string) (string, bool) {
+	// Check if this tree node has sections
+	if sectionsInterface, exists := tree["sections"]; exists {
+		if sections, ok := sectionsInterface.([]interface{}); ok {
+			for _, sectionInterface := range sections {
+				if section, ok := sectionInterface.(map[string]interface{}); ok {
+					// Check if this section matches the target ID
+					if sectionID, idExists := section["id"].(string); idExists && sectionID == targetSectionID {
+						if displayName, nameExists := section["displayName"].(string); nameExists {
+							return displayName, true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Check if this tree node has section groups
+	if sectionGroupsInterface, exists := tree["sectionGroups"]; exists {
+		if sectionGroups, ok := sectionGroupsInterface.([]interface{}); ok {
+			for _, sectionGroupInterface := range sectionGroups {
+				if sectionGroup, ok := sectionGroupInterface.(map[string]interface{}); ok {
+					// Recursively search in section groups
+					if name, found := nc.findSectionNameInTree(sectionGroup, targetSectionID); found {
+						return name, true
+					}
+				}
+			}
+		}
+	}
+
+	return "", false
 }
 
 // IsSet returns whether a notebook is currently selected
@@ -494,6 +715,191 @@ func (nc *NotebookCache) ClearAllNotebookLookupCache() {
 
 	nc.notebookLookupCache = make(map[string]map[string]interface{})
 	nc.notebookLookupTime = make(map[string]time.Time)
+}
+
+// GetPageName returns the page name for a given page ID by searching through all cached pages
+func (nc *NotebookCache) GetPageName(pageID string) (string, bool) {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+
+	// Search through all cached pages in all sections
+	for sectionID, pages := range nc.pagesCache {
+		// Check if this section's cache is still fresh
+		if cacheTime, exists := nc.pagesCacheTime[sectionID]; !exists || time.Since(cacheTime) > 5*time.Minute {
+			continue // Skip expired cache entries
+		}
+
+		// Search through pages in this section
+		for _, page := range pages {
+			// Check both possible field names for page ID
+			var currentPageID string
+			if id, ok := page["id"].(string); ok {
+				currentPageID = id
+			} else if id, ok := page["pageId"].(string); ok {
+				currentPageID = id
+			}
+
+			if currentPageID == pageID {
+				if title, ok := page["title"].(string); ok {
+					logging.AuthorizationLogger.Debug("Page name found in cache",
+						"page_id", pageID,
+						"page_name", title,
+						"section_id", sectionID)
+					return title, true
+				}
+			}
+		}
+	}
+
+	logging.AuthorizationLogger.Debug("Page name not found in cache", "page_id", pageID)
+	return "", false
+}
+
+// GetPageNameWithProgress returns the page name for a given page ID with progress notification support.
+// If not found in cache, it will perform a live API lookup with progress notifications.
+func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool) {
+	logging.AuthorizationLogger.Debug("Looking up page name with progress support",
+		"page_id", pageID,
+		"has_progress_token", progressToken != "",
+		"progress_token", progressToken)
+
+	// First try the fast cache lookup
+	if name, found := nc.GetPageName(pageID); found {
+		logging.AuthorizationLogger.Debug("Page name found in cache",
+			"page_id", pageID,
+			"page_name", name)
+		return name, true
+	}
+
+	logging.AuthorizationLogger.Debug("Page name not found in cache, attempting live API lookup",
+		"page_id", pageID)
+
+	// Cast the graph client and MCP server
+	graphClientTyped, ok := graphClient.(*graph.Client)
+	if !ok {
+		logging.AuthorizationLogger.Warn("Invalid graph client type for page lookup",
+			"page_id", pageID,
+			"client_type", fmt.Sprintf("%T", graphClient))
+		return "", false
+	}
+
+	var mcpServerTyped *server.MCPServer
+	if mcpServer != nil {
+		mcpServerTyped, _ = mcpServer.(*server.MCPServer)
+	}
+
+	// Send progress notification for API lookup
+	if mcpServerTyped != nil && progressToken != "" {
+		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			"progressToken": progressToken,
+			"progress":      5,
+			"total":         100,
+			"message":       fmt.Sprintf("Looking up page name for %s via API...", pageID),
+		})
+		if err != nil {
+			logging.AuthorizationLogger.Warn("Failed to send progress notification for page lookup",
+				"error", err,
+				"page_id", pageID)
+		}
+	}
+
+	// Create a basic page client to fetch page details
+	// We use the GetPageContent method to get page details including title
+	pageApiURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$select=id,title", pageID)
+	
+	if mcpServerTyped != nil && progressToken != "" {
+		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			"progressToken": progressToken,
+			"progress":      10,
+			"total":         100,
+			"message":       "Fetching page details from OneNote API...",
+		})
+		if err != nil {
+			logging.AuthorizationLogger.Warn("Failed to send API progress notification",
+				"error", err,
+				"page_id", pageID)
+		}
+	}
+
+	// Make API call to get page details
+	httpResponse, err := graphClientTyped.MakeAuthenticatedRequest("GET", pageApiURL, nil, nil)
+	if err != nil {
+		logging.AuthorizationLogger.Warn("Failed to fetch page details by ID",
+			"page_id", pageID,
+			"error", err)
+
+		// Send failure progress notification
+		if mcpServerTyped != nil && progressToken != "" {
+			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+				"progressToken": progressToken,
+				"progress":      15,
+				"total":         100,
+				"message":       "Page lookup failed, page name unavailable",
+			})
+			if err != nil {
+				logging.AuthorizationLogger.Warn("Failed to send failure progress notification", "error", err)
+			}
+		}
+
+		return "", false
+	}
+	defer httpResponse.Body.Close()
+
+	// Read and parse the response body
+	var pageDetails map[string]interface{}
+	err = json.NewDecoder(httpResponse.Body).Decode(&pageDetails)
+	if err != nil {
+		logging.AuthorizationLogger.Warn("Failed to parse page details response",
+			"page_id", pageID,
+			"error", err)
+		return "", false
+	}
+
+	// Extract page name from the response
+	pageName := ""
+	if title, ok := pageDetails["title"].(string); ok {
+		pageName = title
+	}
+
+	if pageName == "" {
+		logging.AuthorizationLogger.Warn("Page details retrieved but title is missing",
+			"page_id", pageID,
+			"page_details", pageDetails)
+
+		// Send failure progress notification
+		if mcpServerTyped != nil && progressToken != "" {
+			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+				"progressToken": progressToken,
+				"progress":      20,
+				"total":         100,
+				"message":       "Page found but title is missing",
+			})
+			if err != nil {
+				logging.AuthorizationLogger.Warn("Failed to send missing title progress notification", "error", err)
+			}
+		}
+
+		return "", false
+	}
+
+	// Send success progress notification
+	if mcpServerTyped != nil && progressToken != "" {
+		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			"progressToken": progressToken,
+			"progress":      25,
+			"total":         100,
+			"message":       fmt.Sprintf("Page name resolved: %s", pageName),
+		})
+		if err != nil {
+			logging.AuthorizationLogger.Warn("Failed to send success progress notification", "error", err)
+		}
+	}
+
+	logging.AuthorizationLogger.Info("Page name resolved via API lookup",
+		"page_id", pageID,
+		"page_name", pageName)
+
+	return pageName, true
 }
 
 // Global notebook cache instance

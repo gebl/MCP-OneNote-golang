@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
@@ -22,14 +23,14 @@ import (
 )
 
 // registerPageTools registers all page-related MCP tools
-func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config) {
+func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// listPages: List all pages in a section
 	listPagesTool := mcp.NewTool(
 		"listPages",
 		mcp.WithDescription(resources.MustGetToolDescription("listPages")),
 		mcp.WithString("sectionID", mcp.Required(), mcp.Description("Section ID - MUST be actual ID, NOT a section name. You must obtain the section ID through other means.")),
 	)
-	s.AddTool(listPagesTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	listPagesHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Starting page enumeration", "operation", "listPages", "type", "tool_invocation")
 
@@ -40,53 +41,168 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 		logging.ToolsLogger.Debug("listPages parameter", "sectionID", sectionID)
 
+		// Extract progress token early for use throughout the function
+		progressToken := extractProgressToken(req)
+		
 		// Check cache first
+		if progressToken != "" {
+			sendProgressNotification(s, ctx, progressToken, 5, 100, "Checking page cache...")
+		}
+		
 		if notebookCache.IsPagesCached(sectionID) {
 			cachedPages, cached := notebookCache.GetPagesCache(sectionID)
 			if cached {
+				// Apply authorization filtering to cached pages
+				originalCachedCount := len(cachedPages)
+				if authConfig != nil && authConfig.Enabled {
+					// Try to get section and notebook context for filtering
+					var sectionName, notebookName string
+					if cache != nil {
+						// If sections aren't cached yet, try to fetch them for proper authorization context
+						if !notebookCache.IsSectionsCached() {
+							logging.ToolsLogger.Debug("Sections not cached, fetching for authorization context", 
+								"section_id", sectionID)
+							
+							// Progress token already extracted above
+							if progressToken != "" {
+								sendProgressNotification(s, ctx, progressToken, 10, 100, "Fetching sections for authorization context...")
+							}
+							
+							// Fetch sections to populate cache for authorization
+							if err := populateSectionsForAuthorization(s, ctx, graphClient, notebookCache, progressToken); err != nil {
+								logging.ToolsLogger.Warn("Failed to populate sections for authorization context", "error", err)
+							}
+							
+							if progressToken != "" {
+								sendProgressNotification(s, ctx, progressToken, 30, 100, "Authorization context updated, applying filters...")
+							}
+						}
+						// Try to get section name with progress-aware API lookup if cache misses
+					if progressToken != "" {
+						sendProgressNotification(s, ctx, progressToken, 32, 100, "Resolving section name for authorization...")
+					}
+					sectionName, _ = cache.GetSectionNameWithProgress(ctx, sectionID, s, progressToken, graphClient)
+					notebookName, _ = cache.GetDisplayName()
+					}
+					
+					cachedPages = authConfig.FilterPages(cachedPages, sectionID, sectionName, notebookName)
+					logging.ToolsLogger.Debug("Applied authorization filtering to cached pages",
+						"section_id", sectionID,
+						"section_name", sectionName,
+						"notebook", notebookName,
+						"original_count", originalCachedCount,
+						"filtered_count", len(cachedPages))
+				}
+
 				elapsed := time.Since(startTime)
 				logging.ToolsLogger.Debug("listPages using cached data",
 					"section_id", sectionID,
 					"duration", elapsed,
-					"pages_count", len(cachedPages),
+					"original_cached_count", originalCachedCount,
+					"filtered_cached_count", len(cachedPages),
 					"cache_hit", true)
 
-				// Handle empty cached results gracefully
+				// If cache returns empty results, fall back to fresh API call to be sure
 				if len(cachedPages) == 0 {
-					return mcp.NewToolResultText("No pages found in the specified section. The section may be empty or you may need to create pages first."), nil
-				}
-
-				// Create response with cache status
-				cacheResponse := map[string]interface{}{
-					"pages":       cachedPages,
-					"cached":      true,
-					"cache_hit":   true,
-					"pages_count": len(cachedPages),
-					"duration":    elapsed.String(),
-				}
-
-				// Convert cached response to JSON for proper formatting
-				jsonResult, errMarshal := json.Marshal(cacheResponse)
-				if errMarshal != nil {
-					logging.ToolsLogger.Error("Failed to marshal cached pages response to JSON", "error", errMarshal)
-					// Fall through to fetch from API if JSON marshaling fails
+					logging.ToolsLogger.Debug("Cache returned 0 pages, falling back to fresh API call to verify",
+						"section_id", sectionID)
+					// Continue to fresh API call below instead of returning immediately
 				} else {
-					return mcp.NewToolResultText(string(jsonResult)), nil
+					// Cache has pages, use them
+					// Create response with cache status
+					cacheResponse := map[string]interface{}{
+						"pages":       cachedPages,
+						"cached":      true,
+						"cache_hit":   true,
+						"pages_count": len(cachedPages),
+						"duration":    elapsed.String(),
+					}
+
+					// Convert cached response to JSON for proper formatting
+					jsonResult, errMarshal := json.Marshal(cacheResponse)
+					if errMarshal != nil {
+						logging.ToolsLogger.Error("Failed to marshal cached pages response to JSON", "error", errMarshal)
+						// Fall through to fetch from API if JSON marshaling fails
+					} else {
+						return mcp.NewToolResultText(string(jsonResult)), nil
+					}
 				}
 			}
 		}
 
 		// Cache miss or expired - fetch from API
 		logging.ToolsLogger.Debug("listPages cache miss or expired, fetching from API", "section_id", sectionID)
+		
+		if progressToken != "" {
+			sendProgressNotification(s, ctx, progressToken, 40, 100, "Fetching pages from OneNote API...")
+		}
+		
 		pages, err := pageClient.ListPages(sectionID)
+		
+		if progressToken != "" {
+			sendProgressNotification(s, ctx, progressToken, 55, 100, "Pages retrieved, processing authorization...")
+		}
 		if err != nil {
 			logging.ToolsLogger.Error("listPages operation failed", "section_id", sectionID, "error", err, "operation", "listPages")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to list pages: %v", err)), nil
 		}
 
-		// Cache the results
+		// Apply authorization filtering to fresh pages
+		originalApiCount := len(pages)
+		if authConfig != nil && authConfig.Enabled {
+			// Try to get section and notebook context for filtering
+			var sectionName, notebookName string
+			if cache != nil {
+				// If sections aren't cached yet, try to fetch them for proper authorization context
+				if !notebookCache.IsSectionsCached() {
+					logging.ToolsLogger.Debug("Sections not cached, fetching for authorization context", 
+						"section_id", sectionID)
+					
+					// Progress token already extracted above
+					if progressToken != "" {
+						sendProgressNotification(s, ctx, progressToken, 60, 100, "Fetching sections for authorization context...")
+					}
+					
+					// Fetch sections to populate cache for authorization
+					if err := populateSectionsForAuthorization(s, ctx, graphClient, notebookCache, progressToken); err != nil {
+						logging.ToolsLogger.Warn("Failed to populate sections for authorization context", "error", err)
+					}
+					
+					if progressToken != "" {
+						sendProgressNotification(s, ctx, progressToken, 80, 100, "Authorization context updated, applying filters...")
+					}
+				}
+				// Try to get section name with progress-aware API lookup if cache misses
+			if progressToken != "" {
+				sendProgressNotification(s, ctx, progressToken, 82, 100, "Resolving section name for authorization...")
+			}
+			sectionName, _ = cache.GetSectionNameWithProgress(ctx, sectionID, s, progressToken, graphClient)
+			notebookName, _ = cache.GetDisplayName()
+			}
+			
+			pages = authConfig.FilterPages(pages, sectionID, sectionName, notebookName)
+			logging.ToolsLogger.Debug("Applied authorization filtering to fresh pages",
+				"section_id", sectionID,
+				"section_name", sectionName,
+				"notebook", notebookName,
+				"original_count", originalApiCount,
+				"filtered_count", len(pages))
+			
+			if progressToken != "" {
+				sendProgressNotification(s, ctx, progressToken, 85, 100, "Authorization filtering completed, caching results...")
+			}
+		}
+
+		// Cache the filtered results
 		notebookCache.SetPagesCache(sectionID, pages)
-		logging.ToolsLogger.Debug("listPages cached fresh data", "section_id", sectionID, "pages_count", len(pages))
+		
+		if progressToken != "" {
+			sendProgressNotification(s, ctx, progressToken, 90, 100, "Caching completed, preparing response...")
+		}
+		logging.ToolsLogger.Debug("listPages cached fresh filtered data", 
+			"section_id", sectionID, 
+			"original_count", originalApiCount,
+			"filtered_count", len(pages))
 
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Info("listPages operation completed", "duration", elapsed, "pages_count", len(pages), "success", true)
@@ -97,6 +213,10 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		// Create response with cache status
+		if progressToken != "" {
+			sendProgressNotification(s, ctx, progressToken, 95, 100, "Formatting response...")
+		}
+		
 		apiResponse := map[string]interface{}{
 			"pages":       pages,
 			"cached":      false,
@@ -107,12 +227,17 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		// Convert to JSON for proper formatting
 		jsonResult, err := json.Marshal(apiResponse)
+		
+		if progressToken != "" {
+			sendProgressNotification(s, ctx, progressToken, 100, 100, "Complete!")
+		}
 		if err != nil {
 			logging.ToolsLogger.Error("Failed to marshal pages response to JSON", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to format pages: %v", err)), nil
 		}
 		return mcp.NewToolResultText(string(jsonResult)), nil
-	})
+	}
+	s.AddTool(listPagesTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPages", listPagesHandler, authConfig, cache, quickNoteConfig)))
 
 	// createPage: Create a new page in a section
 	createPageTool := mcp.NewTool(
@@ -122,7 +247,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("title", mcp.Required(), mcp.Description("Page title (cannot contain: ?*\\/:<>|&#''%%~)")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
 	)
-	s.AddTool(createPageTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	createPageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Creating new OneNote page", "operation", "createPage", "type", "tool_invocation")
 
@@ -198,7 +323,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("createPage operation completed", "duration", elapsed, "page_id", pageID)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(createPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("createPage", createPageHandler, authConfig, cache, quickNoteConfig)))
 
 	// updatePageContent: Update the HTML content of a page
 	updatePageContentTool := mcp.NewTool(
@@ -207,7 +333,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("New content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
 	)
-	s.AddTool(updatePageContentTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	updatePageContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Updating OneNote page content", "operation", "updatePageContent", "type", "tool_invocation")
 
@@ -256,7 +382,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig)))
 
 	// updatePageContentAdvanced: Update page content with advanced commands
 	updatePageContentAdvancedTool := mcp.NewTool(
@@ -265,7 +392,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
 		mcp.WithString("commands", mcp.Required(), mcp.Description("JSON STRING containing an array of command objects. MUST be a string, not an array. Content in commands supports HTML, Markdown, or plain text (automatically detected and converted). Example: \"[{\\\"target\\\": \\\"body\\\", \\\"action\\\": \\\"append\\\", \\\"content\\\": \\\"# Header\\n- Item 1\\\"}]\"")),
 	)
-	s.AddTool(updatePageContentAdvancedTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	updatePageContentAdvancedHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("MCP Tool: updatePageContentAdvanced", "operation", "updatePageContentAdvanced", "type", "tool_invocation")
 
@@ -343,7 +470,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig)))
 
 	// deletePage: Delete a page by ID
 	deletePageTool := mcp.NewTool(
@@ -351,7 +479,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription(resources.MustGetToolDescription("deletePage")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to delete")),
 	)
-	s.AddTool(deletePageTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	deletePageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Deleting OneNote page", "operation", "deletePage", "type", "tool_invocation")
 
@@ -376,7 +504,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("deletePage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText("Page deleted successfully"), nil
-	})
+	}
+	s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig)))
 
 	// getPageContent: Get the HTML content of a page by ID
 	getPageContentTool := mcp.NewTool(
@@ -386,7 +515,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("forUpdate", mcp.Description("Optional: set to 'true' to include includeIDs=true parameter for update operations")),
 		mcp.WithString("format", mcp.Description("Optional: output format - 'HTML' (default), 'Markdown', or 'Text'. Note: forUpdate only works with HTML format.")),
 	)
-	s.AddTool(getPageContentTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	getPageContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Retrieving OneNote page content", "operation", "getPageContent", "type", "tool_invocation")
 
@@ -482,7 +611,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig)))
 
 	// getPageItemContent: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type
 	getPageItemContentTool := mcp.NewTool(
@@ -493,7 +623,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("filename", mcp.Description("Custom filename for binary download")),
 		mcp.WithBoolean("fullSize", mcp.Description("Skip image scaling and return original size (default: false = scale images to 1024x768 max)")),
 	)
-	s.AddTool(getPageItemContentTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	getPageItemContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("MCP Tool: getPageItemContent", "operation", "getPageItemContent", "type", "tool_invocation")
 
@@ -529,7 +659,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("getPageItemContent operation completed", "duration", elapsed, "scaled", !fullSize && strings.HasPrefix(pageItemData.ContentType, "image/"))
 		return mcp.NewToolResultImage(filename, encoded, pageItemData.ContentType), nil
-	})
+	}
+	s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig)))
 
 	// listPageItems: List all OneNote page items (images, files, etc.) for a specific page
 	listPageItemsTool := mcp.NewTool(
@@ -537,7 +668,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription(resources.MustGetToolDescription("listPageItems")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to list items for")),
 	)
-	s.AddTool(listPageItemsTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	listPageItemsHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("MCP Tool: listPageItems", "operation", "listPageItems", "type", "tool_invocation")
 
@@ -564,7 +695,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Info("listPageItems operation completed", "duration", elapsed, "items_count", len(pageItems), "success", true)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig)))
 
 	// copyPage: Copy a page from one section to another
 	copyPageTool := mcp.NewTool(
@@ -573,7 +705,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to copy")),
 		mcp.WithString("targetSectionID", mcp.Required(), mcp.Description("Target section ID to copy the page to")),
 	)
-	s.AddTool(copyPageTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	copyPageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Copying OneNote page", "operation", "copyPage", "type", "tool_invocation")
 
@@ -610,7 +742,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("copyPage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig)))
 
 	// movePage: Move a page from one section to another (copy then delete)
 	movePageTool := mcp.NewTool(
@@ -619,7 +752,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to move")),
 		mcp.WithString("targetSectionID", mcp.Required(), mcp.Description("Target section ID to move the page to")),
 	)
-	s.AddTool(movePageTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	movePageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Moving OneNote page", "operation", "movePage", "type", "tool_invocation")
 
@@ -657,7 +790,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("movePage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("movePage", movePageHandler, authConfig, cache, quickNoteConfig)))
 
 	// quickNote: Add a timestamped note to a configured page
 	quickNoteTool := mcp.NewTool(
@@ -665,7 +799,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription("Add a timestamped note to a configured page. Uses quicknote settings from configuration file to determine target notebook, page, and date format. Appends content to the page with current timestamp."),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Content to add to the quicknote page")),
 	)
-	s.AddTool(quickNoteTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	quickNoteHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("Adding quicknote entry", "operation", "quickNote", "type", "tool_invocation")
 
@@ -859,7 +993,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		sendProgressNotification(s, ctx, progressToken, 100, 100, "Quicknote added successfully!")
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(quickNoteTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("quickNote", quickNoteHandler, authConfig, cache, quickNoteConfig)))
 
 	// NOTE: getOnenoteOperation tool is currently commented out in the original code
 	// Uncomment this section if you want to enable it
@@ -870,7 +1005,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			mcp.WithDescription("Check the status of an asynchronous OneNote operation (e.g., copy/move operations)."),
 			mcp.WithString("operationId", mcp.Required(), mcp.Description("Operation ID to check status for")),
 		)
-		s.AddTool(getOnenoteOperationTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		getOnenoteOperationHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			startTime := time.Now()
 			logging.ToolsLogger.Info("MCP Tool: getOnenoteOperation", "operation", "getOnenoteOperation", "type", "tool_invocation")
 
@@ -897,7 +1032,8 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			elapsed := time.Since(startTime)
 			logging.ToolsLogger.Debug("getOnenoteOperation completed", "duration", elapsed)
 			return mcp.NewToolResultText(string(jsonBytes)), nil
-		})
+		}
+		s.AddTool(getOnenoteOperationTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getOnenoteOperation", getOnenoteOperationHandler, authConfig, cache, quickNoteConfig)))
 	*/
 
 	logging.ToolsLogger.Debug("Page tools registered successfully")
@@ -931,10 +1067,16 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 	}
 
 	logging.ToolsLogger.Debug("No cached search result found, performing fresh search")
-	sendProgressNotification(s, ctx, progressToken, 30, 100, fmt.Sprintf("Searching for page: %s", pageName))
+	sendProgressNotification(s, ctx, progressToken, 30, 100, fmt.Sprintf("Getting notebook sections for page search..."))
 
-	// Get all sections in the notebook
-	sections, err := sectionClient.ListSections(notebookID)
+	// Create progress callback for section listing (30-35%)
+	sectionProgressCallback := func(progress int, message string) {
+		adjustedProgress := 30 + (progress * 5 / 100) // Map 0-100% to 30-35%
+		sendProgressNotification(s, ctx, progressToken, adjustedProgress, 100, fmt.Sprintf("Sections: %s", message))
+	}
+
+	// Get all sections in the notebook using progress-aware method
+	sections, err := sectionClient.ListSectionsWithProgress(notebookID, sectionProgressCallback)
 	if err != nil {
 		return nil, "", false, fmt.Errorf("failed to list sections in notebook: %v", err)
 	}
@@ -942,7 +1084,9 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 	totalSections := len(sections)
 	logging.ToolsLogger.Debug("Found sections in notebook for cached search", "notebook_id", notebookID, "sections_count", totalSections)
 
-	// Search through each section using cached listPages calls
+	sendProgressNotification(s, ctx, progressToken, 35, 100, fmt.Sprintf("Found %d sections, starting page search...", totalSections))
+
+	// Search through each section using cached listPages calls with progress
 	for i, section := range sections {
 		sectionID, ok := section["id"].(string)
 		if !ok {
@@ -955,11 +1099,9 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 			sectionName = "unknown"
 		}
 
-		// Send progress notification if available (progress from 30-70%)
-		if totalSections > 1 {
-			progress := 30 + int(float64(i)/float64(totalSections)*40) // 30% to 70%
-			sendProgressNotification(s, ctx, progressToken, progress, 100, fmt.Sprintf("Searching in section: %s", sectionName))
-		}
+		// Calculate progress for this section (35-70% range)
+		baseProgress := 35 + int(float64(i)/float64(totalSections)*35) // Distribute 35% across sections
+		sendProgressNotification(s, ctx, progressToken, baseProgress, 100, fmt.Sprintf("Searching section %d of %d: %s", i+1, totalSections, sectionName))
 
 		logging.ToolsLogger.Debug("Searching in section using cached listPages",
 			"section_index", i+1,
@@ -976,6 +1118,7 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 			if cached {
 				pages = cachedPages
 				fromCache = true
+				sendProgressNotification(s, ctx, progressToken, baseProgress+1, 100, fmt.Sprintf("Using cached pages for section: %s", sectionName))
 				logging.ToolsLogger.Debug("Using cached pages for section",
 					"section_id", sectionID,
 					"section_name", sectionName,
@@ -984,11 +1127,22 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 		}
 
 		if !fromCache {
-			// Cache miss - fetch from API
-			logging.ToolsLogger.Debug("Cache miss, fetching pages from API",
+			// Cache miss - fetch from API with progress
+			logging.ToolsLogger.Debug("Cache miss, fetching pages from API with progress",
 				"section_id", sectionID,
 				"section_name", sectionName)
-			pagesFromAPI, err := pageClient.ListPages(sectionID)
+
+			// Create progress callback for page listing within section
+			pageProgressCallback := func(progress int, message string) {
+				// Map page progress to a small portion of overall progress
+				adjustedProgress := baseProgress + (progress * 2 / 100) // Allow 2% per section for page loading
+				if adjustedProgress > baseProgress + 2 {
+					adjustedProgress = baseProgress + 2
+				}
+				sendProgressNotification(s, ctx, progressToken, adjustedProgress, 100, fmt.Sprintf("Section %s: %s", sectionName, message))
+			}
+
+			pagesFromAPI, err := pageClient.ListPagesWithProgress(sectionID, pageProgressCallback)
 			if err != nil {
 				logging.ToolsLogger.Warn("Failed to list pages in section during cached search",
 					"section_id", sectionID,
@@ -1063,7 +1217,7 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 					"section_id", sectionID)
 
 				// Send completion notification if available
-				sendProgressNotification(s, ctx, progressToken, 70, 100, "Page found successfully")
+				sendProgressNotification(s, ctx, progressToken, 75, 100, fmt.Sprintf("Page found in section: %s", sectionName))
 
 				logging.ToolsLogger.Info("Found target page using cached search",
 					"page_id", pageID,
@@ -1136,4 +1290,93 @@ func getDetailedNotebookByNameCached(notebookClient *notebooks.NotebookClient, n
 	return notebook, false, nil
 }
 
-// Helper functions are shared from NotebookTools.go
+// Helper functions for progress notifications and section population
+
+// extractProgressToken extracts progress token from MCP request for notifications
+func extractProgressToken(req mcp.CallToolRequest) string {
+	var progressToken string
+	
+	if req.Params.Meta != nil && req.Params.Meta.ProgressToken != nil {
+		rawToken := req.Params.Meta.ProgressToken
+		
+		// Handle both string and numeric progress tokens
+		switch token := rawToken.(type) {
+		case string:
+			progressToken = token
+		case int:
+			progressToken = fmt.Sprintf("%d", token)
+		case int64:
+			progressToken = fmt.Sprintf("%d", token)
+		case float64:
+			// Check if it's a whole number and convert appropriately
+			if token == float64(int64(token)) {
+				progressToken = fmt.Sprintf("%.0f", token)
+			} else {
+				progressToken = fmt.Sprintf("%g", token)
+			}
+		default:
+			progressToken = fmt.Sprintf("%v", token)
+		}
+	}
+	
+	return progressToken
+}
+
+// populateSectionsForAuthorization fetches sections to populate cache for authorization context
+func populateSectionsForAuthorization(s *server.MCPServer, ctx context.Context, graphClient *graph.Client, notebookCache *NotebookCache, progressToken string) error {
+	// Check if notebook is selected
+	notebookID, isSet := notebookCache.GetNotebookID()
+	if !isSet {
+		return fmt.Errorf("no notebook selected")
+	}
+	
+	logging.ToolsLogger.Debug("Populating sections for authorization context", 
+		"notebook_id", notebookID,
+		"has_progress_token", progressToken != "")
+	
+	// Create section client for fetching sections
+	sectionClient := sections.NewSectionClient(graphClient)
+	
+	// Get sections with progress notifications
+	if progressToken != "" {
+		sendProgressNotification(s, ctx, progressToken, 15, 100, "Fetching notebook sections for authorization...")
+	}
+	
+	// Create a progress context with typed keys (compatible with fetchAllNotebookContentWithProgress)
+	progressCtx := context.WithValue(ctx, mcpServerKey, s)
+	progressCtx = context.WithValue(progressCtx, progressTokenKey, progressToken)
+	
+	if progressToken != "" {
+		sendProgressNotification(s, ctx, progressToken, 18, 100, "Calling sections API...")
+	}
+	
+	// Fetch all sections and section groups recursively using the same function as getNotebookSections
+	sectionItems, err := fetchAllNotebookContentWithProgress(sectionClient, notebookID, progressCtx)
+	if err != nil {
+		logging.ToolsLogger.Warn("Failed to fetch sections for authorization context", "error", err)
+		return err
+	}
+	
+	if progressToken != "" {
+		sendProgressNotification(s, ctx, progressToken, 22, 100, "Processing section tree structure...")
+	}
+	
+	// Create sections tree structure compatible with cache format
+	sectionsTreeStructure := map[string]interface{}{
+		"sections": sectionItems,
+	}
+	
+	if progressToken != "" {
+		sendProgressNotification(s, ctx, progressToken, 24, 100, "Caching section information...")
+	}
+	
+	// Cache the sections tree
+	notebookCache.SetSectionsTree(sectionsTreeStructure)
+	
+	if progressToken != "" {
+		sendProgressNotification(s, ctx, progressToken, 25, 100, "Sections cached for authorization context")
+	}
+	
+	logging.ToolsLogger.Debug("Successfully populated sections for authorization context", "sections_count", len(sectionItems))
+	return nil
+}

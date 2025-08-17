@@ -104,6 +104,90 @@ func (c *SectionClient) ListSectionGroups(containerID string) ([]map[string]inte
 	return c.processSectionGroupsResponse(resp, "ListSectionGroups", containerID)
 }
 
+// ListSectionGroupsWithProgress fetches section groups with progress updates.
+// Provides granular progress notifications during API calls to prevent client timeouts.
+func (c *SectionClient) ListSectionGroupsWithProgress(containerID string, progressCallback func(progress int, message string)) ([]map[string]interface{}, error) {
+	logging.SectionLogger.Info("Listing section groups for container with progress", "container_id", containerID)
+
+	if progressCallback != nil {
+		progressCallback(0, "Initializing section group listing...")
+	}
+
+	// Sanitize and validate the containerID to prevent injection attacks
+	sanitizedContainerID, err := c.Client.SanitizeOneNoteID(containerID, "containerID")
+	if err != nil {
+		return nil, err
+	}
+
+	if progressCallback != nil {
+		progressCallback(20, "Determining container type...")
+	}
+
+	// Determine container type first for better error messages and logic flow
+	containerType, err := c.determineContainerType(sanitizedContainerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine container type: %v", err)
+	}
+
+	logging.SectionLogger.Debug("Container type determined", "container_type", containerType)
+
+	// Only allow listing section groups from notebooks or section groups
+	// Sections cannot contain section groups according to OneNote hierarchy
+	if containerType == containerTypeSection {
+		return nil, fmt.Errorf("cannot list section groups from a section. Container ID %s is a section. Section groups can only be listed from notebooks or other section groups", containerID)
+	}
+
+	if containerType != containerTypeNotebook && containerType != containerTypeSectionGroup {
+		return nil, fmt.Errorf("container ID %s is a %s. Section groups can only be listed from notebooks or section groups", containerID, containerType)
+	}
+
+	if progressCallback != nil {
+		progressCallback(40, fmt.Sprintf("Getting section groups from %s...", containerType))
+	}
+
+	// Construct the appropriate URL based on container type
+	var url string
+	if containerType == "notebook" {
+		url = fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sectionGroups", sanitizedContainerID)
+		logging.SectionLogger.Debug("Using notebook endpoint", "url", url)
+	} else { // sectionGroup
+		url = fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sectionGroups/%s/sectionGroups", sanitizedContainerID)
+		logging.SectionLogger.Debug("Using section group endpoint", "url", url)
+	}
+
+	if progressCallback != nil {
+		progressCallback(60, "Making API request...")
+	}
+
+	// Make the API request
+	resp, err := c.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Debug("API request failed", "error", err)
+		return nil, fmt.Errorf("failed to list section groups from %s: %v", containerType, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		logging.SectionLogger.Debug("API returned status code", "status_code", resp.StatusCode)
+		return nil, fmt.Errorf("failed to list section groups from %s: HTTP %d", containerType, resp.StatusCode)
+	}
+
+	if progressCallback != nil {
+		progressCallback(80, "Processing response...")
+	}
+
+	logging.SectionLogger.Debug("Successfully retrieved section groups", "container_type", containerType)
+	result, err := c.processSectionGroupsResponse(resp, "ListSectionGroups", containerID)
+	
+	if progressCallback != nil {
+		if err == nil {
+			progressCallback(100, fmt.Sprintf("Completed: %d section groups found", len(result)))
+		}
+	}
+	
+	return result, err
+}
+
 // processSectionGroupsResponse processes the HTTP response for section groups and returns filtered data
 func (c *SectionClient) processSectionGroupsResponse(resp *http.Response, operation string, containerID string) ([]map[string]interface{}, error) {
 	logging.SectionLogger.Debug("Received response", "status_code", resp.StatusCode, "headers", resp.Header)
@@ -176,11 +260,18 @@ func (c *SectionClient) processSectionGroupsResponse(resp *http.Response, operat
 func (c *SectionClient) ListSectionGroupsWithContext(ctx context.Context, containerID string) ([]map[string]interface{}, error) {
 	logging.SectionLogger.Info("Listing section groups with context", "container_id", containerID)
 
-	// Send progress notification if available
-	c.sendProgressNotification(ctx, "Fetching section groups from container: "+containerID)
+	// Send progress notification before section groups API call
+	c.sendProgressNotification(ctx, "Fetching section groups...")
 
-	// Call the original ListSectionGroups method
-	return c.ListSectionGroups(containerID)
+	// Call the original ListSectionGroups method  
+	result, err := c.ListSectionGroups(containerID)
+	
+	if err == nil {
+		// Send progress notification after successful completion
+		c.sendProgressNotification(ctx, "Section groups retrieved successfully")
+	}
+	
+	return result, err
 }
 
 // ListSectionsInSectionGroup fetches all sections in a section group by sectionGroupID using direct HTTP API calls.

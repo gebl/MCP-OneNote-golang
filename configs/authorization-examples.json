@@ -1,0 +1,45 @@
+{
+  "client_id": "your-azure-app-client-id",
+  "tenant_id": "your-azure-tenant-id", 
+  "redirect_uri": "http://localhost:8080/callback",
+  "notebook_name": "Work Notebook",
+  "toolsets": ["notebooks", "sections", "pages", "content"],
+  
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "read",
+    "default_notebook_mode": "none",
+    "default_section_mode": "none", 
+    "default_page_mode": "none",
+    
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write"
+    },
+    
+    "notebook_permissions": {
+      "Work*": "write",
+      "Personal Notes": "read"
+    },
+    
+    "section_permissions": {
+      "Work*/Draft*": "read",
+      "Personal Notes/Public": "write"
+    },
+    
+    "page_permissions": {
+      "Daily Journal": "write"
+    }
+  },
+  
+  "quicknote": {
+    "notebook_name": "Personal Notes",
+    "page_name": "Daily Journal",
+    "date_format": "January 2, 2006 - 3:04 PM"
+  },
+  
+  "log_level": "DEBUG",
+  "log_format": "text",
+  "content_log_level": "INFO"
+}

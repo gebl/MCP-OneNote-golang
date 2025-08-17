@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/notebooks"
@@ -35,7 +36,7 @@ type SectionItem struct {
 }
 
 // registerNotebookTools registers notebook and section-related MCP tools
-func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, notebookCache *NotebookCache) {
+func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, notebookCache *NotebookCache, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// Create specialized clients for notebook and section operations
 	notebookClient := notebooks.NewNotebookClient(graphClient)
 	sectionClient := sections.NewSectionClient(graphClient)
@@ -45,7 +46,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		"listNotebooks",
 		mcp.WithDescription(resources.MustGetToolDescription("listNotebooks")),
 	)
-	s.AddTool(listNotebooksTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	listNotebooksHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Debug("listNotebooks called with no parameters")
 
@@ -55,8 +56,17 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to list notebooks: %v", err)), nil
 		}
 
+		// Apply authorization filtering
+		originalCount := len(notebooks)
+		if authConfig != nil && authConfig.Enabled {
+			notebooks = authConfig.FilterNotebooks(notebooks)
+		}
+
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("listNotebooks completed", "duration", elapsed, "count", len(notebooks))
+		logging.ToolsLogger.Debug("listNotebooks completed", 
+			"duration", elapsed, 
+			"original_count", originalCount,
+			"filtered_count", len(notebooks))
 
 		// Handle empty results gracefully
 		if len(notebooks) == 0 {
@@ -104,6 +114,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
+	}
+	s.AddTool(listNotebooksTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("listNotebooks", listNotebooksHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
 	// createSection: Create a new section in a notebook or section group
@@ -113,7 +126,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		mcp.WithString("containerID", mcp.Description("Notebook ID or Section Group ID to create the section in. Optional - if left blank, automatically uses the server's configured default notebook.")),
 		mcp.WithString("displayName", mcp.Required(), mcp.Description("Display name for the new section (cannot contain: ?*\\/:<>|&#''%%~)")),
 	)
-	s.AddTool(createSectionTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	createSectionHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("MCP Tool: createSection", "operation", "createSection", "type", "tool_invocation")
 
@@ -174,6 +187,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("createSection operation completed", "duration", elapsed, "section_id", sectionID)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
+	}
+	s.AddTool(createSectionTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("createSection", createSectionHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
 	// createSectionGroup: Create a new section group in a notebook or another section group
@@ -183,7 +199,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		mcp.WithString("containerID", mcp.Description("Notebook ID or Section Group ID to create the section group in. Optional - if left blank, automatically uses the server's configured default notebook.")),
 		mcp.WithString("displayName", mcp.Required(), mcp.Description("Display name for the new section group (cannot contain: ?*\\/:<>|&#''%%~)")),
 	)
-	s.AddTool(createSectionGroupTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	createSectionGroupHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("MCP Tool: createSectionGroup", "operation", "createSectionGroup", "type", "tool_invocation")
 
@@ -244,6 +260,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		elapsed := time.Since(startTime)
 		logging.ToolsLogger.Debug("createSectionGroup operation completed", "duration", elapsed, "section_group_id", sectionGroupID)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
+	}
+	s.AddTool(createSectionGroupTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("createSectionGroup", createSectionGroupHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
 	// getSelectedNotebook: Get currently selected notebook metadata from cache
@@ -251,7 +270,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		"getSelectedNotebook",
 		mcp.WithDescription(resources.MustGetToolDescription("getSelectedNotebook")),
 	)
-	s.AddTool(getSelectedNotebookTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	getSelectedNotebookHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Debug("getSelectedNotebook called")
 
@@ -275,6 +294,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
+	}
+	s.AddTool(getSelectedNotebookTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("getSelectedNotebook", getSelectedNotebookHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
 	// selectNotebook: Select a notebook by name or ID to use as the active notebook
@@ -283,7 +305,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		mcp.WithDescription(resources.MustGetToolDescription("selectNotebook")),
 		mcp.WithString("identifier", mcp.Description("Notebook name or ID to select as active")),
 	)
-	s.AddTool(selectNotebookTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	selectNotebookHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		args := req.GetArguments()
 
@@ -355,6 +377,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
+	}
+	s.AddTool(selectNotebookTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("selectNotebook", selectNotebookHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
 	// getNotebookSections: Get sections and section groups from selected notebook with caching
@@ -362,7 +387,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		"getNotebookSections",
 		mcp.WithDescription(resources.MustGetToolDescription("getNotebookSections")),
 	)
-	s.AddTool(getNotebookSectionsTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	getNotebookSectionsHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Debug("getNotebookSections called")
 
@@ -470,13 +495,56 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 					}
 				}
 
+				// Apply authorization filtering to cached sections
+				originalCachedCount := len(cachedArray)
+				if authConfig != nil && authConfig.Enabled {
+					// Get notebook display name for filtering context
+					notebookDisplayName, _ := notebookCache.GetDisplayName()
+					if notebookDisplayName == "" {
+						notebookDisplayName = "Unknown Notebook"
+					}
+					
+					// Convert SectionItem slice to []map[string]interface{} for filtering
+					var sectionsForFiltering []map[string]interface{}
+					for _, item := range cachedArray {
+						sectionMap := map[string]interface{}{
+							"displayName": item.Name,
+							"id":          item.ID,
+							"type":        item.Type,
+						}
+						sectionsForFiltering = append(sectionsForFiltering, sectionMap)
+					}
+					
+					// Apply filtering
+					filteredSections := authConfig.FilterSections(sectionsForFiltering, notebookDisplayName)
+					
+					// Convert back to SectionItem slice
+					var filteredCachedArray []SectionItem
+					for _, filteredSection := range filteredSections {
+						for _, originalItem := range cachedArray {
+							if originalItem.ID == filteredSection["id"].(string) {
+								filteredCachedArray = append(filteredCachedArray, originalItem)
+								break
+							}
+						}
+					}
+					
+					cachedArray = filteredCachedArray
+					logging.ToolsLogger.Debug("Applied authorization filtering to cached sections",
+						"notebook", notebookDisplayName,
+						"original_count", originalCachedCount,
+						"filtered_count", len(cachedArray))
+				}
+
 				elapsed := time.Since(startTime)
 				logging.ToolsLogger.Debug("getNotebookSections completed from cache",
 					"duration", elapsed,
 					"notebook_id", notebookID,
+					"original_cached_count", originalCachedCount,
+					"filtered_cached_count", len(cachedArray),
 					"cache_hit", true)
 
-				// Get notebook display name
+				// Get notebook display name (already retrieved above for filtering)
 				notebookDisplayName, _ := notebookCache.GetDisplayName()
 				if notebookDisplayName == "" {
 					notebookDisplayName = "Unknown Notebook"
@@ -531,6 +599,47 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch sections: %v", err)), nil
 		}
 
+		// Apply authorization filtering to sections
+		originalSectionCount := len(sectionItems)
+		if authConfig != nil && authConfig.Enabled {
+			// Get notebook display name for filtering context
+			notebookDisplayName, _ := notebookCache.GetDisplayName()
+			if notebookDisplayName == "" {
+				notebookDisplayName = "Unknown Notebook"
+			}
+			
+			// Convert SectionItem slice to []map[string]interface{} for filtering
+			var sectionsForFiltering []map[string]interface{}
+			for _, item := range sectionItems {
+				sectionMap := map[string]interface{}{
+					"displayName": item.Name,
+					"id":          item.ID,
+					"type":        item.Type,
+				}
+				sectionsForFiltering = append(sectionsForFiltering, sectionMap)
+			}
+			
+			// Apply filtering
+			filteredSections := authConfig.FilterSections(sectionsForFiltering, notebookDisplayName)
+			
+			// Convert back to SectionItem slice
+			var filteredSectionItems []SectionItem
+			for _, filteredSection := range filteredSections {
+				for _, originalItem := range sectionItems {
+					if originalItem.ID == filteredSection["id"].(string) {
+						filteredSectionItems = append(filteredSectionItems, originalItem)
+						break
+					}
+				}
+			}
+			
+			sectionItems = filteredSectionItems
+			logging.ToolsLogger.Debug("Applied authorization filtering to sections",
+				"notebook", notebookDisplayName,
+				"original_count", originalSectionCount,
+				"filtered_count", len(sectionItems))
+		}
+
 		// Cache the complete structure
 		cacheStructure := map[string]interface{}{
 			"sections": sectionItems,
@@ -577,6 +686,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		sendProgressNotification(s, ctx, progressToken, 100, 100, "Completed fetching all sections and section groups")
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
+	}
+	s.AddTool(getNotebookSectionsTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("getNotebookSections", getNotebookSectionsHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
 	// clearCache: Clear all cached data (notebook sections and pages)
@@ -584,7 +696,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		"clearCache",
 		mcp.WithDescription(resources.MustGetToolDescription("clearCache")),
 	)
-	s.AddTool(clearCacheTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	clearCacheHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Info("MCP Tool: clearCache", "operation", "clearCache", "type", "tool_invocation")
 
@@ -611,7 +723,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	// clearCache doesn't require authorization since it's a system maintenance operation
+	s.AddTool(clearCacheTool, server.ToolHandlerFunc(clearCacheHandler))
 
 	logging.ToolsLogger.Debug("Notebook and section tools registered successfully")
 }
@@ -704,11 +818,32 @@ func fetchAllNotebookContentWithProgress(sectionClient *sections.SectionClient, 
 		logging.ToolsLogger.Debug("No MCP server available for progress notifications", "notebook_id", notebookID)
 	}
 
+	// Send progress notification before the critical API call
+	if mcpServer != nil {
+		logging.ToolsLogger.Debug("Sending progress notification for main API call",
+			"notebook_id", notebookID,
+			"progress_token", progressToken,
+			"progress", 32,
+			"message", "Making main API call to get sections and section groups...")
+		sendProgressNotification(mcpServer, ctx, progressToken, 32, 100, "Making main API call to get sections and section groups...")
+	}
+
 	// Get immediate sections and section groups from the notebook using ListSections
 	items, err := sectionClient.ListSectionsWithContext(ctx, notebookID)
 	if err != nil {
 		logging.ToolsLogger.Error("Failed to get sections and section groups from notebook", "notebook_id", notebookID, "error", err)
 		return nil, fmt.Errorf("failed to get sections and section groups from notebook: %v", err)
+	}
+
+	// Send progress notification after API call completes
+	if mcpServer != nil {
+		logging.ToolsLogger.Debug("Sending progress notification after API fetch",
+			"notebook_id", notebookID,
+			"progress_token", progressToken,
+			"progress", 35,
+			"total_items", len(items),
+			"message", fmt.Sprintf("Retrieved %d items, starting to process...", len(items)))
+		sendProgressNotification(mcpServer, ctx, progressToken, 35, 100, fmt.Sprintf("Retrieved %d items, starting to process...", len(items)))
 	}
 
 	var sectionItems []SectionItem
@@ -734,18 +869,19 @@ func fetchAllNotebookContentWithProgress(sectionClient *sections.SectionClient, 
 			"item_id", itemID,
 			"item_name", itemName)
 
-		// Send progress for each item being processed
+		// Send progress for each item being processed - more frequent updates to prevent timeouts
 		if mcpServer != nil {
-			progress := 30 + int(float64(i)/float64(totalItems)*50) // Progress from 30 to 80
+			progress := 35 + int(float64(i)/float64(totalItems)*45) // Progress from 35 to 80 (leave room for completion)
 			logging.ToolsLogger.Debug("Sending item progress notification",
 				"notebook_id", notebookID,
 				"item_index", i+1,
 				"item_name", itemName,
 				"progress", progress,
-				"message", fmt.Sprintf("Processing: %s", itemName))
-			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, fmt.Sprintf("Processing: %s", itemName))
+				"message", fmt.Sprintf("Processing item %d/%d: %s", i+1, totalItems, itemName))
+			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, fmt.Sprintf("Processing item %d/%d: %s", i+1, totalItems, itemName))
 		}
 
+		// Build the section item - this may involve recursive API calls for section groups
 		sectionItem, err := buildSectionItemWithProgress(item, sectionClient, ctx, i, totalItems)
 		if err != nil {
 			logging.ToolsLogger.Warn("Failed to build section item, skipping",
@@ -754,6 +890,18 @@ func fetchAllNotebookContentWithProgress(sectionClient *sections.SectionClient, 
 				"item_name", itemName,
 				"error", err)
 			continue // Skip this item but continue with others
+		}
+
+		// Send progress after each item is completed
+		if mcpServer != nil {
+			progressAfterCompletion := 35 + int(float64(i+1)/float64(totalItems)*45) // Updated progress after completion
+			logging.ToolsLogger.Debug("Sending item completion progress notification",
+				"notebook_id", notebookID,
+				"item_index", i+1,
+				"item_name", itemName,
+				"progress", progressAfterCompletion,
+				"message", fmt.Sprintf("Completed item %d/%d: %s", i+1, totalItems, itemName))
+			sendProgressNotification(mcpServer, ctx, progressToken, progressAfterCompletion, 100, fmt.Sprintf("Completed item %d/%d: %s", i+1, totalItems, itemName))
 		}
 
 		logging.ToolsLogger.Debug("Successfully built section item",
@@ -772,8 +920,8 @@ func fetchAllNotebookContentWithProgress(sectionClient *sections.SectionClient, 
 			"notebook_id", notebookID,
 			"processed_items", processedItems,
 			"total_items", totalItems,
-			"progress", 90)
-		sendProgressNotification(mcpServer, ctx, progressToken, 90, 100, fmt.Sprintf("Completed processing %d items", processedItems))
+			"progress", 85)
+		sendProgressNotification(mcpServer, ctx, progressToken, 85, 100, fmt.Sprintf("Completed processing all %d items", processedItems))
 	} else {
 		logging.ToolsLogger.Debug("No MCP server for completion notification",
 			"notebook_id", notebookID,
@@ -849,18 +997,29 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 			"item_index", itemIndex,
 			"total_items", totalItems)
 
-		// Send progress notification for section group
+		// Send progress notification for section group - early notification to prevent gaps
 		if mcpServer != nil {
-			progress := 30 + int(float64(itemIndex)/float64(totalItems)*50)
+			progress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 2
 			logging.ToolsLogger.Debug("Sending section group progress notification",
 				"section_group_id", id,
 				"section_group_name", name,
 				"progress", progress,
-				"message", fmt.Sprintf("Fetching children for section group: %s", name))
-			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, fmt.Sprintf("Fetching children for section group: %s", name))
+				"message", fmt.Sprintf("Starting to fetch children for section group: %s", name))
+			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, fmt.Sprintf("Starting to fetch children for section group: %s", name))
 		} else {
 			logging.ToolsLogger.Debug("No MCP server for section group progress notification",
 				"section_group_id", id)
+		}
+
+		// Send progress notification before the actual API call that was causing long delays
+		if mcpServer != nil {
+			progress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 3
+			logging.ToolsLogger.Debug("Sending API call progress notification",
+				"section_group_id", id,
+				"section_group_name", name,
+				"progress", progress,
+				"message", fmt.Sprintf("Making API call to get children for: %s", name))
+			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, fmt.Sprintf("Making API call to get children for: %s", name))
 		}
 
 		childItems, err := sectionClient.ListSectionsWithContext(ctx, id)
@@ -872,6 +1031,18 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 			// Return the section group without children rather than failing completely
 			sectionItem.Children = []SectionItem{}
 			return sectionItem, nil
+		}
+
+		// Send progress notification after API call completes
+		if mcpServer != nil {
+			progress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 4 // Add small increment after API call
+			logging.ToolsLogger.Debug("Sending section group API completion progress notification",
+				"section_group_id", id,
+				"section_group_name", name,
+				"progress", progress,
+				"child_count", len(childItems),
+				"message", fmt.Sprintf("Retrieved %d children for section group: %s", len(childItems), name))
+			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, fmt.Sprintf("Retrieved %d children for section group: %s", len(childItems), name))
 		}
 
 		logging.ToolsLogger.Debug("Retrieved child items for section group",
@@ -895,21 +1066,26 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 				"child_index", childIndex+1,
 				"total_children", len(childItems))
 
-			// Send progress for each child
+			// Send progress for each child - frequent progress tracking to prevent timeouts
 			if mcpServer != nil && len(childItems) > 0 {
-				progress := 30 + int(float64(itemIndex)/float64(totalItems)*50)
+				// Calculate progress within the section group processing - smaller increments for frequent updates
+				baseProgress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 4
+				childProgress := baseProgress + int(float64(childIndex)/float64(len(childItems))*5) // Add up to 5% progress within section group
 				progressMessage := fmt.Sprintf("Processing child %d/%d in %s: %s", childIndex+1, len(childItems), name, childName)
 				logging.ToolsLogger.Debug("Sending child progress notification",
 					"parent_section_group_id", id,
 					"child_id", childID,
 					"child_name", childName,
-					"progress", progress,
+					"progress", childProgress,
 					"message", progressMessage)
-				sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, progressMessage)
+				sendProgressNotification(mcpServer, ctx, progressToken, childProgress, 100, progressMessage)
 			}
 
 			// Recursively build child items with progress
-			childSectionItem, err := buildSectionItemWithProgress(childItem, sectionClient, ctx, childIndex, len(childItems))
+			// Create a progress context for child items to pass the MCP server and progress token
+			childProgressCtx := context.WithValue(ctx, mcpServerKey, mcpServer)
+			childProgressCtx = context.WithValue(childProgressCtx, progressTokenKey, progressToken)
+			childSectionItem, err := buildSectionItemWithProgress(childItem, sectionClient, childProgressCtx, childIndex, len(childItems))
 			if err != nil {
 				logging.ToolsLogger.Warn("Failed to build child section item, skipping",
 					"parent_section_group_id", id,
@@ -917,6 +1093,20 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 					"child_name", childName,
 					"error", err)
 				continue // Skip this child but continue with others
+			}
+
+			// Send progress after each child is completed - quick update to show completion
+			if mcpServer != nil && len(childItems) > 0 {
+				baseProgress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 4
+				childCompletionProgress := baseProgress + int(float64(childIndex+1)/float64(len(childItems))*5)
+				progressMessage := fmt.Sprintf("Completed child %d/%d in %s: %s", childIndex+1, len(childItems), name, childName)
+				logging.ToolsLogger.Debug("Sending child completion progress notification",
+					"parent_section_group_id", id,
+					"child_id", childID,
+					"child_name", childName,
+					"progress", childCompletionProgress,
+					"message", progressMessage)
+				sendProgressNotification(mcpServer, ctx, progressToken, childCompletionProgress, 100, progressMessage)
 			}
 
 			logging.ToolsLogger.Debug("Successfully built child section item",
@@ -929,6 +1119,20 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 		}
 
 		sectionItem.Children = children
+
+		// Send progress after completing all children in section group
+		if mcpServer != nil {
+			finalProgress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 10 // Complete the section group processing
+			progressMessage := fmt.Sprintf("Completed section group %s with %d children", name, len(children))
+			logging.ToolsLogger.Debug("Sending section group completion progress notification",
+				"section_group_id", id,
+				"section_group_name", name,
+				"progress", finalProgress,
+				"children_count", len(children),
+				"message", progressMessage)
+			sendProgressNotification(mcpServer, ctx, progressToken, finalProgress, 100, progressMessage)
+		}
+
 		logging.ToolsLogger.Debug("Completed building section group with all children",
 			"section_group_id", id,
 			"section_group_name", name,
@@ -940,6 +1144,18 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 			"section_id", id,
 			"section_name", name)
 		sectionItem.Children = nil
+
+		// Send progress for simple section
+		if mcpServer != nil {
+			progress := 35 + int(float64(itemIndex)/float64(totalItems)*45) + 8 // Quick progress for simple section
+			progressMessage := fmt.Sprintf("Processed section: %s", name)
+			logging.ToolsLogger.Debug("Sending section progress notification",
+				"section_id", id,
+				"section_name", name,
+				"progress", progress,
+				"message", progressMessage)
+			sendProgressNotification(mcpServer, ctx, progressToken, progress, 100, progressMessage)
+		}
 	}
 
 	return sectionItem, nil

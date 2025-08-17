@@ -79,6 +79,8 @@ The project follows a **modular MCP server architecture** with clear separation 
 
 **Intelligent Text Format Detection**: Advanced text processing utilities automatically detect content format (HTML, Markdown, ASCII) and convert to appropriate HTML for OneNote. Uses `gomarkdown` library for high-quality Markdown to HTML conversion with support for tables, code blocks, lists, and other common Markdown features.
 
+**Granular Authorization System**: Comprehensive permission-based access control system providing fine-grained control over MCP tool access, OneNote operations, and resource permissions. Supports hierarchical permission inheritance with explicit overrides, secure default-deny policies, and flexible configuration through JSON files.
+
 ## Special Tools
 
 ### QuickNote Tool
@@ -224,6 +226,31 @@ CONTENT_LOG_LEVEL="DEBUG"  # Content logging verbosity: DEBUG, INFO, WARN, ERROR
   "redirect_uri": "http://localhost:8080/callback",
   "notebook_name": "My Default Notebook",
   "toolsets": ["notebooks", "sections", "pages", "content"],
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "read",
+    "default_notebook_mode": "none",
+    "default_section_mode": "read",
+    "default_page_mode": "none",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write",
+      "notebook_management": "read"
+    },
+    "notebook_permissions": {
+      "My Notebook": "write",
+      "Work Notes": "read"
+    },
+    "section_permissions": {
+      "Meeting Notes": "write",
+      "Projects": "read"
+    },
+    "page_permissions": {
+      "Daily Journal": "write",
+      "Quick Notes": "write"
+    }
+  },
   "quicknote": {
     "notebook_name": "Personal Notes",
     "page_name": "Daily Journal",
@@ -252,6 +279,226 @@ The server supports bearer token authentication for securing HTTP transport mode
 - **Configuration**: Set `MCP_AUTH_ENABLED=true` and `MCP_BEARER_TOKEN=your-secret-token`
 - **Security**: Use HTTPS in production when bearer token authentication is enabled
 - **Logging**: All authentication attempts are logged for security monitoring
+
+## Authorization System
+
+### Overview
+The MCP OneNote Server includes a comprehensive authorization system that provides fine-grained access control over all operations. The system implements a hierarchical permission model with secure defaults and explicit overrides.
+
+### Permission Modes
+- **`none`**: No access - operations are denied
+- **`read`**: Read-only access - view operations only
+- **`write`**: Full read/write access - all operations allowed
+- **`full`**: Administrative access (for tool permissions only)
+
+### Configuration Structure
+
+#### Core Authorization Settings
+```json
+{
+  "authorization": {
+    "enabled": true,                    // Enable/disable authorization system
+    "default_mode": "read",             // Global default permission level
+    "default_tool_mode": "read",        // Default for tool access
+    "default_notebook_mode": "none",    // Default for notebook access
+    "default_section_mode": "read",     // Default for section access  
+    "default_page_mode": "none"         // Default for page access
+  }
+}
+```
+
+#### Permission Hierarchies
+
+**Tool-Level Permissions** (`tool_permissions`):
+Controls access to specific MCP tool categories:
+- `auth_tools`: Authentication tools (getAuthStatus, initiateAuth, etc.)
+- `notebook_management`: Notebook creation, deletion, and management
+- `section_management`: Section creation, deletion, and management  
+- `page_write`: Page creation, content updates, and deletion
+- `page_read`: Page content reading and listing
+- `content_management`: Advanced content operations
+
+**Resource-Level Permissions**:
+Controls access to specific OneNote resources by name:
+- `notebook_permissions`: Permissions by notebook display name
+- `section_permissions`: Permissions by section display name
+- `page_permissions`: Permissions by page title
+
+#### Permission Resolution Order
+The system evaluates permissions in this hierarchical order:
+1. **Tool Permission Check**: Does the user have access to the tool category?
+2. **Resource-Specific Permission**: Explicit permissions for the target resource
+3. **Resource-Type Default**: Default permission for the resource type (notebook/section/page)
+4. **Global Default**: Fallback to the global default mode
+
+### Security Features
+
+#### Default-Deny Security Model
+- **Secure Defaults**: Most defaults are set to `"none"` or `"read"` 
+- **Explicit Grants**: Write access must be explicitly configured
+- **Principle of Least Privilege**: Users get minimum necessary permissions
+
+#### Authentication Integration
+- **OAuth Integration**: Authorization checks occur after OAuth authentication
+- **Token Validation**: Expired or invalid tokens result in authentication errors before authorization
+- **Session Security**: Authorization state is evaluated per-request
+
+#### Audit and Logging
+- **Permission Decisions**: All authorization decisions are logged with context
+- **Access Attempts**: Failed authorization attempts are logged for security monitoring
+- **Structured Logging**: Authorization logs include user context, resource details, and decision rationale
+
+### Configuration Examples
+
+#### Restrictive Configuration (Default-Deny)
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "none",
+    "default_tool_mode": "none", 
+    "default_notebook_mode": "none",
+    "default_section_mode": "none",
+    "default_page_mode": "none",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_read": "read"
+    },
+    "notebook_permissions": {
+      "Public Notes": "read"
+    },
+    "page_permissions": {
+      "Daily Journal": "write"
+    }
+  }
+}
+```
+
+#### Permissive Configuration (Read-Heavy)
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "read",
+    "default_notebook_mode": "read", 
+    "default_section_mode": "read",
+    "default_page_mode": "read",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write"
+    },
+    "notebook_permissions": {
+      "Work Notes": "write",
+      "Archive": "none"
+    }
+  }
+}
+```
+
+#### QuickNote-Focused Configuration
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "read",
+    "default_notebook_mode": "none",
+    "default_page_mode": "none",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write"
+    },
+    "notebook_permissions": {
+      "Personal Notes": "write"
+    },
+    "page_permissions": {
+      "Daily Journal": "write",
+      "Quick Notes": "write"
+    }
+  }
+}
+```
+
+### Usage Scenarios
+
+#### Read-Only Access for Browsing
+Enable users to browse and read OneNote content without modification capabilities:
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "read",
+    "tool_permissions": {
+      "auth_tools": "full"
+    }
+  }
+}
+```
+
+#### Dedicated Note-Taking Setup
+Configure access for a specific note-taking workflow:
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_notebook_mode": "none",
+    "default_page_mode": "none",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_write": "write"
+    },
+    "notebook_permissions": {
+      "Meeting Notes": "write"
+    },
+    "page_permissions": {
+      "Action Items": "write",
+      "Daily Standup": "write"
+    }
+  }
+}
+```
+
+#### Development and Testing Environment
+Allow broader access for development while protecting sensitive notebooks:
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_tool_mode": "write",
+    "tool_permissions": {
+      "auth_tools": "full"
+    },
+    "notebook_permissions": {
+      "Production Data": "none",
+      "Test Notebook": "write"
+    }
+  }
+}
+```
+
+### Best Practices
+
+#### Security Recommendations
+1. **Enable Authorization**: Always enable the authorization system in production
+2. **Use Secure Defaults**: Start with restrictive defaults and explicitly grant permissions
+3. **Regular Audits**: Review permission configurations periodically
+4. **Monitor Logs**: Watch authorization logs for unexpected access patterns
+5. **Principle of Least Privilege**: Grant only the minimum permissions needed
+
+#### Configuration Management
+1. **Version Control**: Store authorization configurations in version control
+2. **Environment Separation**: Use different configurations for dev/staging/production
+3. **Documentation**: Document permission grants and their business justification
+4. **Testing**: Test permission configurations with representative use cases
+
+#### Performance Considerations
+1. **Caching**: Permission decisions are cached per request for performance
+2. **Early Termination**: Authorization failures fail fast without expensive operations
+3. **Logging Efficiency**: Use appropriate log levels to balance security and performance
 
 ## OneNote Operations Architecture
 

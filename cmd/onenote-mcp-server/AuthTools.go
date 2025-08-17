@@ -9,18 +9,19 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/resources"
 )
 
 // registerAuthTools registers authentication-related MCP tools
-func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager) {
+func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// getAuthStatus: Get current authentication status
 	getAuthStatusTool := mcp.NewTool(
 		"getAuthStatus",
 		mcp.WithDescription(resources.MustGetToolDescription("getAuthStatus")),
 	)
-	s.AddTool(getAuthStatusTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	getAuthStatusHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logging.ToolsLogger.Info("Checking authentication status", "operation", "getAuthStatus", "type", "tool_invocation")
 
 		if authManager == nil {
@@ -37,14 +38,16 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager) {
 
 		logging.ToolsLogger.Debug("getAuthStatus operation completed", "authenticated", status.Authenticated)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	// getAuthStatus doesn't require authorization since it's needed to check auth state
+	s.AddTool(getAuthStatusTool, server.ToolHandlerFunc(getAuthStatusHandler))
 
 	// refreshToken: Manually refresh authentication token
 	refreshTokenTool := mcp.NewTool(
 		"refreshToken",
 		mcp.WithDescription(resources.MustGetToolDescription("refreshToken")),
 	)
-	s.AddTool(refreshTokenTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	refreshTokenHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logging.ToolsLogger.Info("Refreshing authentication token", "operation", "refreshToken", "type", "tool_invocation")
 
 		if authManager == nil {
@@ -65,14 +68,15 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager) {
 
 		logging.ToolsLogger.Debug("refreshToken completed successfully")
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	s.AddTool(refreshTokenTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("refreshToken", refreshTokenHandler, authConfig, cache, quickNoteConfig)))
 
 	// initiateAuth: Start new authentication flow
 	initiateAuthTool := mcp.NewTool(
 		"initiateAuth",
 		mcp.WithDescription(resources.MustGetToolDescription("initiateAuth")),
 	)
-	s.AddTool(initiateAuthTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	initiateAuthHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logging.ToolsLogger.Info("Starting authentication flow", "operation", "initiateAuth", "type", "tool_invocation")
 
 		if authManager == nil {
@@ -102,14 +106,16 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager) {
 
 		logging.ToolsLogger.Debug("initiateAuth completed, auth URL generated")
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	// initiateAuth doesn't require authorization since it's needed to establish auth
+	s.AddTool(initiateAuthTool, server.ToolHandlerFunc(initiateAuthHandler))
 
 	// clearAuth: Clear stored authentication tokens
 	clearAuthTool := mcp.NewTool(
 		"clearAuth",
 		mcp.WithDescription(resources.MustGetToolDescription("clearAuth")),
 	)
-	s.AddTool(clearAuthTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	clearAuthHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logging.ToolsLogger.Info("Clearing authentication", "operation", "clearAuth", "type", "tool_invocation")
 
 		if authManager == nil {
@@ -135,7 +141,9 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager) {
 
 		logging.ToolsLogger.Debug("clearAuth completed successfully")
 		return mcp.NewToolResultText(string(jsonBytes)), nil
-	})
+	}
+	// clearAuth doesn't require authorization since it clears auth state
+	s.AddTool(clearAuthTool, server.ToolHandlerFunc(clearAuthHandler))
 
 	logging.ToolsLogger.Debug("Authentication tools registered successfully")
 }

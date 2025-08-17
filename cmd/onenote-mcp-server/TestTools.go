@@ -8,17 +8,18 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
 // registerTestTools registers test and utility MCP tools
-func registerTestTools(s *server.MCPServer) {
+func registerTestTools(s *server.MCPServer, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// testProgress: A tool that emits progress messages for testing progress notifications
 	testProgressTool := mcp.NewTool(
 		"testProgress",
 		mcp.WithDescription("A tool that emits progress messages to test progress notification functionality. Sends progress updates from 0 to 10 over 10 seconds."),
 	)
-	s.AddTool(testProgressTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	testProgressHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		logging.ToolsLogger.Info("Starting test progress tool", "operation", "testProgress", "type", "tool_invocation")
 
 		mcpServer := server.ServerFromContext(ctx)
@@ -75,7 +76,8 @@ func registerTestTools(s *server.MCPServer) {
 		logging.ToolsLogger.Info("testProgress operation completed successfully")
 		// Return final result
 		return mcp.NewToolResultText("Test progress completed successfully"), nil
-	})
+	}
+	s.AddTool(testProgressTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("testProgress", testProgressHandler, authConfig, cache, quickNoteConfig)))
 
 	logging.ToolsLogger.Debug("Test tools registered successfully")
 }
