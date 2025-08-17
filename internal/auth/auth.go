@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // auth.go - OAuth2 authentication and token management for the OneNote MCP server.
 //
 // This file provides a complete OAuth 2.0 PKCE (Proof Key for Code Exchange) implementation

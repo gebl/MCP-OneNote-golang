@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // image.go - Image processing utilities for OneNote operations.
 //
 // This file contains image processing and manipulation utilities used for

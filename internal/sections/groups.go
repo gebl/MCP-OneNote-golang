@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // groups.go - Section Group operations for the Microsoft Graph API client.
 //
 // This file contains all section group-related operations including listing,

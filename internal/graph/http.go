@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // http.go - HTTP utilities for Microsoft Graph API client.
 //
 // This file contains HTTP request and response handling utilities used across

@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // OneNote MCP Server Resources
 //
 // This file implements MCP (Model Context Protocol) resources for accessing Microsoft OneNote data

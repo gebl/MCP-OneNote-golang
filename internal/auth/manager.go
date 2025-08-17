@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // manager.go - Authentication state manager for MCP tools.
 //
 // This file provides an authentication manager that allows MCP tools to check,

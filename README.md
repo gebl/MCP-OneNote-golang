@@ -6,6 +6,40 @@ A Go-based Model Context Protocol (MCP) server that provides seamless integratio
 
 This server enables AI assistants and other MCP clients to read, create, update, and manage OneNote notebooks, sections, pages, and embedded content with enterprise-grade features including comprehensive authorization, caching, and intelligent content processing.
 
+## ⚠️ Important Safety Notice
+
+**This software is licensed under the MIT License and is provided "AS IS" without warranty of any kind.**
+
+**🚨 EARLY/TESTING SOFTWARE WARNING**: This is early-stage software that **exposes your OneNote data to AI agents** who may decide to perform actions that could **corrupt, modify, or delete your data**. AI agents can autonomously create, update, move, or delete pages, sections, and content based on their interpretation of instructions.
+
+**⚠️ MICROSOFT GRAPH API LIMITATIONS**: The OneNote Microsoft Graph API is **not fully complete** and has known limitations. It has been **observed to corrupt pages or entire notebooks** in certain scenarios, particularly with complex content structures, tables, or when making rapid successive updates. These corruption issues are inherent to the Microsoft Graph API itself, not this software.
+
+**🛡️ CRITICAL SAFETY PRECAUTIONS**:
+- **Backup your OneNote data regularly** before using this software
+- **Use the authorization system** to restrict AI agent access to specific notebooks, sections, or pages
+- **Carefully review and approve AI tool actions** before they are executed, especially write operations
+- **Start with read-only permissions** and gradually expand access as you gain confidence
+- **Test with non-critical data first** to understand how AI agents interact with your content
+- **Monitor the activity logs** to track what changes are being made to your OneNote data
+
+**Recommended Authorization Setup for Safety**:
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_mode": "read",
+    "default_notebook_mode": "none",
+    "tool_permissions": {
+      "auth_tools": "full",
+      "page_read": "read",
+      "page_write": "none"
+    }
+  }
+}
+```
+
+By using this software, you acknowledge that you understand these risks and have taken appropriate precautions to protect your data.
+
 ## 🚀 Features
 
 ### 🎯 Rapid Note-Taking

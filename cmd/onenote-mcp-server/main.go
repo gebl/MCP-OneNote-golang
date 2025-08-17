@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // main.go - Entry point for the OneNote MCP Server.
 //
 // This file sets up the Model Context Protocol (MCP) server that provides seamless

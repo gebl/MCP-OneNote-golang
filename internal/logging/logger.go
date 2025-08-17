@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // logging.go - Centralized logging configuration for the OneNote MCP server.
 //
 // This package provides a structured logging solution using Go's slog package

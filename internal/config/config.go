@@ -1,3 +1,7 @@
+// Copyright (c) 2025 Gabriel Lawrence
+//
+// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
 // config.go - Configuration management for the OneNote MCP server.
 //
 // This file provides flexible configuration loading from multiple sources including
