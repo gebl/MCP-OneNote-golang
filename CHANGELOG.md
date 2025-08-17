@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **listNotebooks Tool**: Fixed blank notebook IDs in response
+  - Corrected key mismatch between notebook client (`notebookId`) and tool implementation (`id`)
+  - Notebook IDs now properly returned in `listNotebooks` tool response
+
 ### Security
 - **Git History Sanitization**: Completely removed sensitive configuration data from git history
   - **Credential Purge**: Used `git filter-repo` to remove Azure client ID and other sensitive data from all commits

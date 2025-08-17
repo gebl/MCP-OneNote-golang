@@ -4,7 +4,7 @@ go 1.23.0
 
 toolchain go1.24.4
 
-replace github.com/mark3labs/mcp-go => C:\Users\gabe.ropnop\OneDrive\Documents\Projects\MCP\mcp-go
+// replace github.com/mark3labs/mcp-go => C:\Users\gabe.ropnop\OneDrive\Documents\Projects\MCP\mcp-go
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0

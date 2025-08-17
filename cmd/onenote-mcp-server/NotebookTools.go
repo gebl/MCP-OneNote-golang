@@ -83,7 +83,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		var notebookList []NotebookInfo
 		for _, notebook := range notebooks {
-			id, _ := notebook["id"].(string)
+			id, _ := notebook["notebookId"].(string)
 			displayName, _ := notebook["displayName"].(string)
 			
 			// Check if this is the API default notebook
