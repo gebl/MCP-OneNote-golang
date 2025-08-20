@@ -107,6 +107,10 @@ type NotebookCache struct {
 	pageSearchTime      map[string]time.Time                // Page search cache timestamps
 	notebookLookupCache map[string]map[string]interface{}   // Notebook lookup results cache by notebook name
 	notebookLookupTime  map[string]time.Time                // Notebook lookup cache timestamps
+	
+	// Optional references for API fallback in authorization
+	graphClient         interface{}                         // Graph client for API calls
+	mcpServer           interface{}                         // MCP server for progress notifications
 }
 
 // NewNotebookCache creates a new notebook cache
@@ -121,6 +125,27 @@ func NewNotebookCache() *NotebookCache {
 		notebookLookupCache: make(map[string]map[string]interface{}),
 		notebookLookupTime:  make(map[string]time.Time),
 	}
+}
+
+// SetAPIReferences sets the graph client and MCP server references for API fallback
+func (nc *NotebookCache) SetAPIReferences(graphClient interface{}, mcpServer interface{}) {
+	nc.mu.Lock()
+	defer nc.mu.Unlock()
+	
+	nc.graphClient = graphClient
+	nc.mcpServer = mcpServer
+	
+	logging.ToolsLogger.Debug("API references set in notebook cache for authorization fallback",
+		"has_graph_client", graphClient != nil,
+		"has_mcp_server", mcpServer != nil)
+}
+
+// GetAPIReferences returns the stored API references
+func (nc *NotebookCache) GetAPIReferences() (interface{}, interface{}) {
+	nc.mu.RLock()
+	defer nc.mu.RUnlock()
+	
+	return nc.graphClient, nc.mcpServer
 }
 
 // SetNotebook sets the selected notebook in cache and clears sections cache
@@ -1075,7 +1100,10 @@ func main() {
 
 	// Register MCP Tools and Resources
 	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
-	registerResources(s, graphClient)
+	registerResources(s, graphClient, cfg)
+	
+	// Set API references in cache for authorization fallback
+	globalNotebookCache.SetAPIReferences(graphClient, s)
 
 	// Initialize default notebook if authentication is available
 	initializeDefaultNotebook(graphClient, cfg, globalNotebookCache, logger)

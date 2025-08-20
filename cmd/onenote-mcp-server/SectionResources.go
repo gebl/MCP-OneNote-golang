@@ -38,6 +38,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/notebooks"
@@ -45,7 +46,7 @@ import (
 )
 
 // registerSectionResources registers all section-related MCP resources
-func registerSectionResources(s *server.MCPServer, graphClient *graph.Client) {
+func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) {
 	logging.MainLogger.Debug("Starting section resource registration process")
 
 	// Register sections by notebook name resource template
@@ -79,7 +80,7 @@ func registerSectionResources(s *server.MCPServer, graphClient *graph.Client) {
 			"request_uri", request.Params.URI)
 
 		// Call the same logic as getNotebookSections tool with progress support
-		jsonData, err := getNotebookSectionsForResource(ctx, s, graphClient, notebookName)
+		jsonData, err := getNotebookSectionsForResource(ctx, s, graphClient, notebookName, cfg)
 		if err != nil {
 			logging.MainLogger.Error("Failed to get notebook sections for resource",
 				"notebook_name", notebookName,
@@ -122,7 +123,7 @@ func registerSectionResources(s *server.MCPServer, graphClient *graph.Client) {
 			"handler_type", "global_sections")
 
 		// Call the global sections API with progress support
-		jsonData, err := getAllSectionsForResource(ctx, s, graphClient)
+		jsonData, err := getAllSectionsForResource(ctx, s, graphClient, cfg)
 		if err != nil {
 			logging.MainLogger.Error("Failed to get all sections for resource",
 				"error", err)
@@ -189,7 +190,7 @@ func getMapKeys(m map[string]interface{}) []string {
 
 // getNotebookSectionsForResource calls the same logic as getNotebookSections tool with progress support
 // This function reuses the logic from NotebookTools.go to get notebook sections with caching and progress notifications
-func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, notebookName string) ([]byte, error) {
+func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, notebookName string, cfg *config.Config) ([]byte, error) {
 	logging.MainLogger.Debug("getNotebookSectionsForResource called", "notebook_name", notebookName)
 
 	// Create specialized clients
@@ -250,6 +251,44 @@ func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, gr
 		notebookDisplayName = notebookName
 	}
 
+	// Apply authorization filtering if enabled
+	if cfg != nil && cfg.Authorization != nil && cfg.Authorization.Enabled {
+		logging.MainLogger.Debug("Applying authorization filtering to resource sections",
+			"notebook_name", notebookDisplayName,
+			"sections_count_before_filtering", len(sectionItems))
+		
+		// Convert SectionItem slice to []map[string]interface{} for filtering
+		var sectionsForFiltering []map[string]interface{}
+		for _, item := range sectionItems {
+			sectionMap := map[string]interface{}{
+				"displayName": item.Name,
+				"id":          item.ID,
+				"type":        item.Type,
+			}
+			sectionsForFiltering = append(sectionsForFiltering, sectionMap)
+		}
+		
+		// Apply filtering
+		filteredSections := cfg.Authorization.FilterSections(sectionsForFiltering, notebookDisplayName)
+		
+		// Convert back to SectionItem slice
+		var filteredSectionItems []SectionItem
+		for _, filteredSection := range filteredSections {
+			for _, originalItem := range sectionItems {
+				if originalItem.ID == filteredSection["id"].(string) {
+					filteredSectionItems = append(filteredSectionItems, originalItem)
+					break
+				}
+			}
+		}
+		
+		sectionItems = filteredSectionItems
+		
+		logging.MainLogger.Debug("Authorization filtering completed for resource sections",
+			"notebook_name", notebookDisplayName,
+			"sections_count_after_filtering", len(sectionItems))
+	}
+
 	// Build the same response format as getNotebookSections tool
 	response := map[string]interface{}{
 		"notebook_name":  notebookDisplayName,
@@ -278,7 +317,7 @@ func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, gr
 
 // getAllSectionsForResource fetches all sections across all notebooks using the global sections endpoint
 // This function calls the Microsoft Graph API equivalent of https://graph.microsoft.com/v1.0/me/onenote/sections?$select=displayName,id
-func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client) ([]byte, error) {
+func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) ([]byte, error) {
 	logging.MainLogger.Debug("getAllSectionsForResource called")
 
 	// Extract progress token from request metadata (MCP spec for resources)
@@ -314,6 +353,41 @@ func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphCl
 	// Send progress for processing
 	if s != nil {
 		sendProgressNotification(s, ctx, progressToken, 70, 100, "Processing sections data...")
+	}
+
+	// Apply authorization filtering if enabled
+	// Note: For global sections, we can only apply section name-based permissions
+	// since we don't have notebook context for each section
+	if cfg != nil && cfg.Authorization != nil && cfg.Authorization.Enabled {
+		logging.MainLogger.Debug("Applying authorization filtering to global sections resource",
+			"sections_count_before_filtering", len(sectionsData))
+		
+		var filteredSections []map[string]interface{}
+		for _, section := range sectionsData {
+			if sectionName, ok := section["displayName"].(string); ok {
+				// For global sections, we can only check section name-based permissions
+				// Check if there's an exact match in section permissions
+				if sectionPermission, exists := cfg.Authorization.SectionPermissions[sectionName]; exists {
+					if sectionPermission != "none" && sectionPermission != "" {
+						filteredSections = append(filteredSections, section)
+					}
+				} else {
+					// Fall back to default permissions if no specific rule
+					if cfg.Authorization.DefaultSectionMode != "none" && cfg.Authorization.DefaultSectionMode != "" {
+						filteredSections = append(filteredSections, section)
+					}
+				}
+			} else {
+				// If section has no name, include it based on default mode
+				if cfg.Authorization.DefaultSectionMode != "none" && cfg.Authorization.DefaultSectionMode != "" {
+					filteredSections = append(filteredSections, section)
+				}
+			}
+		}
+		sectionsData = filteredSections
+		
+		logging.MainLogger.Debug("Authorization filtering completed for global sections resource",
+			"sections_count_after_filtering", len(sectionsData))
 	}
 
 	// Build response in the same format as the original API

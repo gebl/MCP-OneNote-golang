@@ -16,22 +16,23 @@ package main
 import (
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
 // registerResources registers all MCP resources for the OneNote server
-func registerResources(s *server.MCPServer, graphClient *graph.Client) {
+func registerResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) {
 	logging.MainLogger.Debug("Starting resource registration process")
 
 	// Register notebook-related resources from the separate NotebookResources.go file
-	registerNotebookResources(s, graphClient)
+	registerNotebookResources(s, graphClient, cfg)
 
 	// Register section-related resources from the separate SectionResources.go file
-	registerSectionResources(s, graphClient)
+	registerSectionResources(s, graphClient, cfg)
 
 	// Register page-related resources from the separate PageResources.go file
-	registerPageResources(s, graphClient)
+	registerPageResources(s, graphClient, cfg)
 
 	// Future: Additional resources can be registered here
 	// For example: direct section access, etc.

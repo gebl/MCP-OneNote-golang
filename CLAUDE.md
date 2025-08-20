@@ -74,6 +74,7 @@ The project follows a **modular MCP server architecture** with clear separation 
 - `auth/`: OAuth 2.0 PKCE flow, token refresh, secure storage
 - `config/`: Multi-source configuration (env vars, JSON files, defaults)
 - `graph/`: Microsoft Graph SDK integration and HTTP client
+- `http/`: Shared HTTP utilities for automatic resource cleanup and safe request handling
 - `notebooks/`, `pages/`, `sections/`: Domain-specific OneNote operations
 - `utils/`: Validation, image processing, and text format detection utilities
 
@@ -82,6 +83,8 @@ The project follows a **modular MCP server architecture** with clear separation 
 **Client Composition Pattern**: The main `graph.Client` is composed into specialized domain clients (`NotebookClient`, `PageClient`, `SectionClient`) that add domain-specific operations while sharing the core HTTP/auth functionality.
 
 **Token Refresh Integration**: Authentication failures automatically trigger token refresh across all HTTP operations through the `StaticTokenProvider` and `Client.MakeAuthenticatedRequest` pattern.
+
+**Shared HTTP Utilities (`internal/http/`)**: Centralized HTTP request handling with automatic resource cleanup eliminates manual `defer resp.Body.Close()` patterns throughout the codebase. Provides consistent error handling, request validation, and response processing with utilities like `SafeRequestWithBody`, `SafeRequestWithCustomHandler`, and `WithAutoCleanup`. This architectural pattern ensures proper resource management and reduces code duplication across all HTTP operations in the graph, auth, pages, and sections modules.
 
 **MCP Tool Registration**: Tools are organized into specialized modules (`AuthTools`, `NotebookTools`, `PageTools`) with handlers that create domain clients, call operations, and return standardized MCP responses. Each tool includes comprehensive error handling and logging.
 

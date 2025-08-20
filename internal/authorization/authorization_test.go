@@ -19,11 +19,13 @@ type MockNotebookCache struct {
 	displayName  string
 	notebookID   string
 	sectionNames map[string]string
+	pageNames    map[string]string
 }
 
 func NewMockNotebookCache() *MockNotebookCache {
 	return &MockNotebookCache{
 		sectionNames: make(map[string]string),
+		pageNames:    make(map[string]string),
 	}
 }
 
@@ -60,8 +62,23 @@ func (m *MockNotebookCache) GetSectionNameWithProgress(ctx context.Context, sect
 	return m.GetSectionName(sectionID)
 }
 
+func (m *MockNotebookCache) GetPageName(pageID string) (string, bool) {
+	name, exists := m.pageNames[pageID]
+	return name, exists
+}
+
+func (m *MockNotebookCache) GetPageNameWithProgress(ctx context.Context, pageID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool) {
+	// For testing purposes, this behaves the same as GetPageName
+	// In real implementation, this would make API calls if cache misses
+	return m.GetPageName(pageID)
+}
+
 func (m *MockNotebookCache) SetSectionName(sectionID, name string) {
 	m.sectionNames[sectionID] = name
+}
+
+func (m *MockNotebookCache) SetPageName(pageID, name string) {
+	m.pageNames[pageID] = name
 }
 
 // MockQuickNoteConfig implements the QuickNoteConfig interface for testing

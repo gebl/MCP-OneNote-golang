@@ -6,16 +6,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
-	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/resources"
+	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
 
 // registerAuthTools registers authentication-related MCP tools
@@ -26,7 +24,7 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		mcp.WithDescription(resources.MustGetToolDescription("getAuthStatus")),
 	)
 	getAuthStatusHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logging.ToolsLogger.Info("Checking authentication status", "operation", "getAuthStatus", "type", "tool_invocation")
+		logger := utils.NewToolLogger("getAuthStatus")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -34,14 +32,8 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 
 		status := authManager.GetAuthStatus()
 
-		jsonBytes, err := json.Marshal(status)
-		if err != nil {
-			logging.ToolsLogger.Error("getAuthStatus failed to marshal status", "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal auth status: %v", err)), nil
-		}
-
-		logging.ToolsLogger.Debug("getAuthStatus operation completed", "authenticated", status.Authenticated)
-		return mcp.NewToolResultText(string(jsonBytes)), nil
+		logger.LogSuccess("authenticated", status.Authenticated)
+		return utils.ToolResults.NewJSONResult("getAuthStatus", status), nil
 	}
 	// getAuthStatus doesn't require authorization since it's needed to check auth state
 	s.AddTool(getAuthStatusTool, server.ToolHandlerFunc(getAuthStatusHandler))
@@ -52,7 +44,7 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		mcp.WithDescription(resources.MustGetToolDescription("refreshToken")),
 	)
 	refreshTokenHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logging.ToolsLogger.Info("Refreshing authentication token", "operation", "refreshToken", "type", "tool_invocation")
+		logger := utils.NewToolLogger("refreshToken")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -60,18 +52,12 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 
 		status, err := authManager.RefreshToken()
 		if err != nil {
-			logging.ToolsLogger.Error("refreshToken operation failed", "error", err, "operation", "refreshToken")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to refresh token: %v", err)), nil
+			logger.LogError(err)
+			return utils.ToolResults.NewError("refresh token", err), nil
 		}
 
-		jsonBytes, err := json.Marshal(status)
-		if err != nil {
-			logging.ToolsLogger.Error("refreshToken failed to marshal status", "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal refresh status: %v", err)), nil
-		}
-
-		logging.ToolsLogger.Debug("refreshToken completed successfully")
-		return mcp.NewToolResultText(string(jsonBytes)), nil
+		logger.LogSuccess()
+		return utils.ToolResults.NewJSONResult("refreshToken", status), nil
 	}
 	s.AddTool(refreshTokenTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("refreshToken", refreshTokenHandler, authConfig, cache, quickNoteConfig)))
 
@@ -81,7 +67,7 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		mcp.WithDescription(resources.MustGetToolDescription("initiateAuth")),
 	)
 	initiateAuthHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logging.ToolsLogger.Info("Starting authentication flow", "operation", "initiateAuth", "type", "tool_invocation")
+		logger := utils.NewToolLogger("initiateAuth")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -89,8 +75,8 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 
 		session, err := authManager.InitiateAuth()
 		if err != nil {
-			logging.ToolsLogger.Error("initiateAuth operation failed", "error", err, "operation", "initiateAuth")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to initiate authentication: %v", err)), nil
+			logger.LogError(err)
+			return utils.ToolResults.NewError("initiate authentication", err), nil
 		}
 
 		// Create response with user instructions
@@ -102,14 +88,8 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 			"state":           session.State,
 		}
 
-		jsonBytes, err := json.Marshal(response)
-		if err != nil {
-			logging.ToolsLogger.Error("initiateAuth failed to marshal response", "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal auth response: %v", err)), nil
-		}
-
-		logging.ToolsLogger.Debug("initiateAuth completed, auth URL generated")
-		return mcp.NewToolResultText(string(jsonBytes)), nil
+		logger.LogSuccess("auth_url_generated", true)
+		return utils.ToolResults.NewJSONResult("initiateAuth", response), nil
 	}
 	// initiateAuth doesn't require authorization since it's needed to establish auth
 	s.AddTool(initiateAuthTool, server.ToolHandlerFunc(initiateAuthHandler))
@@ -120,7 +100,7 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		mcp.WithDescription(resources.MustGetToolDescription("clearAuth")),
 	)
 	clearAuthHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logging.ToolsLogger.Info("Clearing authentication", "operation", "clearAuth", "type", "tool_invocation")
+		logger := utils.NewToolLogger("clearAuth")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -128,8 +108,8 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 
 		err := authManager.ClearAuth()
 		if err != nil {
-			logging.ToolsLogger.Error("clearAuth operation failed", "error", err, "operation", "clearAuth")
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to clear authentication: %v", err)), nil
+			logger.LogError(err)
+			return utils.ToolResults.NewError("clear authentication", err), nil
 		}
 
 		response := map[string]interface{}{
@@ -137,17 +117,9 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 			"message": "Authentication tokens cleared successfully. Use initiateAuth to re-authenticate.",
 		}
 
-		jsonBytes, err := json.Marshal(response)
-		if err != nil {
-			logging.ToolsLogger.Error("clearAuth failed to marshal response", "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal clear response: %v", err)), nil
-		}
-
-		logging.ToolsLogger.Debug("clearAuth completed successfully")
-		return mcp.NewToolResultText(string(jsonBytes)), nil
+		logger.LogSuccess()
+		return utils.ToolResults.NewJSONResult("clearAuth", response), nil
 	}
 	// clearAuth doesn't require authorization since it clears auth state
 	s.AddTool(clearAuthTool, server.ToolHandlerFunc(clearAuthHandler))
-
-	logging.ToolsLogger.Debug("Authentication tools registered successfully")
 }

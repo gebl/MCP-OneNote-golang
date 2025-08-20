@@ -63,6 +63,7 @@ import (
 	msgraphmodels "github.com/microsoftgraph/msgraph-sdk-go/models"
 
 	"github.com/gebl/onenote-mcp-server/internal/graph"
+	httputils "github.com/gebl/onenote-mcp-server/internal/http"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
@@ -364,21 +365,15 @@ func (c *PageClient) GetPageContent(pageID string, forUpdate ...bool) (string, e
 		url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/content?includeIDs=true", pageID)
 		logging.PageLogger.Debug("Using direct HTTP call with includeIDs", "page_id", pageID, "url", url)
 
-		resp, err := c.MakeAuthenticatedRequest("GET", url, nil, nil)
+		content, err := httputils.SafeRequestWithBody(
+			c.MakeAuthenticatedRequest,
+			c.HandleHTTPResponse,
+			c.ReadResponseBody,
+			"GET", url, nil, nil,
+			"GetPageContent",
+		)
 		if err != nil {
 			logging.PageLogger.Error("Direct HTTP request failed for GetPageContent", "page_id", pageID, "url", url, "error", err)
-			return "", err
-		}
-		defer resp.Body.Close()
-
-		if errHandle := c.HandleHTTPResponse(resp, "GetPageContent"); errHandle != nil {
-			logging.PageLogger.Error("HTTP response handling failed for GetPageContent", "page_id", pageID, "status", resp.StatusCode, "error", errHandle)
-			return "", errHandle
-		}
-
-		content, err := c.ReadResponseBody(resp, "GetPageContent")
-		if err != nil {
-			logging.PageLogger.Error("Failed to read response body for GetPageContent", "page_id", pageID, "error", err)
 			return "", err
 		}
 
@@ -445,22 +440,26 @@ func (c *PageClient) CreatePage(sectionID, title, content string) (map[string]in
 	// Make authenticated request
 	headers := map[string]string{"Content-Type": "application/xhtml+xml"}
 	logging.PageLogger.Debug("Making authenticated request to create page", "section_id", sectionID, "url", url, "content_type", headers["Content-Type"])
-	resp, err := c.MakeAuthenticatedRequest("POST", url, strings.NewReader(finalContent), headers)
+	var result map[string]interface{}
+	err := httputils.SafeRequestWithCustomHandler(
+		c.MakeAuthenticatedRequest,
+		func(resp *http.Response) error {
+			// Handle HTTP response
+			if err := c.HandleHTTPResponse(resp, "CreatePage"); err != nil {
+				logging.PageLogger.Error("HTTP response handling failed for CreatePage", "section_id", sectionID, "title", title, "status", resp.StatusCode, "error", err)
+				return err
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				logging.PageLogger.Error("Failed to decode response for CreatePage", "section_id", sectionID, "title", title, "error", err)
+				return err
+			}
+			return nil
+		},
+		"POST", url, strings.NewReader(finalContent), headers,
+	)
 	if err != nil {
 		logging.PageLogger.Error("Authenticated request failed for CreatePage", "section_id", sectionID, "title", title, "error", err)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Handle HTTP response
-	if err := c.HandleHTTPResponse(resp, "CreatePage"); err != nil {
-		logging.PageLogger.Error("HTTP response handling failed for CreatePage", "section_id", sectionID, "title", title, "status", resp.StatusCode, "error", err)
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		logging.PageLogger.Error("Failed to decode response for CreatePage", "section_id", sectionID, "title", title, "error", err)
 		return nil, err
 	}
 
@@ -691,16 +690,14 @@ func (c *PageClient) UpdatePageContent(pageID string, commands []UpdateCommand) 
 	headers := map[string]string{"Content-Type": contentType}
 	logging.PageLogger.Debug("Making authenticated PATCH request", "page_id", pageID, "url", url, "content_type", contentType, "body_size", buf.Len())
 
-	resp, err := c.MakeAuthenticatedRequest("PATCH", url, &buf, headers)
+	err = httputils.SafeRequest(
+		c.MakeAuthenticatedRequest,
+		c.HandleHTTPResponse,
+		"PATCH", url, &buf, headers,
+		"UpdatePageContent",
+	)
 	if err != nil {
 		logging.PageLogger.Error("Authenticated PATCH request failed for UpdatePageContent", "page_id", pageID, "error", err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Handle HTTP response
-	if err := c.HandleHTTPResponse(resp, "UpdatePageContent"); err != nil {
-		logging.PageLogger.Error("HTTP response handling failed for UpdatePageContent", "page_id", pageID, "status", resp.StatusCode, "error", err)
 		return err
 	}
 
@@ -774,36 +771,41 @@ func (c *PageClient) CopyPage(pageID string, targetSectionID string) (map[string
 	}
 	logging.PageLogger.Debug("Request body marshaled", "page_id", pageID, "body_length", len(jsonBody))
 
-	// Make authenticated request
+	// Make authenticated request with custom handler
 	headers := map[string]string{"Content-Type": "application/json"}
 	logging.PageLogger.Debug("Making authenticated request to copy page", "page_id", pageID, "target_section_id", targetSectionID)
-	resp, err := c.MakeAuthenticatedRequest("POST", url, bytes.NewBuffer(jsonBody), headers)
+	
+	var result map[string]interface{}
+	err = httputils.SafeRequestWithCustomHandler(
+		c.MakeAuthenticatedRequest,
+		func(resp *http.Response) error {
+			// Check for 202 status code (Accepted - asynchronous operation)
+			logging.PageLogger.Debug("Copy request response received", "page_id", pageID, "status_code", resp.StatusCode)
+			if resp.StatusCode != 202 {
+				logging.PageLogger.Error("Copy operation failed with unexpected status", "page_id", pageID, "expected_status", 202, "actual_status", resp.StatusCode)
+				return fmt.Errorf("copy operation failed: expected status 202, got %d", resp.StatusCode)
+			}
+
+			// Read response body
+			content, err := c.ReadResponseBody(resp, "CopyPage")
+			if err != nil {
+				logging.PageLogger.Error("Failed to read response body for CopyPage", "page_id", pageID, "error", err)
+				return err
+			}
+			logging.PageLogger.Debug("Copy response body read", "page_id", pageID, "content_length", len(content))
+
+			// Parse the response JSON
+			if err := json.Unmarshal(content, &result); err != nil {
+				logging.PageLogger.Error("Failed to parse copy response", "page_id", pageID, "error", err)
+				return fmt.Errorf("failed to parse copy response: %v", err)
+			}
+			return nil
+		},
+		"POST", url, bytes.NewBuffer(jsonBody), headers,
+	)
 	if err != nil {
 		logging.PageLogger.Error("Authenticated request failed for CopyPage", "page_id", pageID, "target_section_id", targetSectionID, "error", err)
 		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Check for 202 status code (Accepted - asynchronous operation)
-	logging.PageLogger.Debug("Copy request response received", "page_id", pageID, "status_code", resp.StatusCode)
-	if resp.StatusCode != 202 {
-		logging.PageLogger.Error("Copy operation failed with unexpected status", "page_id", pageID, "expected_status", 202, "actual_status", resp.StatusCode)
-		return nil, fmt.Errorf("copy operation failed: expected status 202, got %d", resp.StatusCode)
-	}
-
-	// Read response body
-	content, err := c.ReadResponseBody(resp, "CopyPage")
-	if err != nil {
-		logging.PageLogger.Error("Failed to read response body for CopyPage", "page_id", pageID, "error", err)
-		return nil, err
-	}
-	logging.PageLogger.Debug("Copy response body read", "page_id", pageID, "content_length", len(content))
-
-	// Parse the response JSON
-	var result map[string]interface{}
-	if err := json.Unmarshal(content, &result); err != nil {
-		logging.PageLogger.Error("Failed to parse copy response JSON", "page_id", pageID, "error", err)
-		return nil, fmt.Errorf("failed to parse copy response: %v", err)
 	}
 
 	// Extract status and id from the response
@@ -927,48 +929,53 @@ func (c *PageClient) GetOnenoteOperation(operationID string) (map[string]interfa
 	url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/operations/%s", sanitizedOperationID)
 	logging.PageLogger.Debug("Operation status URL constructed", "operation_id", operationID, "url", url)
 
-	// Make authenticated request
-	resp, err := c.MakeAuthenticatedRequest("GET", url, nil, nil)
+	// Make authenticated request with custom handler
+	var result map[string]interface{}
+	err = httputils.SafeRequestWithCustomHandler(
+		c.MakeAuthenticatedRequest,
+		func(resp *http.Response) error {
+			// Handle HTTP response - special handling for 503 Service Unavailable
+			if resp.StatusCode == 503 {
+				// 503 indicates the operation is still in progress, not an error condition
+				logging.PageLogger.Warn("Operation status check returned 503 Service Unavailable - operation still in progress",
+					"operation_id", operationID,
+					"status_code", resp.StatusCode,
+					"note", "This is expected during long-running copy operations")
+
+				// Return a result indicating the operation is still running
+				result = map[string]interface{}{
+					"status": "Running",
+					"id":     operationID,
+					"note":   "Operation is still in progress (503 response received)",
+				}
+				return nil
+			}
+
+			// Handle other HTTP responses normally
+			if errHandle := c.HandleHTTPResponse(resp, "GetOnenoteOperation"); errHandle != nil {
+				logging.PageLogger.Error("HTTP response handling failed for GetOnenoteOperation", "operation_id", operationID, "status", resp.StatusCode, "error", errHandle)
+				return errHandle
+			}
+
+			// Read response body
+			content, err := c.ReadResponseBody(resp, "GetOnenoteOperation")
+			if err != nil {
+				logging.PageLogger.Error("Failed to read response body for GetOnenoteOperation", "operation_id", operationID, "error", err)
+				return err
+			}
+
+			// Parse the response JSON
+			if err := json.Unmarshal(content, &result); err != nil {
+				logging.PageLogger.Error("Failed to parse operation status response", "operation_id", operationID, "error", err)
+				return fmt.Errorf("failed to parse operation status response: %v", err)
+			}
+			return nil
+		},
+		"GET", url, nil, nil,
+	)
 	if err != nil {
 		logging.PageLogger.Error("Authenticated request failed for GetOnenoteOperation", "operation_id", operationID, "error", err)
 		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Handle HTTP response - special handling for 503 Service Unavailable
-	if resp.StatusCode == 503 {
-		// 503 indicates the operation is still in progress, not an error condition
-		logging.PageLogger.Warn("Operation status check returned 503 Service Unavailable - operation still in progress",
-			"operation_id", operationID,
-			"status_code", resp.StatusCode,
-			"note", "This is expected during long-running copy operations")
-
-		// Return a result indicating the operation is still running
-		return map[string]interface{}{
-			"status": "Running",
-			"id":     operationID,
-			"note":   "Operation is still in progress (503 response received)",
-		}, nil
-	}
-
-	// Handle other HTTP responses normally
-	if errHandle := c.HandleHTTPResponse(resp, "GetOnenoteOperation"); errHandle != nil {
-		logging.PageLogger.Error("HTTP response handling failed for GetOnenoteOperation", "operation_id", operationID, "status", resp.StatusCode, "error", errHandle)
-		return nil, errHandle
-	}
-
-	// Read response body
-	content, err := c.ReadResponseBody(resp, "GetOnenoteOperation")
-	if err != nil {
-		logging.PageLogger.Error("Failed to read response body for GetOnenoteOperation", "operation_id", operationID, "error", err)
-		return nil, err
-	}
-
-	// Parse the response JSON
-	var result map[string]interface{}
-	if err := json.Unmarshal(content, &result); err != nil {
-		logging.PageLogger.Error("Failed to parse operation status response", "operation_id", operationID, "error", err)
-		return nil, fmt.Errorf("failed to parse operation status response: %v", err)
 	}
 
 	// Log the operation status if available
@@ -1156,24 +1163,32 @@ func (c *PageClient) GetPageItem(pageID, pageItemID string, fullSize ...bool) (*
 	logging.PageLogger.Debug("Downloading item content", "page_id", pageID, "page_item_id", pageItemID, "url", resourceURL)
 
 	// Make authenticated request to download the resource
-	resp, err := c.MakeAuthenticatedRequest("GET", resourceURL, nil, nil)
+	var content []byte
+	var resp *http.Response
+	err = httputils.SafeRequestWithCustomHandler(
+		c.MakeAuthenticatedRequest,
+		func(response *http.Response) error {
+			resp = response // Capture response for header access
+			
+			// Handle HTTP response
+			if errHandle := c.HandleHTTPResponse(response, "GetPageItem"); errHandle != nil {
+				logging.PageLogger.Error("HTTP response handling failed for GetPageItem", "page_id", pageID, "page_item_id", pageItemID, "status", response.StatusCode, "error", errHandle)
+				return errHandle
+			}
+
+			// Read the binary content
+			responseContent, readErr := c.ReadResponseBody(response, "GetPageItem")
+			if readErr != nil {
+				return readErr
+			}
+			content = responseContent
+			return nil
+		},
+		"GET", resourceURL, nil, nil,
+	)
 	if err != nil {
 		logging.PageLogger.Error("Failed to download page item content", "page_id", pageID, "page_item_id", pageItemID, "error", err)
 		return nil, fmt.Errorf("failed to download page item: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Handle HTTP response
-	if errHandle := c.HandleHTTPResponse(resp, "GetPageItem"); errHandle != nil {
-		logging.PageLogger.Error("HTTP response handling failed for GetPageItem", "page_id", pageID, "page_item_id", pageItemID, "status", resp.StatusCode, "error", errHandle)
-		return nil, errHandle
-	}
-
-	// Read the binary content
-	content, err := c.ReadResponseBody(resp, "GetPageItem")
-	if err != nil {
-		logging.PageLogger.Error("Failed to read page item content", "page_id", pageID, "page_item_id", pageItemID, "error", err)
-		return nil, fmt.Errorf("failed to read page item content: %v", err)
 	}
 
 	// Create the page item data with content

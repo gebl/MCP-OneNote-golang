@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"strings"
 
+	httputils "github.com/gebl/onenote-mcp-server/internal/http"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
@@ -102,26 +103,16 @@ func (c *Client) GetOnenoteOperation(operationID string) (map[string]interface{}
 	url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/operations/%s", sanitizedOperationID)
 	logging.GraphLogger.Debug("Operation status URL", "url", url)
 
-	// Make authenticated request
-	resp, err := c.MakeAuthenticatedRequest("GET", url, nil, nil)
+	// Make authenticated request using shared HTTP utilities for automatic resource cleanup
+	content, err := httputils.SafeRequestWithBody(
+		c.MakeAuthenticatedRequest,
+		c.HandleHTTPResponse,
+		c.ReadResponseBody,
+		"GET", url, nil, nil,
+		"GetOnenoteOperation",
+	)
 	if err != nil {
 		logging.GraphLogger.Debug("Authenticated request failed", "error", err)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	logging.GraphLogger.Debug("Received response", "status", resp.StatusCode, "headers", resp.Header)
-
-	// Handle HTTP response
-	if errHandle := c.HandleHTTPResponse(resp, "GetOnenoteOperation"); errHandle != nil {
-		logging.GraphLogger.Debug("HTTP response handling failed", "error", errHandle)
-		return nil, errHandle
-	}
-
-	// Read response body
-	content, err := c.ReadResponseBody(resp, "GetOnenoteOperation")
-	if err != nil {
-		logging.GraphLogger.Debug("Failed to read response body", "error", err)
 		return nil, err
 	}
 

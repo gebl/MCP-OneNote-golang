@@ -40,6 +40,7 @@ import (
 	"fmt"
 	"net/http"
 
+	httputils "github.com/gebl/onenote-mcp-server/internal/http"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
@@ -92,20 +93,31 @@ func (c *SectionClient) ListSectionGroups(containerID string) ([]map[string]inte
 	}
 
 	// Make the API request
-	resp, err := c.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+	var result []map[string]interface{}
+	err = httputils.SafeRequestWithCustomHandler(
+		c.Client.MakeAuthenticatedRequest,
+		func(resp *http.Response) error {
+			if resp.StatusCode != 200 {
+				logging.SectionLogger.Debug("API returned status code", "status_code", resp.StatusCode)
+				return fmt.Errorf("failed to list section groups from %s: HTTP %d", containerType, resp.StatusCode)
+			}
+
+			logging.SectionLogger.Debug("Successfully retrieved section groups", "container_type", containerType)
+			processedResult, procErr := c.processSectionGroupsResponse(resp, "ListSectionGroups", containerID)
+			if procErr != nil {
+				return procErr
+			}
+			result = processedResult
+			return nil
+		},
+		"GET", url, nil, nil,
+	)
 	if err != nil {
 		logging.SectionLogger.Debug("API request failed", "error", err)
 		return nil, fmt.Errorf("failed to list section groups from %s: %v", containerType, err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		logging.SectionLogger.Debug("API returned status code", "status_code", resp.StatusCode)
-		return nil, fmt.Errorf("failed to list section groups from %s: HTTP %d", containerType, resp.StatusCode)
-	}
-
-	logging.SectionLogger.Debug("Successfully retrieved section groups", "container_type", containerType)
-	return c.processSectionGroupsResponse(resp, "ListSectionGroups", containerID)
+	return result, nil
 }
 
 // ListSectionGroupsWithProgress fetches section groups with progress updates.
@@ -164,32 +176,40 @@ func (c *SectionClient) ListSectionGroupsWithProgress(containerID string, progre
 	}
 
 	// Make the API request
-	resp, err := c.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+	var result []map[string]interface{}
+	err = httputils.SafeRequestWithCustomHandler(
+		c.Client.MakeAuthenticatedRequest,
+		func(resp *http.Response) error {
+			if resp.StatusCode != 200 {
+				logging.SectionLogger.Debug("API returned status code", "status_code", resp.StatusCode)
+				return fmt.Errorf("failed to list section groups from %s: HTTP %d", containerType, resp.StatusCode)
+			}
+
+			if progressCallback != nil {
+				progressCallback(80, "Processing response...")
+			}
+
+			logging.SectionLogger.Debug("Successfully retrieved section groups", "container_type", containerType)
+			processedResult, procErr := c.processSectionGroupsResponse(resp, "ListSectionGroups", containerID)
+			if procErr != nil {
+				return procErr
+			}
+			result = processedResult
+			
+			if progressCallback != nil {
+				progressCallback(100, fmt.Sprintf("Completed: %d section groups found", len(result)))
+			}
+			
+			return nil
+		},
+		"GET", url, nil, nil,
+	)
 	if err != nil {
 		logging.SectionLogger.Debug("API request failed", "error", err)
 		return nil, fmt.Errorf("failed to list section groups from %s: %v", containerType, err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		logging.SectionLogger.Debug("API returned status code", "status_code", resp.StatusCode)
-		return nil, fmt.Errorf("failed to list section groups from %s: HTTP %d", containerType, resp.StatusCode)
-	}
-
-	if progressCallback != nil {
-		progressCallback(80, "Processing response...")
-	}
-
-	logging.SectionLogger.Debug("Successfully retrieved section groups", "container_type", containerType)
-	result, err := c.processSectionGroupsResponse(resp, "ListSectionGroups", containerID)
 	
-	if progressCallback != nil {
-		if err == nil {
-			progressCallback(100, fmt.Sprintf("Completed: %d section groups found", len(result)))
-		}
-	}
-	
-	return result, err
+	return result, nil
 }
 
 // processSectionGroupsResponse processes the HTTP response for section groups and returns filtered data
@@ -294,29 +314,19 @@ func (c *SectionClient) ListSectionsInSectionGroup(sectionGroupID string) ([]map
 	logging.SectionLogger.Debug("Sections in section group URL", "url", url)
 
 	// Make authenticated request
-	resp, err := c.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+	content, err := httputils.SafeRequestWithBody(
+		c.Client.MakeAuthenticatedRequest,
+		c.Client.HandleHTTPResponse,
+		c.Client.ReadResponseBody,
+		"GET", url, nil, nil,
+		"ListSectionsInSectionGroup",
+	)
 	if err != nil {
 		logging.SectionLogger.Debug("Authenticated request failed", "error", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	logging.SectionLogger.Debug("Received response", "status_code", resp.StatusCode, "headers", resp.Header)
-
-	// Handle HTTP response
-	if errHandle := c.Client.HandleHTTPResponse(resp, "ListSectionsInSectionGroup"); errHandle != nil {
-		logging.SectionLogger.Debug("HTTP response handling failed", "error", errHandle)
-		return nil, errHandle
-	}
-
-	// Read response body
-	content, err := c.Client.ReadResponseBody(resp, "ListSectionsInSectionGroup")
-	if err != nil {
-		logging.SectionLogger.Debug("Failed to read response body", "error", err)
-		return nil, err
-	}
-
-	logging.SectionLogger.Debug("Response body", "content", string(content))
+	logging.SectionLogger.Debug("Request completed successfully", "content_length", len(content))
 
 	// Parse the response JSON
 	var result map[string]interface{}
@@ -429,20 +439,31 @@ func (c *SectionClient) CreateSectionGroup(containerID, displayName string) (map
 	logging.SectionLogger.Debug("Using correct endpoint based on container type", "url", url, "container_type", containerType, "endpoint_type", endpointType)
 
 	// Make the API request to the correct endpoint
-	resp, err := c.Client.MakeAuthenticatedRequest("POST", url, bytes.NewBuffer(jsonBody), map[string]string{"Content-Type": "application/json"})
+	var result map[string]interface{}
+	err = httputils.SafeRequestWithCustomHandler(
+		c.Client.MakeAuthenticatedRequest,
+		func(resp *http.Response) error {
+			if resp.StatusCode != 201 {
+				logging.SectionLogger.Debug("API returned non-201 status", "status_code", resp.StatusCode, "endpoint_type", endpointType)
+				return fmt.Errorf("failed to create section group in %s: HTTP %d", endpointType, resp.StatusCode)
+			}
+
+			logging.SectionLogger.Debug("Successfully created section group", "endpoint_type", endpointType)
+			processedResult, procErr := c.processCreateSectionGroupResponse(resp, "CreateSectionGroup")
+			if procErr != nil {
+				return procErr
+			}
+			result = processedResult
+			return nil
+		},
+		"POST", url, bytes.NewBuffer(jsonBody), map[string]string{"Content-Type": "application/json"},
+	)
 	if err != nil {
 		logging.SectionLogger.Debug("API request failed", "error", err, "endpoint_type", endpointType)
 		return nil, fmt.Errorf("failed to create section group in %s: %v", endpointType, err)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 201 {
-		logging.SectionLogger.Debug("API returned non-201 status", "status_code", resp.StatusCode, "endpoint_type", endpointType)
-		return nil, fmt.Errorf("failed to create section group in %s: HTTP %d", endpointType, resp.StatusCode)
-	}
-
-	logging.SectionLogger.Debug("Successfully created section group", "endpoint_type", endpointType)
-	return c.processCreateSectionGroupResponse(resp, "CreateSectionGroup")
+	return result, nil
 }
 
 // processCreateSectionGroupResponse processes the HTTP response for creating section groups and returns the result

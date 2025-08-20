@@ -52,6 +52,7 @@ func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *Aut
 
 		// Resolve additional context if needed
 		ResolveNotebookContext(&resourceContext, cache)
+		ResolveSectionContext(ctx, &resourceContext, cache)
 		ResolvePageContext(&resourceContext, cache)
 
 		// Enhanced security check: If we have a page ID but still no page name after context resolution,

@@ -315,49 +315,82 @@ func (ac *AuthorizationConfig) getToolPermission(category ToolCategory) Permissi
 
 // getResourcePermission returns the permission level for a resource context
 func (ac *AuthorizationConfig) getResourcePermission(resourceContext ResourceContext) PermissionLevel {
-	// Check page permissions first (most specific)
+	// Check page permissions first (most specific) - use hierarchical lookup
 	if resourceContext.PageName != "" {
-		if permission := ac.matchPattern(resourceContext.PageName, ac.pageMatchers); permission != "" {
-			logging.AuthorizationLogger.Debug("Page permission found via pattern match",
+		sectionIdentifier := resourceContext.SectionName
+		if sectionIdentifier == "" {
+			sectionIdentifier = resourceContext.SectionID
+		}
+		permission := ac.getPagePermission(resourceContext.NotebookName, sectionIdentifier, resourceContext.PageName)
+		if permission != "" {
+			logging.AuthorizationLogger.Debug("Page permission found via hierarchical lookup",
 				"page_name", resourceContext.PageName,
 				"page_id", resourceContext.PageID,
+				"notebook", resourceContext.NotebookName,
+				"section", sectionIdentifier,
 				"permission", permission)
 			return permission
 		}
-		// No page-specific permission found, use page default
+	} else if resourceContext.PageID != "" {
+		// We have a page ID but no page name - this means we couldn't resolve the page name
+		// Check notebook/section permissions first before falling back to default page mode
+		logging.AuthorizationLogger.Info("Page ID present but page name could not be resolved, checking notebook/section permissions first",
+			"page_id", resourceContext.PageID,
+			"notebook", resourceContext.NotebookName,
+			"section", resourceContext.SectionName,
+			"security_action", "preventing_page_id_authorization_bypass")
+		
+		// Check section permission first if we have section context
+		if resourceContext.SectionName != "" || resourceContext.SectionID != "" {
+			sectionIdentifier := resourceContext.SectionName
+			if sectionIdentifier == "" {
+				sectionIdentifier = resourceContext.SectionID
+			}
+			sectionPermission := ac.getSectionPermission(resourceContext.NotebookName, sectionIdentifier)
+			if sectionPermission != "" {
+				logging.AuthorizationLogger.Debug("Using section permission for unresolved page",
+					"page_id", resourceContext.PageID,
+					"section", sectionIdentifier,
+					"permission", sectionPermission)
+				return sectionPermission
+			}
+		}
+		
+		// Check notebook permission if we have notebook context
+		if resourceContext.NotebookName != "" {
+			notebookPermission := ac.getNotebookPermission(resourceContext.NotebookName)
+			if notebookPermission != "" {
+				logging.AuthorizationLogger.Debug("Using notebook permission for unresolved page",
+					"page_id", resourceContext.PageID,
+					"notebook", resourceContext.NotebookName,
+					"permission", notebookPermission)
+				return notebookPermission
+			}
+		}
+		
+		// Only fall back to default page mode if no other context is available
 		if ac.DefaultPageMode != "" {
-			logging.AuthorizationLogger.Debug("No page-specific permission found, applying default page mode",
-				"page_name", resourceContext.PageName,
+			logging.AuthorizationLogger.Debug("Falling back to default page mode for unresolved page",
 				"page_id", resourceContext.PageID,
 				"default_page_mode", ac.DefaultPageMode)
 			return ac.DefaultPageMode
 		}
-	} else if resourceContext.PageID != "" {
-		// We have a page ID but no page name - this means we couldn't resolve the page name
-		// Apply the default page mode to prevent authorization bypass
-		logging.AuthorizationLogger.Info("Page ID present but page name could not be resolved, applying default page mode to prevent bypass",
-			"page_id", resourceContext.PageID,
-			"default_page_mode", ac.DefaultPageMode,
-			"security_action", "preventing_page_id_authorization_bypass")
-		if ac.DefaultPageMode != "" {
-			return ac.DefaultPageMode
-		}
 	}
 	
-	// Check section permissions next (more specific than notebook)
-	if resourceContext.SectionName != "" {
-		sectionPath := resourceContext.NotebookName + "/" + resourceContext.SectionName
-		if permission := ac.matchPattern(sectionPath, ac.sectionMatchers); permission != "" {
-			return permission
+	// Check section permissions next (more specific than notebook) - use hierarchical lookup
+	if resourceContext.SectionName != "" || resourceContext.SectionID != "" {
+		sectionIdentifier := resourceContext.SectionName
+		if sectionIdentifier == "" {
+			sectionIdentifier = resourceContext.SectionID
 		}
-		
-		// Also check section name alone
-		if permission := ac.matchPattern(resourceContext.SectionName, ac.sectionMatchers); permission != "" {
+		permission := ac.getSectionPermission(resourceContext.NotebookName, sectionIdentifier)
+		if permission != "" {
+			logging.AuthorizationLogger.Debug("Section permission found via hierarchical lookup",
+				"section_name", resourceContext.SectionName,
+				"section_id", resourceContext.SectionID,
+				"notebook", resourceContext.NotebookName,
+				"permission", permission)
 			return permission
-		}
-		// No section-specific permission found, use section default
-		if ac.DefaultSectionMode != "" {
-			return ac.DefaultSectionMode
 		}
 	}
 	
@@ -604,8 +637,8 @@ func (ac *AuthorizationConfig) FilterSections(sections []map[string]interface{},
 			sectionType, _ := section["type"].(string)
 			
 			// Check section-specific permission first
+			sectionPermission := ac.getSectionPermission(notebookName, sectionName)
 			sectionPath := notebookName + "/" + sectionName
-			sectionPermission := ac.getSectionPermission(sectionPath)
 			
 			// If no section-specific rule, fall back to notebook permission
 			var effectivePermission PermissionLevel
@@ -790,12 +823,11 @@ func (ac *AuthorizationConfig) FilterPages(pages []map[string]interface{}, secti
 	var contextInfo string
 	
 	if sectionName != "" && notebookName != "" {
-		sectionPath := notebookName + "/" + sectionName
-		sectionPermission := ac.getSectionPermission(sectionPath)
+		sectionPermission := ac.getSectionPermission(notebookName, sectionName)
 		if sectionPermission != "" {
 			effectivePermission = sectionPermission
 			permissionSource = "section_specific"
-			contextInfo = fmt.Sprintf("section permission for path '%s'", sectionPath)
+			contextInfo = fmt.Sprintf("section permission for '%s/%s'", notebookName, sectionName)
 		} else {
 			effectivePermission = ac.getNotebookPermission(notebookName)
 			permissionSource = "notebook_fallback"
@@ -916,7 +948,7 @@ func (ac *AuthorizationConfig) FilterPages(pages []map[string]interface{}, secti
 			}
 			
 			// Check page-specific permission
-			pagePermission := ac.getPagePermission(pageTitle)
+			pagePermission := ac.getPagePermission(notebookName, sectionName, pageTitle)
 			var pagePermissionSource string
 			var matchedPagePattern string
 			
@@ -1118,26 +1150,47 @@ func (ac *AuthorizationConfig) getNotebookPermission(notebookName string) Permis
 	return ac.DefaultMode
 }
 
-// getSectionPermission gets the effective permission for a section
-func (ac *AuthorizationConfig) getSectionPermission(sectionPath string) PermissionLevel {
-	// Try exact match first
-	if permission, exists := ac.SectionPermissions[sectionPath]; exists {
+// getSectionPermission gets the effective permission for a section using hierarchical lookup
+func (ac *AuthorizationConfig) getSectionPermission(notebookName, sectionIdentifier string) PermissionLevel {
+	// Try exact match with full path (notebook/section)
+	fullPath := notebookName + "/" + sectionIdentifier
+	if permission, exists := ac.SectionPermissions[fullPath]; exists {
+		return permission
+	}
+	
+	// Try exact match with section name/ID only
+	if permission, exists := ac.SectionPermissions[sectionIdentifier]; exists {
 		return permission
 	}
 
-	// Try pattern matching
-	permission := ac.matchPattern(sectionPath, ac.sectionMatchers)
+	// Try pattern matching with full path
+	permission := ac.matchPattern(fullPath, ac.sectionMatchers)
 	if permission != "" {
 		return permission
 	}
 	
-	// Fall back to section default (but don't fall back to global default for sections,
-	// let the caller handle notebook/global fallback)
-	return ac.DefaultSectionMode
+	// Try pattern matching with section name/ID only
+	permission = ac.matchPattern(sectionIdentifier, ac.sectionMatchers)
+	if permission != "" {
+		return permission
+	}
+	
+	// Fall back to notebook permission, then section default, then global default
+	notebookPermission := ac.getNotebookPermission(notebookName)
+	if notebookPermission != "" && notebookPermission != ac.DefaultNotebookMode {
+		return notebookPermission
+	}
+	
+	if ac.DefaultSectionMode != "" {
+		return ac.DefaultSectionMode
+	}
+	
+	return ac.DefaultMode
 }
 
-// getPagePermission gets the effective permission for a page
-func (ac *AuthorizationConfig) getPagePermission(pageName string) PermissionLevel {
+
+// getPagePermission gets the effective permission for a page using hierarchical lookup
+func (ac *AuthorizationConfig) getPagePermission(notebookName, sectionIdentifier, pageName string) PermissionLevel {
 	// Try exact match first
 	if permission, exists := ac.PagePermissions[pageName]; exists {
 		return permission
@@ -1149,9 +1202,16 @@ func (ac *AuthorizationConfig) getPagePermission(pageName string) PermissionLeve
 		return permission
 	}
 
+	// Fall back to section permission
+	sectionPermission := ac.getSectionPermission(notebookName, sectionIdentifier)
+	if sectionPermission != "" && sectionPermission != ac.DefaultSectionMode {
+		return sectionPermission
+	}
+
 	// Fall back to page default, then global default
 	if ac.DefaultPageMode != "" {
 		return ac.DefaultPageMode
 	}
 	return ac.DefaultMode
 }
+

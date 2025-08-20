@@ -23,12 +23,10 @@ import (
 	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
 
-// Context keys for progress notification system
-type contextKey string
-
+// Context keys are now imported from utils to avoid duplication
 const (
-	mcpServerKey     contextKey = "mcpServer"
-	progressTokenKey contextKey = "progressToken"
+	mcpServerKey     = utils.MCPServerKey
+	progressTokenKey = utils.ProgressTokenKey
 )
 
 // SectionItem represents a section or section group in the hierarchical tree
@@ -734,58 +732,9 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 	logging.ToolsLogger.Debug("Notebook and section tools registered successfully")
 }
 
-// sendProgressNotification sends a progress notification with consistent logging and immediate flushing
+// sendProgressNotification sends a progress notification using the centralized utility
 func sendProgressNotification(s *server.MCPServer, ctx context.Context, progressToken string, progress int, total int, message string) {
-	if progressToken == "" {
-		logging.ToolsLogger.Debug("Skipping progress notification - no progress token provided",
-			"progress", progress,
-			"total", total,
-			"message", message)
-		return
-	}
-
-	// Calculate percentage for enhanced logging
-	percentage := float64(progress) / float64(total) * 100
-
-	logging.ToolsLogger.Debug("Preparing to send progress notification to client",
-		"progressToken", progressToken,
-		"progress", progress,
-		"total", total,
-		"percentage", fmt.Sprintf("%.1f%%", percentage),
-		"message", message,
-		"has_server", s != nil)
-
-	if s == nil {
-		logging.ToolsLogger.Warn("Cannot send progress notification - MCP server is nil",
-			"progressToken", progressToken,
-			"progress", progress,
-			"message", message)
-		return
-	}
-
-	err := s.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-		"progressToken": progressToken,
-		"progress":      progress,
-		"total":         total,
-		"message":       message,
-	})
-
-	if err != nil {
-		logging.ToolsLogger.Warn("Failed to send progress notification to client",
-			"error", err,
-			"progressToken", progressToken,
-			"progress", progress,
-			"total", total,
-			"percentage", fmt.Sprintf("%.1f%%", percentage),
-			"message", message)
-	} else {
-		logging.ToolsLogger.Debug("Successfully sent progress notification to client",
-			"progressToken", progressToken,
-			"progress", progress,
-			"total", total,
-			"percentage", fmt.Sprintf("%.1f%%", percentage),
-			"message", message)
-	}
+	utils.SendProgressNotification(s, ctx, progressToken, progress, total, message)
 }
 
 // Helper functions for notebook and section operations

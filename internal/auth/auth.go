@@ -78,6 +78,7 @@ import (
 	"strings"
 	"time"
 
+	httputils "github.com/gebl/onenote-mcp-server/internal/http"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
@@ -204,10 +205,25 @@ func (c *OAuth2Config) ExchangeCode(ctx context.Context, code, codeVerifier stri
 		logging.AuthLogger.Error("Failed to send token exchange request", "error", err, "endpoint", endpoint)
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		logging.AuthLogger.Error("Token exchange failed", "status_code", resp.StatusCode, "response_body", string(body))
+	
+	var body []byte
+	var statusCode int
+	err = httputils.WithAutoCleanup(resp, func(resp *http.Response) error {
+		statusCode = resp.StatusCode
+		responseBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return readErr
+		}
+		body = responseBody
+		return nil
+	})
+	if err != nil {
+		logging.AuthLogger.Error("Failed to read response body", "error", err, "endpoint", endpoint)
+		return nil, err
+	}
+	
+	if statusCode != 200 {
+		logging.AuthLogger.Error("Token exchange failed", "status_code", statusCode, "response_body", string(body))
 
 		// Check for specific PKCE errors
 		if strings.Contains(string(body), "invalid_grant") && strings.Contains(string(body), "code_verifier") {
@@ -228,7 +244,7 @@ func (c *OAuth2Config) ExchangeCode(ctx context.Context, code, codeVerifier stri
 		RefreshToken string `json:"refresh_token"`
 		ExpiresIn    int64  `json:"expires_in"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+	if err := json.Unmarshal(body, &res); err != nil {
 		logging.AuthLogger.Error("Failed to decode token response JSON", "error", err)
 		return nil, err
 	}
@@ -387,9 +403,24 @@ func (c *OAuth2Config) RefreshToken(ctx context.Context, refreshToken string) (*
 		logging.AuthLogger.Error("Error sending refresh request", "error", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
+	
+	var body []byte
+	var statusCode int
+	err = httputils.WithAutoCleanup(resp, func(resp *http.Response) error {
+		statusCode = resp.StatusCode
+		responseBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return readErr
+		}
+		body = responseBody
+		return nil
+	})
+	if err != nil {
+		logging.AuthLogger.Error("Failed to read refresh response body", "error", err)
+		return nil, err
+	}
+	
+	if statusCode != 200 {
 		logging.AuthLogger.Error("Token refresh failed", "response_body", string(body))
 		return nil, fmt.Errorf("token refresh failed: %s", string(body))
 	}
@@ -398,7 +429,7 @@ func (c *OAuth2Config) RefreshToken(ctx context.Context, refreshToken string) (*
 		RefreshToken string `json:"refresh_token"`
 		ExpiresIn    int64  `json:"expires_in"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+	if err := json.Unmarshal(body, &res); err != nil {
 		logging.AuthLogger.Error("Error decoding refresh response", "error", err)
 		return nil, err
 	}

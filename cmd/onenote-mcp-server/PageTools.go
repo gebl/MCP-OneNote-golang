@@ -46,7 +46,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("listPages parameter", "sectionID", sectionID)
 
 		// Extract progress token early for use throughout the function
-		progressToken := extractProgressToken(req)
+		progressToken := utils.ExtractProgressToken(req)
 		
 		// Check cache first
 		if progressToken != "" {
@@ -1071,7 +1071,7 @@ func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *se
 	}
 
 	logging.ToolsLogger.Debug("No cached search result found, performing fresh search")
-	sendProgressNotification(s, ctx, progressToken, 30, 100, fmt.Sprintf("Getting notebook sections for page search..."))
+	sendProgressNotification(s, ctx, progressToken, 30, 100, "Getting notebook sections for page search...")
 
 	// Create progress callback for section listing (30-35%)
 	sectionProgressCallback := func(progress int, message string) {
@@ -1297,34 +1297,6 @@ func getDetailedNotebookByNameCached(notebookClient *notebooks.NotebookClient, n
 // Helper functions for progress notifications and section population
 
 // extractProgressToken extracts progress token from MCP request for notifications
-func extractProgressToken(req mcp.CallToolRequest) string {
-	var progressToken string
-	
-	if req.Params.Meta != nil && req.Params.Meta.ProgressToken != nil {
-		rawToken := req.Params.Meta.ProgressToken
-		
-		// Handle both string and numeric progress tokens
-		switch token := rawToken.(type) {
-		case string:
-			progressToken = token
-		case int:
-			progressToken = fmt.Sprintf("%d", token)
-		case int64:
-			progressToken = fmt.Sprintf("%d", token)
-		case float64:
-			// Check if it's a whole number and convert appropriately
-			if token == float64(int64(token)) {
-				progressToken = fmt.Sprintf("%.0f", token)
-			} else {
-				progressToken = fmt.Sprintf("%g", token)
-			}
-		default:
-			progressToken = fmt.Sprintf("%v", token)
-		}
-	}
-	
-	return progressToken
-}
 
 // populateSectionsForAuthorization fetches sections to populate cache for authorization context
 func populateSectionsForAuthorization(s *server.MCPServer, ctx context.Context, graphClient *graph.Client, notebookCache *NotebookCache, progressToken string) error {
