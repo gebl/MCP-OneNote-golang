@@ -373,13 +373,13 @@ func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphCl
 					}
 				} else {
 					// Fall back to default permissions if no specific rule
-					if cfg.Authorization.DefaultSectionMode != "none" && cfg.Authorization.DefaultSectionMode != "" {
+					if cfg.Authorization.DefaultNotebookPermissions != "none" && cfg.Authorization.DefaultNotebookPermissions != "" {
 						filteredSections = append(filteredSections, section)
 					}
 				}
 			} else {
 				// If section has no name, include it based on default mode
-				if cfg.Authorization.DefaultSectionMode != "none" && cfg.Authorization.DefaultSectionMode != "" {
+				if cfg.Authorization.DefaultNotebookPermissions != "none" && cfg.Authorization.DefaultNotebookPermissions != "" {
 					filteredSections = append(filteredSections, section)
 				}
 			}

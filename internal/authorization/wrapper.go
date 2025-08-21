@@ -18,6 +18,11 @@ type ToolHandler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 
 // AuthorizedToolHandler wraps a tool handler with authorization checks
 func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig) ToolHandler {
+	return AuthorizedToolHandlerWithResolver(toolName, handler, authConfig, cache, quickNoteConfig, nil)
+}
+
+// AuthorizedToolHandlerWithResolver wraps a tool handler with authorization checks including page notebook resolution
+func AuthorizedToolHandlerWithResolver(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig, resolver PageNotebookResolver) ToolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Skip authorization if not enabled
 		if authConfig == nil || !authConfig.Enabled {
@@ -31,8 +36,13 @@ func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *Aut
 			"tool", toolName,
 			"authorization_enabled", authConfig.Enabled)
 
-		// Extract resource context from the request
-		resourceContext := ExtractResourceContext(toolName, req, cache)
+		// Extract resource context from the request with proper page notebook resolution
+		var resourceContext ResourceContext
+		if resolver != nil {
+			resourceContext = ExtractResourceContextWithResolver(ctx, toolName, req, cache, resolver)
+		} else {
+			resourceContext = ExtractResourceContext(toolName, req, cache)
+		}
 
 		// Special handling for quickNote tool
 		if toolName == "quickNote" && quickNoteConfig != nil {
@@ -56,13 +66,12 @@ func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *Aut
 		ResolvePageContext(&resourceContext, cache)
 
 		// Enhanced security check: If we have a page ID but still no page name after context resolution,
-		// and page permissions are configured, we need to be more cautious
-		if resourceContext.PageID != "" && resourceContext.PageName == "" && authConfig.DefaultPageMode == PermissionNone {
-			logging.AuthorizationLogger.Warn("Page ID provided but page name could not be resolved with default_page_mode=none",
+		// we will rely on the simplified authorization model to handle it securely
+		if resourceContext.PageID != "" && resourceContext.PageName == "" {
+			logging.AuthorizationLogger.Warn("Page ID provided but page name could not be resolved",
 				"tool", toolName,
 				"page_id", resourceContext.PageID,
-				"default_page_mode", authConfig.DefaultPageMode,
-				"security_implications", "This will apply the restrictive default page mode to prevent authorization bypass")
+				"security_implications", "Will use current notebook permission as fallback")
 		}
 
 		// Perform authorization check
@@ -105,12 +114,14 @@ func CreateAuthorizedTool(toolName string, handler ToolHandler, authConfig *Auth
 
 // AuthorizationInfo provides information about the authorization system status
 type AuthorizationInfo struct {
-	Enabled         bool   `json:"enabled"`
-	DefaultMode     string `json:"default_mode"`
-	ToolCategories  int    `json:"tool_categories_configured"`
-	NotebookRules   int    `json:"notebook_rules_configured"`
-	SectionRules    int    `json:"section_rules_configured"`
-	CompiledMatchers bool   `json:"compiled_matchers"`
+	Enabled                  bool   `json:"enabled"`
+	DefaultNotebookMode      string `json:"default_notebook_mode"`
+	NotebookRules           int    `json:"notebook_rules_configured"`
+	SectionRules            int    `json:"section_rules_configured"`
+	PageRules               int    `json:"page_rules_configured"`
+	CompiledPatterns        bool   `json:"compiled_patterns"`
+	CurrentNotebook         string `json:"current_notebook"`
+	CurrentNotebookPerm     string `json:"current_notebook_permission"`
 }
 
 // GetAuthorizationInfo returns information about the current authorization configuration
@@ -122,12 +133,14 @@ func GetAuthorizationInfo(authConfig *AuthorizationConfig) AuthorizationInfo {
 	}
 
 	return AuthorizationInfo{
-		Enabled:         authConfig.Enabled,
-		DefaultMode:     string(authConfig.DefaultMode),
-		ToolCategories:  len(authConfig.ToolPermissions),
-		NotebookRules:   len(authConfig.NotebookPermissions),
-		SectionRules:    len(authConfig.SectionPermissions),
-		CompiledMatchers: len(authConfig.notebookMatchers) > 0 || len(authConfig.sectionMatchers) > 0,
+		Enabled:                  authConfig.Enabled,
+		DefaultNotebookMode:      string(authConfig.DefaultNotebookPermissions),
+		NotebookRules:           len(authConfig.NotebookPermissions),
+		SectionRules:            len(authConfig.SectionPermissions),
+		PageRules:               len(authConfig.PagePermissions),
+		CompiledPatterns:        len(authConfig.NotebookPermissions) > 0 || len(authConfig.SectionPermissions) > 0 || len(authConfig.PagePermissions) > 0,
+		CurrentNotebook:         authConfig.GetCurrentNotebook(),
+		CurrentNotebookPerm:     string(authConfig.currentNotebookPerm),
 	}
 }
 
@@ -137,88 +150,43 @@ func ValidateAuthorizationConfig(authConfig *AuthorizationConfig) error {
 		return nil // nil config is valid (authorization disabled)
 	}
 
-	// Validate default modes
-	switch authConfig.DefaultMode {
+	// Validate default notebook permissions
+	switch authConfig.DefaultNotebookPermissions {
 	case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
 		// Valid
 	default:
-		return fmt.Errorf("invalid default_mode: %s (must be one of: none, read, write, full)", authConfig.DefaultMode)
+		return fmt.Errorf("invalid default_notebook_permissions: %s (must be one of: none, read, write, full)", authConfig.DefaultNotebookPermissions)
 	}
 	
-	// Validate specific default modes (optional fields)
-	for name, mode := range map[string]PermissionLevel{
-		"default_tool_mode":     authConfig.DefaultToolMode,
-		"default_notebook_mode": authConfig.DefaultNotebookMode,
-		"default_section_mode":  authConfig.DefaultSectionMode,
-		"default_page_mode":     authConfig.DefaultPageMode,
-	} {
-		if mode != "" {
-			switch mode {
-			case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
-				// Valid
-			default:
-				return fmt.Errorf("invalid %s: %s (must be one of: none, read, write, full)", name, mode)
-			}
-		}
-	}
-
-	// Validate tool permissions
-	for category, permission := range authConfig.ToolPermissions {
-		switch permission {
-		case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
-			// Valid
-		default:
-			return fmt.Errorf("invalid permission '%s' for tool category '%s' (must be one of: none, read, write, full)", permission, category)
-		}
-		
-		// Validate that category exists
-		validCategory := false
-		switch category {
-		case CategoryAuthTools, CategoryNotebookRead, CategoryNotebookWrite, CategoryPageRead, CategoryPageWrite, CategoryTestTools:
-			validCategory = true
-		}
-		if !validCategory {
-			return fmt.Errorf("invalid tool category: %s", category)
-		}
-	}
-
 	// Validate notebook permissions
-	for notebook, permission := range authConfig.NotebookPermissions {
-		switch permission {
+	for name, mode := range authConfig.NotebookPermissions {
+		switch mode {
 		case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
 			// Valid
 		default:
-			return fmt.Errorf("invalid permission '%s' for notebook '%s' (must be one of: none, read, write, full)", permission, notebook)
+			return fmt.Errorf("invalid notebook permission for '%s': %s (must be one of: none, read, write, full)", name, mode)
 		}
 	}
-
+	
 	// Validate section permissions
-	for section, permission := range authConfig.SectionPermissions {
-		switch permission {
+	for name, mode := range authConfig.SectionPermissions {
+		switch mode {
 		case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
 			// Valid
 		default:
-			return fmt.Errorf("invalid permission '%s' for section '%s' (must be one of: none, read, write, full)", permission, section)
+			return fmt.Errorf("invalid section permission for '%s': %s (must be one of: none, read, write, full)", name, mode)
 		}
 	}
-
-	// Validate page permissions
-	for page, permission := range authConfig.PagePermissions {
-		switch permission {
+	
+	// Validate page permissions  
+	for name, mode := range authConfig.PagePermissions {
+		switch mode {
 		case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
 			// Valid
 		default:
-			return fmt.Errorf("invalid permission '%s' for page '%s' (must be one of: none, read, write, full)", permission, page)
+			return fmt.Errorf("invalid page permission for '%s': %s (must be one of: none, read, write, full)", name, mode)
 		}
 	}
-
-	logging.AuthorizationLogger.Debug("Authorization configuration validated successfully",
-		"enabled", authConfig.Enabled,
-		"default_mode", authConfig.DefaultMode,
-		"tool_permissions", len(authConfig.ToolPermissions),
-		"notebook_permissions", len(authConfig.NotebookPermissions),
-		"section_permissions", len(authConfig.SectionPermissions),
-		"page_permissions", len(authConfig.PagePermissions))
 
 	return nil
 }

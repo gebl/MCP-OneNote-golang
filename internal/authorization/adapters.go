@@ -163,3 +163,17 @@ func (nca *NotebookCacheAdapter) GetPageNameWithProgress(ctx context.Context, pa
 	}
 	return "", false
 }
+
+// GetAPIReferences returns the API references for fallback resolution
+func (nca *NotebookCacheAdapter) GetAPIReferences() (interface{}, interface{}) {
+	if nca.Cache != nil {
+		// Try to call GetAPIReferences if the cache supports it
+		// We need to check if the cache has this method using type assertion
+		if cacheWithAPIRefs, ok := nca.Cache.(interface {
+			GetAPIReferences() (interface{}, interface{})
+		}); ok {
+			return cacheWithAPIRefs.GetAPIReferences()
+		}
+	}
+	return nil, nil
+}

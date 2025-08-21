@@ -7,7 +7,6 @@ package authorization
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -25,17 +24,6 @@ const (
 	PermissionFull  PermissionLevel = "full"  // Allow all operations (same as write for most tools)
 )
 
-// ToolCategory represents different categories of tools for authorization
-type ToolCategory string
-
-const (
-	CategoryAuthTools     ToolCategory = "auth_tools"
-	CategoryNotebookRead  ToolCategory = "notebook_read"
-	CategoryNotebookWrite ToolCategory = "notebook_write"
-	CategoryPageRead      ToolCategory = "page_read"
-	CategoryPageWrite     ToolCategory = "page_write"
-	CategoryTestTools     ToolCategory = "test_tools"
-)
 
 // ToolOperation represents whether a tool performs read or write operations
 type ToolOperation string
@@ -45,34 +33,24 @@ const (
 	OperationWrite ToolOperation = "write"
 )
 
-// AuthorizationConfig represents the authorization configuration
+// AuthorizationConfig represents the simplified authorization configuration
 type AuthorizationConfig struct {
-	Enabled             bool                           `json:"enabled"`
-	DefaultMode         PermissionLevel                `json:"default_mode"`          // Global fallback
-	DefaultToolMode     PermissionLevel                `json:"default_tool_mode"`     // Default for tool categories
-	DefaultNotebookMode PermissionLevel                `json:"default_notebook_mode"` // Default for notebooks
-	DefaultSectionMode  PermissionLevel                `json:"default_section_mode"`  // Default for sections
-	DefaultPageMode     PermissionLevel                `json:"default_page_mode"`     // Default for pages
-	ToolPermissions     map[ToolCategory]PermissionLevel `json:"tool_permissions"`
-	NotebookPermissions map[string]PermissionLevel    `json:"notebook_permissions"`
-	SectionPermissions  map[string]PermissionLevel    `json:"section_permissions"`
-	PagePermissions     map[string]PermissionLevel    `json:"page_permissions"`
+	Enabled                     bool                          `json:"enabled"`
+	DefaultNotebookPermissions  PermissionLevel               `json:"default_notebook_permissions"`  // Default for any notebook
+	NotebookPermissions         map[string]PermissionLevel    `json:"notebook_permissions"`          // Specific notebook permissions
+	SectionPermissions          map[string]PermissionLevel    `json:"section_permissions"`           // Section permissions with pattern support
+	PagePermissions             map[string]PermissionLevel    `json:"page_permissions"`              // Page permissions with pattern support
 	
-	// Compiled matchers for performance (not serialized)
-	notebookMatchers []PermissionMatcher `json:"-"`
-	sectionMatchers  []PermissionMatcher `json:"-"`
-	pageMatchers     []PermissionMatcher `json:"-"`
+	// Pattern engines for efficient matching (not serialized)
+	notebookEngine *PatternEngine `json:"-"`
+	sectionEngine  *PatternEngine `json:"-"`
+	pageEngine     *PatternEngine `json:"-"`
+	
+	// Current selected notebook for operation scoping
+	currentNotebook     string          `json:"-"`
+	currentNotebookPerm PermissionLevel `json:"-"`
 }
 
-// PermissionMatcher represents a compiled permission pattern
-type PermissionMatcher struct {
-	Pattern    string
-	Permission PermissionLevel
-	IsExact    bool
-	IsPrefix   bool
-	IsPath     bool
-	Regex      *regexp.Regexp
-}
 
 // ResourceContext contains information about the resource being accessed
 type ResourceContext struct {
@@ -104,144 +82,99 @@ func (rc ResourceContext) String() string {
 }
 
 // ToolRegistry maps tool names to their categories and operations
-// ToolInfo contains metadata about an MCP tool
-type ToolInfo struct {
-	Category     ToolCategory
-	Operation    ToolOperation
-	IsFilterTool bool // True for tools that filter results instead of requiring specific resource access
+// AuthToolNames defines which tools are always allowed (authentication tools + discovery tools)
+var AuthToolNames = map[string]bool{
+	"getAuthStatus":  true,
+	"refreshToken":   true,
+	"initiateAuth":   true,
+	"clearAuth":      true,
+	"listNotebooks":  true, // Always allow notebook discovery (results are filtered)
+	"selectNotebook": true, // Always allow notebook selection (but selection itself is validated)
 }
 
-var ToolRegistry = map[string]ToolInfo{
-	// Authentication tools
-	"getAuthStatus": {CategoryAuthTools, OperationRead, false},
-	"refreshToken":  {CategoryAuthTools, OperationWrite, false},
-	"initiateAuth":  {CategoryAuthTools, OperationWrite, false},
-	"clearAuth":     {CategoryAuthTools, OperationWrite, false},
-
-	// Notebook read tools
-	"listNotebooks":       {CategoryNotebookRead, OperationRead, true},  // Filter tool
-	"getSelectedNotebook": {CategoryNotebookRead, OperationRead, false},
-	"getNotebookSections": {CategoryNotebookRead, OperationRead, true},  // Filter tool
-
-	// Notebook write tools
-	"selectNotebook":     {CategoryNotebookWrite, OperationWrite, false},
-	"createSection":      {CategoryNotebookWrite, OperationWrite, false},
-	"createSectionGroup": {CategoryNotebookWrite, OperationWrite, false},
-	"clearCache":         {CategoryNotebookWrite, OperationWrite, false},
-
-	// Page read tools
-	"listPages":           {CategoryPageRead, OperationRead, true},  // Filter tool
-	"getPageContent":      {CategoryPageRead, OperationRead, false},
-	"getPageItemContent":  {CategoryPageRead, OperationRead, false},
-	"listPageItems":       {CategoryPageRead, OperationRead, false},
-
-	// Page write tools
-	"createPage":                 {CategoryPageWrite, OperationWrite, false},
-	"updatePageContent":          {CategoryPageWrite, OperationWrite, false},
-	"updatePageContentAdvanced":  {CategoryPageWrite, OperationWrite, false},
-	"deletePage":                 {CategoryPageWrite, OperationWrite, false},
-	"copyPage":                   {CategoryPageWrite, OperationWrite, false},
-	"movePage":                   {CategoryPageWrite, OperationWrite, false},
-	"quickNote":                  {CategoryPageWrite, OperationWrite, false},
-
-	// Test tools
-	"testProgress": {CategoryTestTools, OperationRead, false},
-}
-
-// NewAuthorizationConfig creates a new authorization configuration with compiled matchers
+// NewAuthorizationConfig creates a new authorization configuration with pattern engines
 func NewAuthorizationConfig() *AuthorizationConfig {
 	return &AuthorizationConfig{
-		Enabled:             false,
-		DefaultMode:         PermissionRead,    // Global fallback
-		DefaultToolMode:     PermissionRead,    // Default for tool categories
-		DefaultNotebookMode: PermissionRead,    // Default for notebooks
-		DefaultSectionMode:  PermissionRead,    // Default for sections
-		DefaultPageMode:     PermissionRead,    // Default for pages
-		ToolPermissions:     make(map[ToolCategory]PermissionLevel),
-		NotebookPermissions: make(map[string]PermissionLevel),
-		SectionPermissions:  make(map[string]PermissionLevel),
-		PagePermissions:     make(map[string]PermissionLevel),
-		notebookMatchers:    []PermissionMatcher{},
-		sectionMatchers:     []PermissionMatcher{},
-		pageMatchers:        []PermissionMatcher{},
+		Enabled:                     false,
+		DefaultNotebookPermissions:  PermissionRead,
+		NotebookPermissions:         make(map[string]PermissionLevel),
+		SectionPermissions:          make(map[string]PermissionLevel),
+		PagePermissions:             make(map[string]PermissionLevel),
+		notebookEngine:              NewPatternEngine(),
+		sectionEngine:               NewPatternEngine(),
+		pageEngine:                  NewPatternEngine(),
+		currentNotebook:             "",
+		currentNotebookPerm:         PermissionNone,
 	}
 }
 
-// CompileMatchers compiles the permission patterns for efficient matching
-func (ac *AuthorizationConfig) CompileMatchers() error {
-	var err error
-	
-	// Compile notebook matchers
-	ac.notebookMatchers, err = compilePermissionMatchers(ac.NotebookPermissions)
-	if err != nil {
-		return fmt.Errorf("failed to compile notebook matchers: %v", err)
+// CompilePatterns compiles the permission patterns for efficient matching
+func (ac *AuthorizationConfig) CompilePatterns() error {
+	// Compile notebook patterns
+	if err := ac.notebookEngine.CompilePatterns(ac.NotebookPermissions); err != nil {
+		return fmt.Errorf("failed to compile notebook patterns: %v", err)
 	}
 	
-	// Compile section matchers
-	ac.sectionMatchers, err = compilePermissionMatchers(ac.SectionPermissions)
-	if err != nil {
-		return fmt.Errorf("failed to compile section matchers: %v", err)
+	// Compile section patterns
+	if err := ac.sectionEngine.CompilePatterns(ac.SectionPermissions); err != nil {
+		return fmt.Errorf("failed to compile section patterns: %v", err)
 	}
 	
-	// Compile page matchers
-	ac.pageMatchers, err = compilePermissionMatchers(ac.PagePermissions)
-	if err != nil {
-		return fmt.Errorf("failed to compile page matchers: %v", err)
+	// Compile page patterns
+	if err := ac.pageEngine.CompilePatterns(ac.PagePermissions); err != nil {
+		return fmt.Errorf("failed to compile page patterns: %v", err)
 	}
 	
-	logging.AuthorizationLogger.Debug("Authorization matchers compiled successfully",
-		"notebook_matchers", len(ac.notebookMatchers),
-		"section_matchers", len(ac.sectionMatchers),
-		"page_matchers", len(ac.pageMatchers))
+	logging.AuthorizationLogger.Debug("Authorization patterns compiled successfully",
+		"notebook_patterns", len(ac.NotebookPermissions),
+		"section_patterns", len(ac.SectionPermissions),
+		"page_patterns", len(ac.PagePermissions))
 	
 	return nil
 }
 
-// compilePermissionMatchers compiles a map of patterns to matchers
-func compilePermissionMatchers(permissions map[string]PermissionLevel) ([]PermissionMatcher, error) {
-	var matchers []PermissionMatcher
-	
-	for pattern, permission := range permissions {
-		matcher := PermissionMatcher{
-			Pattern:    pattern,
-			Permission: permission,
-		}
-		
-		// Determine pattern type and compile if needed
-		if strings.Contains(pattern, "*") {
-			if strings.Contains(pattern, "/") {
-				// Path pattern like "*/Draft*" or "Personal Notes/*"
-				matcher.IsPath = true
-				regexPattern := strings.ReplaceAll(regexp.QuoteMeta(pattern), "\\*", ".*")
-				regex, err := regexp.Compile("^" + regexPattern + "$")
-				if err != nil {
-					return nil, fmt.Errorf("invalid pattern '%s': %v", pattern, err)
-				}
-				matcher.Regex = regex
-			} else if strings.HasSuffix(pattern, "*") {
-				// Prefix pattern like "Archive*"
-				matcher.IsPrefix = true
-			} else {
-				// General wildcard pattern
-				regexPattern := strings.ReplaceAll(regexp.QuoteMeta(pattern), "\\*", ".*")
-				regex, err := regexp.Compile("^" + regexPattern + "$")
-				if err != nil {
-					return nil, fmt.Errorf("invalid pattern '%s': %v", pattern, err)
-				}
-				matcher.Regex = regex
-			}
-		} else {
-			// Exact match
-			matcher.IsExact = true
-		}
-		
-		matchers = append(matchers, matcher)
+
+// SetCurrentNotebook sets the currently selected notebook and validates permission
+func (ac *AuthorizationConfig) SetCurrentNotebook(notebookName string) error {
+	if !ac.Enabled {
+		ac.currentNotebook = notebookName
+		ac.currentNotebookPerm = PermissionWrite // Allow everything when disabled
+		logging.AuthorizationLogger.Debug("Authorization disabled, allowing notebook selection", "notebook", notebookName)
+		return nil
 	}
 	
-	return matchers, nil
+	permission := ac.GetNotebookPermission(notebookName)
+	
+	// Handle empty permission string by defaulting to read permission
+	// This can happen if authorization config isn't properly initialized
+	if permission == "" {
+		logging.AuthorizationLogger.Warn("Empty permission returned, defaulting to read",
+			"notebook", notebookName,
+			"default_permissions", ac.DefaultNotebookPermissions)
+		permission = PermissionRead
+	}
+	
+	if permission == PermissionNone {
+		logging.AuthorizationLogger.Info("Notebook selection denied",
+			"notebook", notebookName,
+			"permission", permission)
+		return fmt.Errorf("access denied: cannot select notebook '%s' - permission is '%s'", notebookName, permission)
+	}
+	
+	ac.currentNotebook = notebookName
+	ac.currentNotebookPerm = permission
+	logging.AuthorizationLogger.Debug("Notebook selected",
+		"notebook", notebookName,
+		"permission", permission)
+	return nil
 }
 
-// IsAuthorized checks if a tool call is authorized based on the configuration
+// GetCurrentNotebook returns the currently selected notebook name
+func (ac *AuthorizationConfig) GetCurrentNotebook() string {
+	return ac.currentNotebook
+}
+
+// IsAuthorized checks if a tool call is authorized based on the simplified configuration
 func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string, req mcp.CallToolRequest, resourceContext ResourceContext) error {
 	if !ac.Enabled {
 		logging.AuthorizationLogger.Debug("Authorization disabled, allowing all operations", "tool", toolName)
@@ -250,203 +183,135 @@ func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string
 	
 	logging.AuthorizationLogger.Debug("Checking authorization", 
 		"tool", toolName,
-		"resource_context", resourceContext.String())
+		"resource_context", resourceContext.String(),
+		"current_notebook", ac.currentNotebook)
 	
-	// 1. Get tool info
-	toolInfo, exists := ToolRegistry[toolName]
-	if !exists {
-		logging.AuthorizationLogger.Warn("Unknown tool requested", "tool", toolName)
-		return fmt.Errorf("unknown tool: %s", toolName)
-	}
-	
-	// 2. Check tool-level permissions first (fast)
-	toolPermission := ac.getToolPermission(toolInfo.Category)
-	if !ac.permissionAllowsOperation(toolPermission, toolInfo.Operation) {
-		logging.AuthorizationLogger.Info("Tool category access denied",
-			"tool", toolName,
-			"category", toolInfo.Category,
-			"required_operation", toolInfo.Operation,
-			"allowed_permission", toolPermission)
-		return fmt.Errorf("access denied: tool category '%s' requires '%s' permission but only '%s' is granted", 
-			toolInfo.Category, toolInfo.Operation, toolPermission)
-	}
-	
-	// 2.5. Filter tools bypass resource-level checks (they filter results instead)
-	if toolInfo.IsFilterTool {
-		logging.AuthorizationLogger.Debug("Filter tool bypassing resource-level authorization check",
-			"tool", toolName,
-			"category", toolInfo.Category,
-			"operation", toolInfo.Operation)
+	// 1. Auth tools are always allowed
+	if AuthToolNames[toolName] {
+		logging.AuthorizationLogger.Debug("Auth tool allowed", "tool", toolName)
 		return nil
 	}
 	
-	// 3. Check resource-level permissions (notebook and section)
+	// 2. For non-auth tools, ensure we have a selected notebook with permission
+	if ac.currentNotebook == "" {
+		logging.AuthorizationLogger.Info("No notebook selected for non-auth tool",
+			"tool", toolName)
+		return fmt.Errorf("access denied: no notebook selected - use selectNotebook tool first")
+	}
+	
+	if ac.currentNotebookPerm == PermissionNone {
+		logging.AuthorizationLogger.Info("Current notebook has no permission",
+			"tool", toolName,
+			"notebook", ac.currentNotebook,
+			"permission", ac.currentNotebookPerm)
+		return fmt.Errorf("access denied: current notebook '%s' has no permission", ac.currentNotebook)
+	}
+	
+	// 3. SECURITY: All operations must be scoped to current notebook
+	if resourceContext.NotebookName != "" && resourceContext.NotebookName != ac.currentNotebook {
+		logging.AuthorizationLogger.Error("SECURITY VIOLATION: Cross-notebook access attempt",
+			"tool", toolName,
+			"requested_notebook", resourceContext.NotebookName,
+			"current_notebook", ac.currentNotebook,
+			"security_action", "BLOCKING_CROSS_NOTEBOOK_ACCESS")
+		return fmt.Errorf("access denied: cannot access notebook '%s' when '%s' is selected", resourceContext.NotebookName, ac.currentNotebook)
+	}
+	
+	// 4. Check resource-level permissions using simplified hierarchy
 	resourcePermission := ac.getResourcePermission(resourceContext)
-	if !ac.permissionAllowsOperation(resourcePermission, toolInfo.Operation) {
+	if !ac.permissionAllowsOperation(resourcePermission, resourceContext.Operation) {
 		logging.AuthorizationLogger.Info("Resource access denied",
 			"tool", toolName,
 			"resource_context", resourceContext.String(),
-			"required_operation", toolInfo.Operation,
+			"required_operation", resourceContext.Operation,
 			"allowed_permission", resourcePermission)
 		return fmt.Errorf("access denied: resource requires '%s' permission but only '%s' is granted for %s", 
-			toolInfo.Operation, resourcePermission, resourceContext.String())
+			resourceContext.Operation, resourcePermission, resourceContext.String())
 	}
 	
 	logging.AuthorizationLogger.Debug("Authorization granted",
 		"tool", toolName,
-		"category", toolInfo.Category,
-		"operation", toolInfo.Operation,
-		"resource_context", resourceContext.String())
+		"operation", resourceContext.Operation,
+		"resource_context", resourceContext.String(),
+		"resource_permission", resourcePermission)
 	
 	return nil
 }
 
-// getToolPermission returns the permission level for a tool category
-func (ac *AuthorizationConfig) getToolPermission(category ToolCategory) PermissionLevel {
-	if permission, exists := ac.ToolPermissions[category]; exists {
-		return permission
-	}
-	// Use tool-specific default if available, otherwise global default
-	if ac.DefaultToolMode != "" {
-		return ac.DefaultToolMode
-	}
-	return ac.DefaultMode
-}
 
-// getResourcePermission returns the permission level for a resource context
+// getResourcePermission returns the permission level using simplified hierarchical resolution
 func (ac *AuthorizationConfig) getResourcePermission(resourceContext ResourceContext) PermissionLevel {
-	// Check page permissions first (most specific) - use hierarchical lookup
-	if resourceContext.PageName != "" {
-		sectionIdentifier := resourceContext.SectionName
-		if sectionIdentifier == "" {
-			sectionIdentifier = resourceContext.SectionID
-		}
-		permission := ac.getPagePermission(resourceContext.NotebookName, sectionIdentifier, resourceContext.PageName)
-		if permission != "" {
-			logging.AuthorizationLogger.Debug("Page permission found via hierarchical lookup",
-				"page_name", resourceContext.PageName,
-				"page_id", resourceContext.PageID,
-				"notebook", resourceContext.NotebookName,
-				"section", sectionIdentifier,
-				"permission", permission)
-			return permission
-		}
-	} else if resourceContext.PageID != "" {
-		// We have a page ID but no page name - this means we couldn't resolve the page name
-		// Check notebook/section permissions first before falling back to default page mode
-		logging.AuthorizationLogger.Info("Page ID present but page name could not be resolved, checking notebook/section permissions first",
+	// SECURITY: For page operations, if we have a page ID but no notebook context,
+	// this indicates we couldn't resolve which notebook the page belongs to.
+	// This is a security risk, so we deny access (fail-closed security model).
+	if resourceContext.PageID != "" && resourceContext.NotebookName == "" {
+		logging.AuthorizationLogger.Error("SECURITY: Denying page access - notebook ownership could not be determined",
 			"page_id", resourceContext.PageID,
-			"notebook", resourceContext.NotebookName,
-			"section", resourceContext.SectionName,
-			"security_action", "preventing_page_id_authorization_bypass")
-		
-		// Check section permission first if we have section context
-		if resourceContext.SectionName != "" || resourceContext.SectionID != "" {
-			sectionIdentifier := resourceContext.SectionName
-			if sectionIdentifier == "" {
-				sectionIdentifier = resourceContext.SectionID
-			}
-			sectionPermission := ac.getSectionPermission(resourceContext.NotebookName, sectionIdentifier)
-			if sectionPermission != "" {
-				logging.AuthorizationLogger.Debug("Using section permission for unresolved page",
-					"page_id", resourceContext.PageID,
-					"section", sectionIdentifier,
-					"permission", sectionPermission)
-				return sectionPermission
-			}
-		}
-		
-		// Check notebook permission if we have notebook context
-		if resourceContext.NotebookName != "" {
-			notebookPermission := ac.getNotebookPermission(resourceContext.NotebookName)
-			if notebookPermission != "" {
-				logging.AuthorizationLogger.Debug("Using notebook permission for unresolved page",
-					"page_id", resourceContext.PageID,
-					"notebook", resourceContext.NotebookName,
-					"permission", notebookPermission)
-				return notebookPermission
-			}
-		}
-		
-		// Only fall back to default page mode if no other context is available
-		if ac.DefaultPageMode != "" {
-			logging.AuthorizationLogger.Debug("Falling back to default page mode for unresolved page",
-				"page_id", resourceContext.PageID,
-				"default_page_mode", ac.DefaultPageMode)
-			return ac.DefaultPageMode
-		}
+			"page_name", resourceContext.PageName,
+			"security_action", "FAIL_CLOSED_ON_UNRESOLVED_OWNERSHIP")
+		return PermissionNone
 	}
 	
-	// Check section permissions next (more specific than notebook) - use hierarchical lookup
-	if resourceContext.SectionName != "" || resourceContext.SectionID != "" {
-		sectionIdentifier := resourceContext.SectionName
-		if sectionIdentifier == "" {
-			sectionIdentifier = resourceContext.SectionID
-		}
-		permission := ac.getSectionPermission(resourceContext.NotebookName, sectionIdentifier)
-		if permission != "" {
-			logging.AuthorizationLogger.Debug("Section permission found via hierarchical lookup",
-				"section_name", resourceContext.SectionName,
-				"section_id", resourceContext.SectionID,
-				"notebook", resourceContext.NotebookName,
-				"permission", permission)
-			return permission
-		}
+	// Use current notebook as fallback if no specific notebook in context
+	// (but only for non-page operations or when page notebook was successfully resolved)
+	notebookName := resourceContext.NotebookName
+	if notebookName == "" {
+		notebookName = ac.currentNotebook
 	}
 	
-	// Check notebook permissions
-	if resourceContext.NotebookName != "" {
-		if permission := ac.matchPattern(resourceContext.NotebookName, ac.notebookMatchers); permission != "" {
-			return permission
+	// For pages: check page permission -> section permission -> notebook permission
+	if resourceContext.PageName != "" {
+		// 1. Check page-specific permission
+		if pagePermission, _, found := ac.pageEngine.Match(resourceContext.PageName); found {
+			return pagePermission
 		}
-		// No notebook-specific permission found, use notebook default
-		if ac.DefaultNotebookMode != "" {
-			return ac.DefaultNotebookMode
+		
+		// 2. Check parent section permission
+		if resourceContext.SectionName != "" {
+			return ac.getSectionPermissionWithFallback(resourceContext.SectionName, notebookName)
 		}
+		
+		// 3. Fall back to notebook permission
+		return ac.currentNotebookPerm
 	}
 	
-	// Fall back to global default
-	return ac.DefaultMode
+	// For sections: check section permission -> notebook permission
+	if resourceContext.SectionName != "" {
+		return ac.getSectionPermissionWithFallback(resourceContext.SectionName, notebookName)
+	}
+	
+	// SECURITY: For section operations, if we have a section ID but no section name,
+	// this indicates we couldn't resolve the section name for proper authorization.
+	// This is a security risk, so we deny access (fail-closed security model).
+	if resourceContext.SectionID != "" && resourceContext.SectionName == "" {
+		logging.AuthorizationLogger.Error("SECURITY: Denying section access - section name could not be resolved for authorization",
+			"section_id", resourceContext.SectionID,
+			"notebook_name", notebookName,
+			"security_action", "FAIL_CLOSED_ON_UNRESOLVED_SECTION_NAME")
+		return PermissionNone
+	}
+	
+	// For notebook-level operations: use current notebook permission
+	return ac.currentNotebookPerm
 }
 
-// matchPattern matches a string against compiled matchers
-func (ac *AuthorizationConfig) matchPattern(value string, matchers []PermissionMatcher) PermissionLevel {
-	for _, matcher := range matchers {
-		var matches bool
-		
-		if matcher.IsExact {
-			matches = value == matcher.Pattern
-		} else if matcher.IsPrefix {
-			prefix := strings.TrimSuffix(matcher.Pattern, "*")
-			matches = strings.HasPrefix(value, prefix)
-		} else if matcher.Regex != nil {
-			matches = matcher.Regex.MatchString(value)
-		}
-		
-		if matches {
-			logging.AuthorizationLogger.Debug("Pattern matched",
-				"value", value,
-				"pattern", matcher.Pattern,
-				"permission", matcher.Permission,
-				"match_type", ac.getMatchType(matcher))
-			return matcher.Permission
-		}
+// getSectionPermissionWithFallback gets section permission or falls back to notebook permission
+func (ac *AuthorizationConfig) getSectionPermissionWithFallback(sectionName, notebookName string) PermissionLevel {
+	// Try direct section name match
+	if sectionPermission, _, found := ac.sectionEngine.Match(sectionName); found {
+		return sectionPermission
 	}
 	
-	return ""
+	// Try full path match (notebook/section)
+	fullPath := notebookName + "/" + sectionName
+	if sectionPermission, _, found := ac.sectionEngine.Match(fullPath); found {
+		return sectionPermission
+	}
+	
+	// Fall back to notebook permission
+	return ac.currentNotebookPerm
 }
 
-// getMatchType returns a string describing the match type for logging
-func (ac *AuthorizationConfig) getMatchType(matcher PermissionMatcher) string {
-	if matcher.IsExact {
-		return "exact"
-	} else if matcher.IsPrefix {
-		return "prefix"
-	} else if matcher.IsPath {
-		return "path"
-	}
-	return "regex"
-}
 
 // permissionAllowsOperation checks if a permission level allows a specific operation
 func (ac *AuthorizationConfig) permissionAllowsOperation(permission PermissionLevel, operation ToolOperation) bool {
@@ -473,88 +338,31 @@ func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{
 
 	logging.AuthorizationLogger.Debug("Starting notebook filtering",
 		"notebook_count", len(notebooks),
-		"default_mode", ac.DefaultMode,
+		"default_permissions", ac.DefaultNotebookPermissions,
 		"notebook_permissions_configured", len(ac.NotebookPermissions) > 0)
 
 	var filtered []map[string]interface{}
 	var filteredOut []string
-	var filterDecisions []map[string]interface{}
 
 	for _, notebook := range notebooks {
 		if displayName, ok := notebook["displayName"].(string); ok {
 			notebookID, _ := notebook["id"].(string)
 			
-			// Get permission with detailed decision tracking
-			permission := ac.getNotebookPermission(displayName)
-			
-			// Log detailed decision reasoning
-			decision := map[string]interface{}{
-				"notebook_name": displayName,
-				"notebook_id":   notebookID,
-				"permission":    permission,
-				"allowed":       permission != PermissionNone && permission != "",
-			}
-			
-			// Determine why this permission was assigned
-			var reason string
-			var matchedPattern string
-			
-			// Check exact match first
-			if exactPermission, exists := ac.NotebookPermissions[displayName]; exists {
-				reason = "exact_match"
-				matchedPattern = displayName
-				decision["reason"] = reason
-				decision["matched_pattern"] = matchedPattern
-				decision["exact_permission"] = exactPermission
-			} else {
-				// Check pattern matching
-				patternPermission := ac.matchPattern(displayName, ac.notebookMatchers)
-				if patternPermission != "" {
-					reason = "pattern_match"
-					// Find which pattern matched
-					for _, matcher := range ac.notebookMatchers {
-						var matches bool
-						if matcher.IsExact {
-							matches = displayName == matcher.Pattern
-						} else if matcher.IsPrefix {
-							prefix := strings.TrimSuffix(matcher.Pattern, "*")
-							matches = strings.HasPrefix(displayName, prefix)
-						} else if matcher.Regex != nil {
-							matches = matcher.Regex.MatchString(displayName)
-						}
-						if matches {
-							matchedPattern = matcher.Pattern
-							break
-						}
-					}
-					decision["reason"] = reason
-					decision["matched_pattern"] = matchedPattern
-					decision["pattern_permission"] = patternPermission
-				} else {
-					reason = "default_fallback"
-					decision["reason"] = reason
-					decision["default_permission"] = ac.DefaultMode
-				}
-			}
-			
-			filterDecisions = append(filterDecisions, decision)
+			// Get permission using pattern engine
+			permission := ac.GetNotebookPermission(displayName)
 			
 			if permission != PermissionNone && permission != "" {
 				filtered = append(filtered, notebook)
 				logging.AuthorizationLogger.Debug("Notebook allowed by filter",
 					"notebook_name", displayName,
 					"notebook_id", notebookID,
-					"permission", permission,
-					"reason", reason,
-					"matched_pattern", matchedPattern)
+					"permission", permission)
 			} else {
 				filteredOut = append(filteredOut, displayName)
 				logging.AuthorizationLogger.Debug("Notebook blocked by filter",
 					"notebook_name", displayName,
 					"notebook_id", notebookID,
 					"permission", permission,
-					"reason", reason,
-					"matched_pattern", matchedPattern,
 					"why_blocked", "permission is 'none' or empty")
 			}
 		} else {
@@ -569,43 +377,19 @@ func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{
 			"filtered_count", len(filteredOut),
 			"filtered_notebooks", filteredOut,
 			"remaining_count", len(filtered))
-		
-		// Log detailed decisions for filtered out notebooks
-		for _, decision := range filterDecisions {
-			if !decision["allowed"].(bool) {
-				logging.AuthorizationLogger.Info("Notebook filter decision (BLOCKED)",
-					"notebook_name", decision["notebook_name"],
-					"notebook_id", decision["notebook_id"],
-					"permission", decision["permission"],
-					"reason", decision["reason"],
-					"matched_pattern", decision["matched_pattern"])
-			}
-		}
-	}
-
-	// Log decisions for allowed notebooks at debug level
-	for _, decision := range filterDecisions {
-		if decision["allowed"].(bool) {
-			logging.AuthorizationLogger.Debug("Notebook filter decision (ALLOWED)",
-				"notebook_name", decision["notebook_name"],
-				"notebook_id", decision["notebook_id"],
-				"permission", decision["permission"],
-				"reason", decision["reason"],
-				"matched_pattern", decision["matched_pattern"])
-		}
 	}
 
 	logging.AuthorizationLogger.Debug("Notebook filtering completed",
 		"original_count", len(notebooks),
 		"filtered_count", len(filtered),
-		"removed_count", len(filteredOut),
-		"decisions_tracked", len(filterDecisions))
+		"removed_count", len(filteredOut))
 
 	return filtered
 }
 
 // FilterSections filters a list of sections based on authorization permissions
 // Only sections with read, write, or full permissions are included
+// Note: Filtering is only performed when operating within the current notebook scope
 func (ac *AuthorizationConfig) FilterSections(sections []map[string]interface{}, notebookName string) []map[string]interface{} {
 	if !ac.Enabled {
 		logging.AuthorizationLogger.Debug("Section filtering skipped - authorization disabled",
@@ -614,108 +398,31 @@ func (ac *AuthorizationConfig) FilterSections(sections []map[string]interface{},
 		return sections // No filtering when authorization disabled
 	}
 
+	// Only filter sections if we're operating within the current notebook
+	if notebookName != ac.currentNotebook {
+		logging.AuthorizationLogger.Debug("Section filtering skipped - not current notebook",
+			"section_count", len(sections),
+			"notebook", notebookName,
+			"current_notebook", ac.currentNotebook)
+		return sections
+	}
+
 	logging.AuthorizationLogger.Debug("Starting section filtering",
 		"section_count", len(sections),
 		"notebook", notebookName,
-		"default_mode", ac.DefaultMode,
-		"section_permissions_configured", len(ac.SectionPermissions) > 0,
-		"notebook_permissions_configured", len(ac.NotebookPermissions) > 0)
+		"current_notebook_permission", ac.currentNotebookPerm,
+		"section_permissions_configured", len(ac.SectionPermissions) > 0)
 
 	var filtered []map[string]interface{}
 	var filteredOut []string
-	var filterDecisions []map[string]interface{}
-
-	// Get notebook-level permission for context
-	notebookPermission := ac.getNotebookPermission(notebookName)
-	logging.AuthorizationLogger.Debug("Notebook permission context for section filtering",
-		"notebook", notebookName,
-		"notebook_permission", notebookPermission)
 
 	for _, section := range sections {
 		if sectionName, ok := section["displayName"].(string); ok {
 			sectionID, _ := section["id"].(string)
 			sectionType, _ := section["type"].(string)
 			
-			// Check section-specific permission first
-			sectionPermission := ac.getSectionPermission(notebookName, sectionName)
-			sectionPath := notebookName + "/" + sectionName
-			
-			// If no section-specific rule, fall back to notebook permission
-			var effectivePermission PermissionLevel
-			var permissionSource string
-			var matchedPattern string
-			
-			if sectionPermission != "" {
-				effectivePermission = sectionPermission
-				permissionSource = "section_specific"
-				
-				// Find which section pattern matched
-				if exactPermission, exists := ac.SectionPermissions[sectionPath]; exists {
-					matchedPattern = sectionPath + " (exact)"
-					logging.AuthorizationLogger.Debug("Section exact match found",
-						"section_path", sectionPath,
-						"exact_permission", exactPermission)
-				} else if exactPermission, exists := ac.SectionPermissions[sectionName]; exists {
-					matchedPattern = sectionName + " (exact)"
-					logging.AuthorizationLogger.Debug("Section name exact match found",
-						"section_name", sectionName,
-						"exact_permission", exactPermission)
-				} else {
-					// Check patterns
-					for _, matcher := range ac.sectionMatchers {
-						var matches bool
-						var testValue string
-						
-						// Test both full path and section name
-						for _, tv := range []string{sectionPath, sectionName} {
-							if matcher.IsExact {
-								matches = tv == matcher.Pattern
-							} else if matcher.IsPrefix {
-								prefix := strings.TrimSuffix(matcher.Pattern, "*")
-								matches = strings.HasPrefix(tv, prefix)
-							} else if matcher.Regex != nil {
-								matches = matcher.Regex.MatchString(tv)
-							}
-							if matches {
-								testValue = tv
-								break
-							}
-						}
-						
-						if matches {
-							matchedPattern = matcher.Pattern + " (pattern on " + testValue + ")"
-							logging.AuthorizationLogger.Debug("Section pattern match found",
-								"section_path", sectionPath,
-								"section_name", sectionName,
-								"matched_pattern", matcher.Pattern,
-								"test_value", testValue,
-								"pattern_permission", matcher.Permission)
-							break
-						}
-					}
-				}
-			} else {
-				effectivePermission = notebookPermission
-				permissionSource = "notebook_fallback"
-				matchedPattern = "inherited from notebook: " + notebookName
-			}
-			
-			// Create detailed decision record
-			decision := map[string]interface{}{
-				"section_name":         sectionName,
-				"section_id":          sectionID,
-				"section_type":        sectionType,
-				"section_path":        sectionPath,
-				"notebook":            notebookName,
-				"section_permission":  sectionPermission,
-				"notebook_permission": notebookPermission,
-				"effective_permission": effectivePermission,
-				"permission_source":   permissionSource,
-				"matched_pattern":     matchedPattern,
-				"allowed":             effectivePermission != PermissionNone && effectivePermission != "",
-			}
-			
-			filterDecisions = append(filterDecisions, decision)
+			// Get effective permission using simplified hierarchy
+			effectivePermission := ac.getSectionPermissionWithFallback(sectionName, notebookName)
 
 			if effectivePermission != PermissionNone && effectivePermission != "" {
 				filtered = append(filtered, section)
@@ -723,22 +430,16 @@ func (ac *AuthorizationConfig) FilterSections(sections []map[string]interface{},
 					"section_name", sectionName,
 					"section_id", sectionID,
 					"section_type", sectionType,
-					"section_path", sectionPath,
 					"notebook", notebookName,
-					"effective_permission", effectivePermission,
-					"permission_source", permissionSource,
-					"matched_pattern", matchedPattern)
+					"effective_permission", effectivePermission)
 			} else {
 				filteredOut = append(filteredOut, sectionName)
 				logging.AuthorizationLogger.Debug("Section blocked by filter",
 					"section_name", sectionName,
 					"section_id", sectionID,
 					"section_type", sectionType,
-					"section_path", sectionPath,
 					"notebook", notebookName,
 					"effective_permission", effectivePermission,
-					"permission_source", permissionSource,
-					"matched_pattern", matchedPattern,
 					"why_blocked", "effective permission is 'none' or empty")
 			}
 		} else {
@@ -755,48 +456,19 @@ func (ac *AuthorizationConfig) FilterSections(sections []map[string]interface{},
 			"filtered_count", len(filteredOut),
 			"filtered_sections", filteredOut,
 			"remaining_count", len(filtered))
-		
-		// Log detailed decisions for filtered out sections
-		for _, decision := range filterDecisions {
-			if !decision["allowed"].(bool) {
-				logging.AuthorizationLogger.Info("Section filter decision (BLOCKED)",
-					"section_name", decision["section_name"],
-					"section_id", decision["section_id"],
-					"section_path", decision["section_path"],
-					"notebook", decision["notebook"],
-					"effective_permission", decision["effective_permission"],
-					"permission_source", decision["permission_source"],
-					"matched_pattern", decision["matched_pattern"])
-			}
-		}
-	}
-
-	// Log decisions for allowed sections at debug level
-	for _, decision := range filterDecisions {
-		if decision["allowed"].(bool) {
-			logging.AuthorizationLogger.Debug("Section filter decision (ALLOWED)",
-				"section_name", decision["section_name"],
-				"section_id", decision["section_id"],
-				"section_path", decision["section_path"],
-				"notebook", decision["notebook"],
-				"effective_permission", decision["effective_permission"],
-				"permission_source", decision["permission_source"],
-				"matched_pattern", decision["matched_pattern"])
-		}
 	}
 
 	logging.AuthorizationLogger.Debug("Section filtering completed",
 		"notebook", notebookName,
 		"original_count", len(sections),
 		"filtered_count", len(filtered),
-		"removed_count", len(filteredOut),
-		"decisions_tracked", len(filterDecisions))
+		"removed_count", len(filteredOut))
 
 	return filtered
 }
 
 // FilterPages filters a list of pages based on authorization permissions
-// Uses the section permission for the containing section
+// Only performed for pages within the current notebook scope
 func (ac *AuthorizationConfig) FilterPages(pages []map[string]interface{}, sectionID, sectionName, notebookName string) []map[string]interface{} {
 	if !ac.Enabled {
 		logging.AuthorizationLogger.Debug("Page filtering skipped - authorization disabled",
@@ -807,411 +479,148 @@ func (ac *AuthorizationConfig) FilterPages(pages []map[string]interface{}, secti
 		return pages // No filtering when authorization disabled
 	}
 
+	// Only filter pages if we're operating within the current notebook
+	if notebookName != ac.currentNotebook {
+		logging.AuthorizationLogger.Debug("Page filtering skipped - not current notebook",
+			"page_count", len(pages),
+			"section_id", sectionID,
+			"section_name", sectionName,
+			"notebook", notebookName,
+			"current_notebook", ac.currentNotebook)
+		return pages
+	}
+
 	logging.AuthorizationLogger.Debug("Starting page filtering",
 		"page_count", len(pages),
 		"section_id", sectionID,
 		"section_name", sectionName,
 		"notebook", notebookName,
-		"default_mode", ac.DefaultMode,
-		"page_permissions_configured", len(ac.PagePermissions) > 0,
-		"section_permissions_configured", len(ac.SectionPermissions) > 0,
-		"notebook_permissions_configured", len(ac.NotebookPermissions) > 0)
+		"page_permissions_configured", len(ac.PagePermissions) > 0)
 
-	// Determine effective permission for this section
-	var effectivePermission PermissionLevel
-	var permissionSource string
-	var contextInfo string
-	
-	if sectionName != "" && notebookName != "" {
-		sectionPermission := ac.getSectionPermission(notebookName, sectionName)
-		if sectionPermission != "" {
-			effectivePermission = sectionPermission
-			permissionSource = "section_specific"
-			contextInfo = fmt.Sprintf("section permission for '%s/%s'", notebookName, sectionName)
-		} else {
-			effectivePermission = ac.getNotebookPermission(notebookName)
-			permissionSource = "notebook_fallback"
-			contextInfo = fmt.Sprintf("inherited from notebook '%s'", notebookName)
-		}
-	} else {
-		// Fallback to default mode if we can't determine context
-		effectivePermission = ac.DefaultMode
-		permissionSource = "default_fallback"
-		contextInfo = "missing section/notebook context, using default mode"
-	}
-
-	logging.AuthorizationLogger.Debug("Page filtering context determined",
-		"section_id", sectionID,
-		"section_name", sectionName,
-		"notebook", notebookName,
-		"effective_permission", effectivePermission,
-		"permission_source", permissionSource,
-		"context_info", contextInfo)
-
-	// If no permission at section/notebook level, filter out all pages
-	if effectivePermission == PermissionNone || effectivePermission == "" {
-		if len(pages) > 0 {
-			var pageNames []string
-			var pageDecisions []map[string]interface{}
-			
-			for _, page := range pages {
-				pageTitle := "Unknown"
-				pageID := "Unknown"
-				if title, ok := page["title"].(string); ok {
-					pageTitle = title
-					pageNames = append(pageNames, title)
-				}
-				// Check both possible field names for page ID
-				if id, ok := page["id"].(string); ok {
-					pageID = id
-				} else if id, ok := page["pageId"].(string); ok {
-					pageID = id
-				}
-				
-				decision := map[string]interface{}{
-					"page_title":           pageTitle,
-					"page_id":             pageID,
-					"section_id":          sectionID,
-					"section_name":        sectionName,
-					"notebook":            notebookName,
-					"effective_permission": effectivePermission,
-					"permission_source":   permissionSource,
-					"allowed":             false,
-					"block_reason":        "section/notebook permission is 'none' or empty",
-				}
-				pageDecisions = append(pageDecisions, decision)
-				
-				logging.AuthorizationLogger.Debug("Page blocked by section/notebook filter",
-					"page_title", pageTitle,
-					"page_id", pageID,
-					"section_id", sectionID,
-					"section_name", sectionName,
-					"notebook", notebookName,
-					"effective_permission", effectivePermission,
-					"permission_source", permissionSource,
-					"why_blocked", "section/notebook permission is 'none' or empty")
-			}
-			
-			logging.AuthorizationLogger.Info("Filtered out all pages due to section/notebook authorization",
-				"section_id", sectionID,
-				"section_name", sectionName,
-				"notebook", notebookName,
-				"effective_permission", effectivePermission,
-				"permission_source", permissionSource,
-				"filtered_count", len(pages),
-				"filtered_pages", pageNames)
-			
-			// Log each blocked page decision at info level
-			for _, decision := range pageDecisions {
-				logging.AuthorizationLogger.Info("Page filter decision (BLOCKED)",
-					"page_title", decision["page_title"],
-					"page_id", decision["page_id"],
-					"section_id", decision["section_id"],
-					"section_name", decision["section_name"],
-					"notebook", decision["notebook"],
-					"effective_permission", decision["effective_permission"],
-					"permission_source", decision["permission_source"],
-					"block_reason", decision["block_reason"])
-			}
-		}
-		return []map[string]interface{}{}
-	}
-
-	// Check individual page permissions if page permissions are defined
-	if len(ac.PagePermissions) > 0 {
-		logging.AuthorizationLogger.Debug("Applying individual page-level permissions",
-			"page_count", len(pages),
-			"page_permissions_count", len(ac.PagePermissions))
-		
-		var filteredPages []map[string]interface{}
-		var filteredOutPages []string
-		var filterDecisions []map[string]interface{}
-		
-		for _, page := range pages {
-			pageTitle, hasTitle := page["title"].(string)
-			pageID := ""
-			// Check both possible field names for page ID
-			if id, ok := page["id"].(string); ok {
-				pageID = id
-			} else if id, ok := page["pageId"].(string); ok {
-				pageID = id
-			}
-			
-			if !hasTitle {
-				// Skip pages without titles, but log for debugging
-				logging.AuthorizationLogger.Warn("Page missing title field, skipping page-level authorization",
-					"page", page,
-					"section_id", sectionID,
-					"section_name", sectionName,
-					"notebook", notebookName)
-				continue
-			}
-			
-			// Check page-specific permission
-			pagePermission := ac.getPagePermission(notebookName, sectionName, pageTitle)
-			var pagePermissionSource string
-			var matchedPagePattern string
-			
-			// Determine why this page permission was assigned
-			if exactPermission, exists := ac.PagePermissions[pageTitle]; exists {
-				pagePermissionSource = "exact_match"
-				matchedPagePattern = pageTitle + " (exact)"
-				logging.AuthorizationLogger.Debug("Page exact match found",
-					"page_title", pageTitle,
-					"exact_permission", exactPermission)
-			} else {
-				// Check patterns
-				patternPermission := ac.matchPattern(pageTitle, ac.pageMatchers)
-				if patternPermission != "" {
-					pagePermissionSource = "pattern_match"
-					// Find which pattern matched
-					for _, matcher := range ac.pageMatchers {
-						var matches bool
-						if matcher.IsExact {
-							matches = pageTitle == matcher.Pattern
-						} else if matcher.IsPrefix {
-							prefix := strings.TrimSuffix(matcher.Pattern, "*")
-							matches = strings.HasPrefix(pageTitle, prefix)
-						} else if matcher.Regex != nil {
-							matches = matcher.Regex.MatchString(pageTitle)
-						}
-						if matches {
-							matchedPagePattern = matcher.Pattern + " (pattern)"
-							break
-						}
-					}
-				} else {
-					pagePermissionSource = "default_fallback"
-					matchedPagePattern = "using default mode"
-				}
-			}
-			
-			decision := map[string]interface{}{
-				"page_title":           pageTitle,
-				"page_id":             pageID,
-				"section_id":          sectionID,
-				"section_name":        sectionName,
-				"notebook":            notebookName,
-				"page_permission":     pagePermission,
-				"page_permission_source": pagePermissionSource,
-				"matched_page_pattern": matchedPagePattern,
-				"section_permission":  effectivePermission,
-				"permission_source":   permissionSource,
-				"allowed":             pagePermission != PermissionNone,
-			}
-			filterDecisions = append(filterDecisions, decision)
-			
-			if pagePermission != PermissionNone {
-				filteredPages = append(filteredPages, page)
-				logging.AuthorizationLogger.Debug("Page allowed by page permissions",
-					"page_title", pageTitle,
-					"page_id", pageID,
-					"page_permission", pagePermission,
-					"page_permission_source", pagePermissionSource,
-					"matched_page_pattern", matchedPagePattern,
-					"section_id", sectionID,
-					"section_name", sectionName,
-					"notebook", notebookName)
-			} else {
-				filteredOutPages = append(filteredOutPages, pageTitle)
-				logging.AuthorizationLogger.Debug("Page blocked by page permissions",
-					"page_title", pageTitle,
-					"page_id", pageID,
-					"page_permission", pagePermission,
-					"page_permission_source", pagePermissionSource,
-					"matched_page_pattern", matchedPagePattern,
-					"section_id", sectionID,
-					"section_name", sectionName,
-					"notebook", notebookName,
-					"why_blocked", "page permission is 'none'")
-			}
-		}
-		
-		if len(filteredOutPages) > 0 {
-			logging.AuthorizationLogger.Info("Filtered out pages by page-level authorization",
-				"section_id", sectionID,
-				"section_name", sectionName,
-				"notebook", notebookName,
-				"original_count", len(pages),
-				"filtered_count", len(filteredPages),
-				"filtered_out_pages", filteredOutPages)
-			
-			// Log detailed decisions for filtered out pages
-			for _, decision := range filterDecisions {
-				if !decision["allowed"].(bool) {
-					logging.AuthorizationLogger.Info("Page filter decision (BLOCKED)",
-						"page_title", decision["page_title"],
-						"page_id", decision["page_id"],
-						"section_id", decision["section_id"],
-						"section_name", decision["section_name"],
-						"notebook", decision["notebook"],
-						"page_permission", decision["page_permission"],
-						"page_permission_source", decision["page_permission_source"],
-						"matched_page_pattern", decision["matched_page_pattern"])
-				}
-			}
-		}
-		
-		// Log decisions for allowed pages at debug level
-		for _, decision := range filterDecisions {
-			if decision["allowed"].(bool) {
-				logging.AuthorizationLogger.Debug("Page filter decision (ALLOWED)",
-					"page_title", decision["page_title"],
-					"page_id", decision["page_id"],
-					"section_id", decision["section_id"],
-					"section_name", decision["section_name"],
-					"notebook", decision["notebook"],
-					"page_permission", decision["page_permission"],
-					"page_permission_source", decision["page_permission_source"],
-					"matched_page_pattern", decision["matched_page_pattern"])
-			}
-		}
-		
-		logging.AuthorizationLogger.Debug("Page filtering completed with individual page permissions",
+	// Get section permission as baseline
+	sectionPermission := ac.getSectionPermissionWithFallback(sectionName, notebookName)
+	if sectionPermission == PermissionNone || sectionPermission == "" {
+		// If section is blocked, all pages are blocked
+		logging.AuthorizationLogger.Info("All pages blocked due to section permission",
 			"section_id", sectionID,
 			"section_name", sectionName,
 			"notebook", notebookName,
-			"original_count", len(pages),
-			"filtered_count", len(filteredPages),
-			"removed_count", len(filteredOutPages),
-			"decisions_tracked", len(filterDecisions))
-		
-		return filteredPages
+			"section_permission", sectionPermission,
+			"filtered_count", len(pages))
+		return []map[string]interface{}{}
 	}
 
-	// No page permissions defined - allow all pages based on section/notebook permission
-	var allowedDecisions []map[string]interface{}
+	// If no page-specific permissions are configured, allow all pages
+	if len(ac.PagePermissions) == 0 {
+		logging.AuthorizationLogger.Debug("Page filtering completed - all pages allowed (no page permissions defined)",
+			"section_id", sectionID,
+			"section_name", sectionName,
+			"notebook", notebookName,
+			"section_permission", sectionPermission,
+			"page_count", len(pages))
+		return pages
+	}
+
+	// Apply page-specific filtering
+	var filtered []map[string]interface{}
+	var filteredOut []string
+
 	for _, page := range pages {
-		pageTitle := "Unknown"
-		pageID := "Unknown"
-		if title, ok := page["title"].(string); ok {
-			pageTitle = title
-		}
+		pageTitle, hasTitle := page["title"].(string)
+		pageID := ""
 		// Check both possible field names for page ID
 		if id, ok := page["id"].(string); ok {
 			pageID = id
 		} else if id, ok := page["pageId"].(string); ok {
 			pageID = id
 		}
-		
-		decision := map[string]interface{}{
-			"page_title":           pageTitle,
-			"page_id":             pageID,
-			"section_id":          sectionID,
-			"section_name":        sectionName,
-			"notebook":            notebookName,
-			"effective_permission": effectivePermission,
-			"permission_source":   permissionSource,
-			"allowed":             true,
-			"allow_reason":        "no page permissions defined, using section/notebook permission",
+
+		if !hasTitle {
+			// Skip pages without titles, but log for debugging
+			logging.AuthorizationLogger.Warn("Page missing title field, allowing based on section permission",
+				"page", page,
+				"section_id", sectionID,
+				"section_name", sectionName,
+				"notebook", notebookName)
+			filtered = append(filtered, page)
+			continue
 		}
-		allowedDecisions = append(allowedDecisions, decision)
-		
-		logging.AuthorizationLogger.Debug("Page allowed by section/notebook permission",
-			"page_title", pageTitle,
-			"page_id", pageID,
+
+		// Check page-specific permission using pattern engine
+		if pagePermission, pattern, found := ac.pageEngine.Match(pageTitle); found {
+			if pagePermission != PermissionNone {
+				filtered = append(filtered, page)
+				logging.AuthorizationLogger.Debug("Page allowed by page pattern",
+					"page_title", pageTitle,
+					"page_id", pageID,
+					"matched_pattern", pattern,
+					"page_permission", pagePermission)
+			} else {
+				filteredOut = append(filteredOut, pageTitle)
+				logging.AuthorizationLogger.Debug("Page blocked by page pattern",
+					"page_title", pageTitle,
+					"page_id", pageID,
+					"matched_pattern", pattern,
+					"page_permission", pagePermission)
+			}
+		} else {
+			// No page-specific permission, use section permission
+			filtered = append(filtered, page)
+			logging.AuthorizationLogger.Debug("Page allowed by section fallback",
+				"page_title", pageTitle,
+				"page_id", pageID,
+				"section_permission", sectionPermission)
+		}
+	}
+
+	// Log comprehensive filtering summary
+	if len(filteredOut) > 0 {
+		logging.AuthorizationLogger.Info("Filtered out pages by page-level authorization",
 			"section_id", sectionID,
 			"section_name", sectionName,
 			"notebook", notebookName,
-			"effective_permission", effectivePermission,
-			"permission_source", permissionSource,
-			"reason", "no page permissions defined")
+			"original_count", len(pages),
+			"filtered_count", len(filtered),
+			"filtered_out_pages", filteredOut)
 	}
 
-	logging.AuthorizationLogger.Debug("Page filtering completed - all pages allowed (no page permissions defined)",
+	logging.AuthorizationLogger.Debug("Page filtering completed",
 		"section_id", sectionID,
 		"section_name", sectionName,
 		"notebook", notebookName,
-		"effective_permission", effectivePermission,
-		"permission_source", permissionSource,
-		"page_count", len(pages),
-		"decisions_tracked", len(allowedDecisions))
+		"original_count", len(pages),
+		"filtered_count", len(filtered),
+		"removed_count", len(filteredOut))
 
-	return pages
+	return filtered
 }
 
-// getNotebookPermission gets the effective permission for a notebook
-func (ac *AuthorizationConfig) getNotebookPermission(notebookName string) PermissionLevel {
-	// Try exact match first
-	if permission, exists := ac.NotebookPermissions[notebookName]; exists {
+// GetNotebookPermission gets the effective permission for a notebook
+func (ac *AuthorizationConfig) GetNotebookPermission(notebookName string) PermissionLevel {
+	// Try pattern matching with the engine
+	if permission, _, found := ac.notebookEngine.Match(notebookName); found {
 		return permission
 	}
 
-	// Try pattern matching
-	permission := ac.matchPattern(notebookName, ac.notebookMatchers)
-	if permission != "" {
-		return permission
-	}
-
-	// Fall back to notebook default, then global default
-	if ac.DefaultNotebookMode != "" {
-		return ac.DefaultNotebookMode
-	}
-	return ac.DefaultMode
+	// Fall back to default
+	return ac.DefaultNotebookPermissions
 }
 
-// getSectionPermission gets the effective permission for a section using hierarchical lookup
-func (ac *AuthorizationConfig) getSectionPermission(notebookName, sectionIdentifier string) PermissionLevel {
-	// Try exact match with full path (notebook/section)
-	fullPath := notebookName + "/" + sectionIdentifier
-	if permission, exists := ac.SectionPermissions[fullPath]; exists {
-		return permission
-	}
-	
-	// Try exact match with section name/ID only
-	if permission, exists := ac.SectionPermissions[sectionIdentifier]; exists {
-		return permission
+// GetNotebookPermissionWithSource gets the permission and source information for a notebook
+func (ac *AuthorizationConfig) GetNotebookPermissionWithSource(notebookName string) (PermissionLevel, string, string) {
+	// Try pattern matching with the engine
+	if permission, pattern, found := ac.notebookEngine.Match(notebookName); found {
+		var source string
+		if pattern == notebookName {
+			source = "exact"
+		} else {
+			source = "pattern"
+		}
+		return permission, pattern, source
 	}
 
-	// Try pattern matching with full path
-	permission := ac.matchPattern(fullPath, ac.sectionMatchers)
-	if permission != "" {
-		return permission
-	}
-	
-	// Try pattern matching with section name/ID only
-	permission = ac.matchPattern(sectionIdentifier, ac.sectionMatchers)
-	if permission != "" {
-		return permission
-	}
-	
-	// Fall back to notebook permission, then section default, then global default
-	notebookPermission := ac.getNotebookPermission(notebookName)
-	if notebookPermission != "" && notebookPermission != ac.DefaultNotebookMode {
-		return notebookPermission
-	}
-	
-	if ac.DefaultSectionMode != "" {
-		return ac.DefaultSectionMode
-	}
-	
-	return ac.DefaultMode
+	// Fall back to default
+	return ac.DefaultNotebookPermissions, "", "default"
 }
 
-
-// getPagePermission gets the effective permission for a page using hierarchical lookup
-func (ac *AuthorizationConfig) getPagePermission(notebookName, sectionIdentifier, pageName string) PermissionLevel {
-	// Try exact match first
-	if permission, exists := ac.PagePermissions[pageName]; exists {
-		return permission
-	}
-
-	// Try pattern matching
-	permission := ac.matchPattern(pageName, ac.pageMatchers)
-	if permission != "" {
-		return permission
-	}
-
-	// Fall back to section permission
-	sectionPermission := ac.getSectionPermission(notebookName, sectionIdentifier)
-	if sectionPermission != "" && sectionPermission != ac.DefaultSectionMode {
-		return sectionPermission
-	}
-
-	// Fall back to page default, then global default
-	if ac.DefaultPageMode != "" {
-		return ac.DefaultPageMode
-	}
-	return ac.DefaultMode
-}
 

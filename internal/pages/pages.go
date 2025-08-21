@@ -83,6 +83,72 @@ func NewPageClient(client *graph.Client) *PageClient {
 	return &PageClient{Client: client}
 }
 
+// ResolvePageNotebook resolves which notebook contains a specific page ID
+// This method implements the authorization.PageNotebookResolver interface
+func (pc *PageClient) ResolvePageNotebook(ctx context.Context, pageID string) (notebookID string, notebookName string, sectionID string, sectionName string, err error) {
+	logging.PageLogger.Debug("Resolving notebook ownership for page",
+		"page_id", pageID)
+
+	// Use Graph API to get page metadata including parent section and notebook
+	url := fmt.Sprintf("/me/onenote/pages/%s?$select=id,title,parentSection,parentNotebook", pageID)
+	
+	response, err := pc.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+	if err != nil {
+		logging.PageLogger.Error("Failed to resolve page notebook via Graph API",
+			"page_id", pageID,
+			"error", err.Error())
+		return "", "", "", "", fmt.Errorf("failed to resolve page notebook: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != 200 {
+		logging.PageLogger.Error("Graph API returned error when resolving page notebook",
+			"page_id", pageID,
+			"status_code", response.StatusCode)
+		return "", "", "", "", fmt.Errorf("Graph API error %d when resolving page notebook", response.StatusCode)
+	}
+
+	var pageInfo struct {
+		ID             string `json:"id"`
+		Title          string `json:"title"`
+		ParentSection  *struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"displayName"`
+		} `json:"parentSection"`
+		ParentNotebook *struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"displayName"`
+		} `json:"parentNotebook"`
+	}
+
+	if err := json.NewDecoder(response.Body).Decode(&pageInfo); err != nil {
+		logging.PageLogger.Error("Failed to decode page notebook resolution response",
+			"page_id", pageID,
+			"error", err.Error())
+		return "", "", "", "", fmt.Errorf("failed to decode page notebook response: %w", err)
+	}
+
+	// Extract the information
+	if pageInfo.ParentNotebook != nil {
+		notebookID = pageInfo.ParentNotebook.ID
+		notebookName = pageInfo.ParentNotebook.DisplayName
+	}
+	
+	if pageInfo.ParentSection != nil {
+		sectionID = pageInfo.ParentSection.ID
+		sectionName = pageInfo.ParentSection.DisplayName
+	}
+
+	logging.PageLogger.Info("Successfully resolved page notebook ownership",
+		"page_id", pageID,
+		"notebook_id", notebookID,
+		"notebook_name", notebookName,
+		"section_id", sectionID,
+		"section_name", sectionName)
+
+	return notebookID, notebookName, sectionID, sectionName, nil
+}
+
 // PageItemData represents the complete data for a OneNote page item (e.g., image) including metadata and content.
 type PageItemData struct {
 	ContentType string            `json:"contentType"` // MIME type of the page item

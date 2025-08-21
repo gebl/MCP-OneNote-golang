@@ -25,6 +25,11 @@ type NotebookCache interface {
 	GetPageNameWithProgress(ctx context.Context, pageID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool)
 }
 
+// PageNotebookResolver interface defines methods needed to resolve which notebook contains a page
+type PageNotebookResolver interface {
+	ResolvePageNotebook(ctx context.Context, pageID string) (notebookID string, notebookName string, sectionID string, sectionName string, err error)
+}
+
 // ExtractResourceContextEnhanced extracts resource context with API fallback for missing cache data
 // This function can make API calls to resolve missing section/page names when needed
 func ExtractResourceContextEnhanced(ctx context.Context, toolName string, req mcp.CallToolRequest, cache NotebookCache, mcpServer interface{}, graphClient interface{}) ResourceContext {
@@ -123,6 +128,50 @@ func ExtractResourceContext(toolName string, req mcp.CallToolRequest, cache Note
 		"page_name", context.PageName,
 		"operation", context.Operation)
 
+	return context
+}
+
+// ExtractResourceContextWithResolver extracts resource context and resolves page notebook ownership when needed
+func ExtractResourceContextWithResolver(ctx context.Context, toolName string, req mcp.CallToolRequest, cache NotebookCache, resolver PageNotebookResolver) ResourceContext {
+	context := ExtractResourceContext(toolName, req, cache)
+	
+	// CRITICAL SECURITY: If we have a page ID, we must verify which notebook it actually belongs to
+	if context.PageID != "" && resolver != nil {
+		actualNotebookID, actualNotebookName, actualSectionID, actualSectionName, err := resolver.ResolvePageNotebook(ctx, context.PageID)
+		if err != nil {
+			logging.AuthorizationLogger.Error("Failed to resolve notebook for page ID - BLOCKING ACCESS",
+				"page_id", context.PageID,
+				"cached_notebook", context.NotebookName,
+				"error", err.Error(),
+				"security_action", "BLOCKING_POTENTIAL_UNAUTHORIZED_ACCESS")
+			// Clear context to force authorization failure
+			context.NotebookName = ""
+			context.NotebookID = ""
+		} else {
+			// Check if the page belongs to a different notebook than cached
+			if actualNotebookID != context.NotebookID {
+				logging.AuthorizationLogger.Info("Page belongs to different notebook than cached context",
+					"page_id", context.PageID,
+					"cached_notebook_id", context.NotebookID,
+					"cached_notebook_name", context.NotebookName,
+					"actual_notebook_id", actualNotebookID,
+					"actual_notebook_name", actualNotebookName,
+					"security_action", "updating_context_to_prevent_unauthorized_access")
+				
+				// Update context with actual notebook/section information
+				context.NotebookID = actualNotebookID
+				context.NotebookName = actualNotebookName
+				context.SectionID = actualSectionID
+				context.SectionName = actualSectionName
+			} else {
+				logging.AuthorizationLogger.Debug("Page belongs to cached notebook - context validated",
+					"page_id", context.PageID,
+					"notebook_id", actualNotebookID,
+					"notebook_name", actualNotebookName)
+			}
+		}
+	}
+	
 	return context
 }
 
@@ -376,10 +425,20 @@ func getStringParam(args map[string]interface{}, key string) string {
 
 // getToolOperation returns the operation type for a given tool
 func getToolOperation(toolName string) ToolOperation {
-	if toolInfo, exists := ToolRegistry[toolName]; exists {
-		return toolInfo.Operation
+	// Auth tools are always read operations
+	if AuthToolNames[toolName] {
+		return OperationRead
 	}
-	return OperationRead // Default to read operation for unknown tools
+	// For non-auth tools, determine operation type based on tool name patterns
+	writeToolPatterns := []string{
+		"create", "update", "delete", "move", "copy", "select", "clear",
+	}
+	for _, pattern := range writeToolPatterns {
+		if strings.Contains(strings.ToLower(toolName), pattern) {
+			return OperationWrite
+		}
+	}
+	return OperationRead // Default to read operation
 }
 
 // ResolveNotebookContext tries to resolve notebook context when only ID is available

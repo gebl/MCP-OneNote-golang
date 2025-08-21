@@ -387,7 +387,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// updatePageContentAdvanced: Update page content with advanced commands
 	updatePageContentAdvancedTool := mcp.NewTool(
@@ -475,7 +475,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// deletePage: Delete a page by ID
 	deletePageTool := mcp.NewTool(
@@ -509,7 +509,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("deletePage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText("Page deleted successfully"), nil
 	}
-	s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// getPageContent: Get the HTML content of a page by ID
 	getPageContentTool := mcp.NewTool(
@@ -616,7 +616,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// getPageItemContent: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type
 	getPageItemContentTool := mcp.NewTool(
@@ -664,7 +664,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("getPageItemContent operation completed", "duration", elapsed, "scaled", !fullSize && strings.HasPrefix(pageItemData.ContentType, "image/"))
 		return mcp.NewToolResultImage(filename, encoded, pageItemData.ContentType), nil
 	}
-	s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// listPageItems: List all OneNote page items (images, files, etc.) for a specific page
 	listPageItemsTool := mcp.NewTool(
@@ -700,7 +700,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Info("listPageItems operation completed", "duration", elapsed, "items_count", len(pageItems), "success", true)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// copyPage: Copy a page from one section to another
 	copyPageTool := mcp.NewTool(
@@ -747,7 +747,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("copyPage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// movePage: Move a page from one section to another (copy then delete)
 	movePageTool := mcp.NewTool(
@@ -795,7 +795,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("movePage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("movePage", movePageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("movePage", movePageHandler, authConfig, cache, quickNoteConfig, pageClient)))
 
 	// quickNote: Add a timestamped note to a configured page
 	quickNoteTool := mcp.NewTool(

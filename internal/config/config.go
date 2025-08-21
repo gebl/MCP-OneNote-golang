@@ -293,6 +293,11 @@ func Load() (*Config, error) {
 			cfg.Authorization = authorization.NewAuthorizationConfig()
 		}
 
+		// Ensure DefaultNotebookPermissions has a valid default if not set in JSON
+		if cfg.Authorization.DefaultNotebookPermissions == "" {
+			cfg.Authorization.DefaultNotebookPermissions = authorization.PermissionRead
+		}
+
 		logger.Debug("Successfully loaded from config file",
 			"client_id", maskSensitiveData(cfg.ClientID),
 			"tenant_id", cfg.TenantID,
@@ -335,7 +340,7 @@ func Load() (*Config, error) {
 	// Compile authorization matchers if authorization is configured
 	if cfg.Authorization != nil {
 		logger.Debug("Compiling authorization matchers")
-		if err := cfg.Authorization.CompileMatchers(); err != nil {
+		if err := cfg.Authorization.CompilePatterns(); err != nil {
 			logger.Error("Authorization matcher compilation failed", "error", err)
 			return nil, fmt.Errorf("failed to compile authorization matchers: %v", err)
 		}

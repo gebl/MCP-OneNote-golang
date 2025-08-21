@@ -304,13 +304,36 @@ The server supports bearer token authentication for securing HTTP transport mode
 ## Authorization System
 
 ### Overview
-The MCP OneNote Server includes a comprehensive authorization system that provides fine-grained access control over all operations. The system implements a hierarchical permission model with secure defaults and explicit overrides.
+The MCP OneNote Server includes a comprehensive authorization system that provides fine-grained access control over all operations. The system implements a **simplified hierarchical permission model** with secure defaults, current notebook scoping, and powerful pattern matching capabilities.
+
+### Key Features
+- **Simplified Model**: No complex tool categories - just notebook-level selection with resource-level permissions
+- **Current Notebook Scoping**: All operations must be within a selected notebook context for security
+- **Pattern Matching**: Support for wildcards (`*`) and recursive patterns (`**`) for flexible resource matching
+- **Fail-Closed Security**: Unknown resources default to no access
+- **Resource Filtering**: Automatically filters notebooks, sections, and pages based on permissions
+- **Security Monitoring**: Comprehensive logging of all authorization decisions and security violations
 
 ### Permission Modes
 - **`none`**: No access - operations are denied
-- **`read`**: Read-only access - view operations only
+- **`read`**: Read-only access - view operations only  
 - **`write`**: Full read/write access - all operations allowed
-- **`full`**: Administrative access (for tool permissions only)
+- **`full`**: Same as write (reserved for future use)
+
+### Core Architecture
+
+#### Notebook-Centric Security Model
+All operations are scoped to a currently selected notebook:
+
+1. **Authentication Tools**: Always allowed (getAuthStatus, initiateAuth, etc.)
+2. **Notebook Discovery**: `listNotebooks` is allowed but results are filtered by permissions
+3. **Notebook Selection**: `selectNotebook` validates permission before setting current context
+4. **Scoped Operations**: All other tools require a selected notebook and validate access within that scope
+
+#### Security Enforcement
+- **Cross-Notebook Protection**: Prevents access to resources outside the current notebook
+- **Resource Resolution**: Validates notebook ownership of pages/sections using API calls when needed
+- **Fail-Closed Model**: Denies access when resource ownership cannot be determined
 
 ### Configuration Structure
 
@@ -318,208 +341,307 @@ The MCP OneNote Server includes a comprehensive authorization system that provid
 ```json
 {
   "authorization": {
-    "enabled": true,                    // Enable/disable authorization system
-    "default_mode": "read",             // Global default permission level
-    "default_tool_mode": "read",        // Default for tool access
-    "default_notebook_mode": "none",    // Default for notebook access
-    "default_section_mode": "read",     // Default for section access  
-    "default_page_mode": "none"         // Default for page access
+    "enabled": true,                              // Enable/disable authorization system
+    "default_notebook_permissions": "read",       // Default permission for any notebook
+    "notebook_permissions": {                     // Specific notebook permissions
+      "Work*": "write",                          // Pattern: any notebook starting with "Work"
+      "Personal Notes": "read",                  // Exact match
+      "Archive/**": "none"                       // Recursive pattern: Archive and all sub-paths
+    },
+    "section_permissions": {                      // Section permissions (with optional notebook prefix)
+      "Meeting Notes": "write",                  // Section name only
+      "Work*/Drafts": "read",                   // Notebook pattern + section name
+      "Personal Notes/Private": "none"          // Full path specification
+    },
+    "page_permissions": {                        // Page permissions by title
+      "Daily Journal": "write",                 // Exact page title match
+      "Draft*": "read",                         // Pattern: pages starting with "Draft"
+      "**confidential**": "none"                // Pattern: pages containing "confidential"
+    }
   }
 }
 ```
 
-#### Permission Hierarchies
+### Pattern Matching System
 
-**Tool-Level Permissions** (`tool_permissions`):
-Controls access to specific MCP tool categories:
-- `auth_tools`: Authentication tools (getAuthStatus, initiateAuth, etc.)
-- `notebook_management`: Notebook creation, deletion, and management
-- `section_management`: Section creation, deletion, and management  
-- `page_write`: Page creation, content updates, and deletion
-- `page_read`: Page content reading and listing
-- `content_management`: Advanced content operations
+#### Supported Pattern Types
 
-**Resource-Level Permissions**:
-Controls access to specific OneNote resources by name:
-- `notebook_permissions`: Permissions by notebook display name
-- `section_permissions`: Permissions by section display name
-- `page_permissions`: Permissions by page title
+**Exact Matches** (Highest Precedence):
+```json
+{
+  "notebook_permissions": {
+    "Work Notebook": "write"         // Exact notebook name
+  },
+  "page_permissions": {
+    "Daily Journal": "write"         // Exact page title
+  }
+}
+```
 
-#### Permission Resolution Order
-The system evaluates permissions in this hierarchical order:
-1. **Tool Permission Check**: Does the user have access to the tool category?
-2. **Resource-Specific Permission**: Explicit permissions for the target resource
-3. **Resource-Type Default**: Default permission for the resource type (notebook/section/page)
-4. **Global Default**: Fallback to the global default mode
+**Prefix Patterns**:
+```json
+{
+  "notebook_permissions": {
+    "Work*": "write",               // Any notebook starting with "Work"
+    "Project*": "read"              // Any notebook starting with "Project"
+  }
+}
+```
+
+**Suffix Patterns**:
+```json
+{
+  "page_permissions": {
+    "*Notes": "read",               // Any page ending with "Notes"
+    "*Draft": "write"               // Any page ending with "Draft"
+  }
+}
+```
+
+**Recursive Patterns** (Lowest Precedence):
+```json
+{
+  "section_permissions": {
+    "Archive/**": "none",           // Archive and all subsections
+    "**/Private/**": "none"         // Any section path containing "Private"
+  }
+}
+```
+
+#### Pattern Precedence Rules
+Patterns are matched in order of specificity (higher precedence wins):
+
+1. **Exact matches**: `Daily Journal`
+2. **Simple prefix/suffix**: `Work*`, `*Notes`  
+3. **Complex patterns**: `Work*/Draft*`
+4. **Recursive patterns**: `**/Private/**`
+5. **Default permissions**: Fallback when no pattern matches
 
 ### Security Features
 
-#### Default-Deny Security Model
-- **Secure Defaults**: Most defaults are set to `"none"` or `"read"` 
-- **Explicit Grants**: Write access must be explicitly configured
-- **Principle of Least Privilege**: Users get minimum necessary permissions
+#### Fail-Closed Security Model
+- **Secure Defaults**: Default to `"none"` or `"read"` permissions
+- **Unknown Resources**: Deny access to unrecognized notebooks/sections/pages
+- **Cross-Notebook Prevention**: Block access to resources outside current notebook scope
+- **Resource Validation**: Verify page/section ownership before allowing operations
 
-#### Authentication Integration
-- **OAuth Integration**: Authorization checks occur after OAuth authentication
-- **Token Validation**: Expired or invalid tokens result in authentication errors before authorization
-- **Session Security**: Authorization state is evaluated per-request
+#### Current Notebook Enforcement
+```json
+// Security workflow:
+// 1. User calls: selectNotebook("Work Notebook") 
+// 2. System validates: notebook permission >= read
+// 3. System sets: current notebook context
+// 4. All subsequent operations validated within this scope
+// 5. Cross-notebook access attempts are blocked and logged
+```
 
-#### Audit and Logging
-- **Permission Decisions**: All authorization decisions are logged with context
-- **Access Attempts**: Failed authorization attempts are logged for security monitoring
-- **Structured Logging**: Authorization logs include user context, resource details, and decision rationale
+#### Comprehensive Security Logging
+```bash
+# Successful authorization
+[auth] Authorization granted: notebook=Work Notebook, operation=write, source=exact_match
+
+# Security violation detected  
+[auth] SECURITY VIOLATION: Cross-notebook access attempt blocked
+[auth] SECURITY: Denying page access - notebook ownership could not be determined
+
+# Permission denied
+[auth] Authorization denied: resource=Archive Notes, permission=none, reason=pattern_match
+```
 
 ### Configuration Examples
 
-#### Restrictive Configuration (Default-Deny)
+#### QuickNote-Only Access (Restrictive)
+Perfect for dedicated note-taking with minimal access:
 ```json
 {
   "authorization": {
     "enabled": true,
-    "default_mode": "none",
-    "default_tool_mode": "none", 
-    "default_notebook_mode": "none",
-    "default_section_mode": "none",
-    "default_page_mode": "none",
-    "tool_permissions": {
-      "auth_tools": "full",
-      "page_read": "read"
-    },
+    "default_notebook_permissions": "none",      // Block all notebooks by default
     "notebook_permissions": {
-      "Public Notes": "read"
+      "Personal Notes": "write"                  // Allow only Personal Notes notebook
     },
     "page_permissions": {
-      "Daily Journal": "write"
+      "Daily Journal": "write",                  // Allow quickNote target page
+      "Quick Notes": "write",                    // Allow additional note pages
+      "Archive*": "none"                         // Block archive pages
+    }
+  },
+  "quicknote": {
+    "notebook_name": "Personal Notes",
+    "page_name": "Daily Journal"
+  }
+}
+```
+
+#### Development Environment (Permissive with Protection)
+Allow broad access while protecting sensitive data:
+```json
+{
+  "authorization": {
+    "enabled": true,
+    "default_notebook_permissions": "read",      // Read access to most notebooks
+    "notebook_permissions": {
+      "Development*": "write",                   // Full access to dev notebooks
+      "Test*": "write",                         // Full access to test notebooks
+      "Production*": "none",                    // Block production data
+      "Customer*": "none",                      // Block customer data
+      "Personal*": "none"                       // Block personal notebooks
+    },
+    "section_permissions": {
+      "**/Confidential": "none",                // Block confidential sections
+      "**/Archive/**": "read"                   // Read-only access to archives
     }
   }
 }
 ```
 
-#### Permissive Configuration (Read-Heavy)
+#### Work Environment (Pattern-Based)
+Use patterns for flexible workspace organization:
 ```json
 {
   "authorization": {
     "enabled": true,
-    "default_mode": "read",
-    "default_tool_mode": "read",
-    "default_notebook_mode": "read", 
-    "default_section_mode": "read",
-    "default_page_mode": "read",
-    "tool_permissions": {
-      "auth_tools": "full",
-      "page_write": "write"
-    },
+    "default_notebook_permissions": "read",
     "notebook_permissions": {
-      "Work Notes": "write",
-      "Archive": "none"
-    }
-  }
-}
-```
-
-#### QuickNote-Focused Configuration
-```json
-{
-  "authorization": {
-    "enabled": true,
-    "default_mode": "read",
-    "default_tool_mode": "read",
-    "default_notebook_mode": "none",
-    "default_page_mode": "none",
-    "tool_permissions": {
-      "auth_tools": "full",
-      "page_write": "write"
+      "Work*": "write",                         // All work notebooks writable
+      "Project*": "write",                      // All project notebooks writable
+      "Team*": "read",                          // Team notebooks read-only
+      "Archive*": "read",                       // Archive notebooks read-only
+      "Personal*": "none"                       // Block personal content
     },
-    "notebook_permissions": {
-      "Personal Notes": "write"
+    "section_permissions": {
+      "Work*/Meeting Notes": "write",           // Meeting notes in work notebooks
+      "Project*/Status": "write",               // Status sections in projects
+      "**/Private": "none"                      // Block private sections everywhere
     },
     "page_permissions": {
-      "Daily Journal": "write",
-      "Quick Notes": "write"
+      "*Weekly Report*": "write",               // Weekly reports anywhere
+      "*Action Items*": "write",                // Action items anywhere  
+      "**confidential**": "none"                // Block confidential pages
     }
   }
 }
 ```
 
-### Usage Scenarios
+### Resource Filtering
 
-#### Read-Only Access for Browsing
-Enable users to browse and read OneNote content without modification capabilities:
+#### Automatic Filtering Behavior
+The authorization system automatically filters results from list operations:
+
+**Filtered Operations**:
+- `listNotebooks`: Only shows notebooks with `read`, `write`, or `full` permissions
+- `getNotebookSections`: Only shows sections accessible within current notebook
+- `listPages`: Only shows pages accessible based on section and page permissions
+
+**Security Benefits**:
+- Users only see resources they can access
+- Prevents information disclosure about restricted resources
+- Maintains clean user experience while enforcing security
+
+#### Filtering Examples
 ```json
+// User sees filtered results based on permissions:
 {
-  "authorization": {
-    "enabled": true,
-    "default_mode": "read",
-    "default_tool_mode": "read",
-    "tool_permissions": {
-      "auth_tools": "full"
-    }
+  "available_notebooks": [
+    "Work Notebook",      // Has 'write' permission
+    "Project Alpha",      // Has 'read' permission  
+    // "Archive" hidden - has 'none' permission
+    // "Personal" hidden - blocked by pattern
+  ],
+  "filtered_info": {
+    "total_notebooks": 4,
+    "visible_notebooks": 2,
+    "filtered_by_authorization": true
   }
 }
 ```
 
-#### Dedicated Note-Taking Setup
-Configure access for a specific note-taking workflow:
+### Environment Variables Support
+
+Authorization can be configured via environment variables:
+```bash
+# Enable authorization
+AUTHORIZATION_ENABLED=true
+
+# Set default permissions
+AUTHORIZATION_DEFAULT_NOTEBOOK_PERMISSIONS=read
+
+# Configure permissions (JSON format)
+AUTHORIZATION_NOTEBOOK_PERMISSIONS='{"Work*":"write","Archive*":"read"}'
+AUTHORIZATION_SECTION_PERMISSIONS='{"**/Private":"none"}'
+AUTHORIZATION_PAGE_PERMISSIONS='{"Daily Journal":"write"}'
+```
+
+**Note**: JSON configuration takes precedence over environment variables.
+
+### Migration and Troubleshooting
+
+#### Migrating to Authorization
+1. **Start Permissive**: Begin with `default_notebook_permissions: "read"`
+2. **Test Operations**: Verify all required functionality works
+3. **Add Restrictions**: Gradually add `"none"` permissions for sensitive resources
+4. **Monitor Logs**: Watch for unexpected authorization denials
+
+#### Common Issues
+
+**Issue**: `"No notebook selected"` error
+**Cause**: Attempting operations without calling `selectNotebook` first
+**Solution**: Always call `selectNotebook` before other operations
+
+**Issue**: `"Cross-notebook access denied"` 
+**Cause**: Trying to access resources outside current notebook
+**Solution**: Select the correct notebook before accessing its resources
+
+**Issue**: QuickNote authorization failures
+**Cause**: Missing permissions for target notebook or page
+**Solution**: Ensure quickNote target has appropriate permissions:
 ```json
 {
-  "authorization": {
-    "enabled": true,
-    "default_mode": "read",
-    "default_notebook_mode": "none",
-    "default_page_mode": "none",
-    "tool_permissions": {
-      "auth_tools": "full",
-      "page_write": "write"
-    },
-    "notebook_permissions": {
-      "Meeting Notes": "write"
-    },
-    "page_permissions": {
-      "Action Items": "write",
-      "Daily Standup": "write"
-    }
+  "notebook_permissions": {
+    "Personal Notes": "write"    // QuickNote notebook needs write access
+  },
+  "page_permissions": {
+    "Daily Journal": "write"     // QuickNote page needs write access
   }
 }
 ```
 
-#### Development and Testing Environment
-Allow broader access for development while protecting sensitive notebooks:
+#### Debug Authorization Issues
+Enable detailed authorization logging:
 ```json
 {
-  "authorization": {
-    "enabled": true,
-    "default_mode": "read",
-    "default_tool_mode": "write",
-    "tool_permissions": {
-      "auth_tools": "full"
-    },
-    "notebook_permissions": {
-      "Production Data": "none",
-      "Test Notebook": "write"
-    }
-  }
+  "log_level": "DEBUG",
+  "content_log_level": "DEBUG"
 }
+```
+
+Look for log messages like:
+```bash
+[auth] Authorization granted: notebook=Work, operation=write, matched_pattern=Work*
+[auth] Authorization denied: resource=Archive, permission=none, matched_pattern=Archive*
+[auth] SECURITY VIOLATION: Cross-notebook access attempt detected
 ```
 
 ### Best Practices
 
 #### Security Recommendations
-1. **Enable Authorization**: Always enable the authorization system in production
-2. **Use Secure Defaults**: Start with restrictive defaults and explicitly grant permissions
-3. **Regular Audits**: Review permission configurations periodically
-4. **Monitor Logs**: Watch authorization logs for unexpected access patterns
-5. **Principle of Least Privilege**: Grant only the minimum permissions needed
+1. **Always Enable in Production**: Set `"enabled": true` for production deployments
+2. **Use Secure Defaults**: Start with `"none"` or `"read"` for default permissions
+3. **Explicit Write Grants**: Only grant `"write"` permissions where needed
+4. **Pattern Strategy**: Use patterns for scalable permission management
+5. **Monitor Security Logs**: Watch for security violations and unauthorized access attempts
+
+#### Performance Optimization
+1. **Pattern Efficiency**: Exact matches are fastest, complex patterns are slower
+2. **Cache Utilization**: Authorization leverages existing cache infrastructure
+3. **Early Termination**: Failed authorization stops expensive operations immediately
+4. **Structured Logging**: Use appropriate log levels to balance security and performance
 
 #### Configuration Management
-1. **Version Control**: Store authorization configurations in version control
-2. **Environment Separation**: Use different configurations for dev/staging/production
-3. **Documentation**: Document permission grants and their business justification
-4. **Testing**: Test permission configurations with representative use cases
-
-#### Performance Considerations
-1. **Caching**: Permission decisions are cached per request for performance
-2. **Early Termination**: Authorization failures fail fast without expensive operations
-3. **Logging Efficiency**: Use appropriate log levels to balance security and performance
+1. **Version Control**: Store authorization configs in source control
+2. **Environment Separation**: Use different permissions for dev/test/prod
+3. **Regular Audits**: Review permissions periodically for security and compliance
+4. **Documentation**: Document permission grants and their business justification
 
 ## Docker Deployment
 

@@ -34,11 +34,13 @@ func registerTools(s *server.MCPServer, graphClient *graph.Client, authManager *
 		authInfo := authorization.GetAuthorizationInfo(cfg.Authorization)
 		logging.ToolsLogger.Info("Authorization is enabled and integrated into tool registration",
 			"enabled", authInfo.Enabled,
-			"default_mode", authInfo.DefaultMode,
-			"tool_categories", authInfo.ToolCategories,
+			"default_notebook_mode", authInfo.DefaultNotebookMode,
 			"notebook_rules", authInfo.NotebookRules,
 			"section_rules", authInfo.SectionRules,
-			"compiled_matchers", authInfo.CompiledMatchers)
+			"page_rules", authInfo.PageRules,
+			"compiled_patterns", authInfo.CompiledPatterns,
+			"current_notebook", authInfo.CurrentNotebook,
+			"current_notebook_perm", authInfo.CurrentNotebookPerm)
 	} else {
 		logging.ToolsLogger.Debug("Authorization is disabled or not configured")
 	}

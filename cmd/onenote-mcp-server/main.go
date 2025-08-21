@@ -935,6 +935,7 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 var globalNotebookCache *NotebookCache
 
 // initializeDefaultNotebook initializes the default notebook on server startup
+// with authorization filtering and priority-based selection
 func initializeDefaultNotebook(graphClient *graph.Client, cfg *config.Config, cache *NotebookCache, logger *slog.Logger) {
 	// Only initialize if we have valid authentication
 	if graphClient.AccessToken == "" {
@@ -947,69 +948,110 @@ func initializeDefaultNotebook(graphClient *graph.Client, cfg *config.Config, ca
 	// Import the notebooks package for client creation
 	notebookClient := notebooks.NewNotebookClient(graphClient)
 
-	// Try to get the configured default notebook
-	if cfg.NotebookName != "" {
-		notebook, err := notebookClient.GetDetailedNotebookByName(cfg.NotebookName)
-		if err != nil {
-			logger.Debug("Failed to get configured default notebook, will try first available",
-				"notebook_name", cfg.NotebookName, "error", err)
-		} else {
-			cache.SetNotebook(notebook)
-			logger.Info("Initialized default notebook from configuration",
-				"notebook_name", cfg.NotebookName,
-				"notebook_id", notebook["id"])
-			return
-		}
-	}
-
-	// Fallback: Get the first available notebook
-	notebooks, err := notebookClient.ListNotebooks()
+	// Get all available notebooks
+	allNotebooks, err := notebookClient.ListNotebooks()
 	if err != nil {
 		logger.Debug("Failed to list notebooks for default initialization", "error", err)
 		return
 	}
 
-	if len(notebooks) == 0 {
+	if len(allNotebooks) == 0 {
 		logger.Info("No notebooks found, default notebook not set")
 		return
 	}
 
-	// Use the first notebook as default
-	firstNotebook := notebooks[0]
+	// Apply authorization filtering if enabled
+	var availableNotebooks []map[string]interface{}
+	if cfg.Authorization != nil && cfg.Authorization.Enabled {
+		availableNotebooks = cfg.Authorization.FilterNotebooks(allNotebooks)
+		logger.Debug("Applied authorization filtering", 
+			"total_notebooks", len(allNotebooks), 
+			"authorized_notebooks", len(availableNotebooks))
+	} else {
+		availableNotebooks = allNotebooks
+		logger.Debug("Authorization disabled, all notebooks available",
+			"total_notebooks", len(allNotebooks))
+	}
 
-	// Get detailed notebook info
-	if notebookID, ok := firstNotebook["id"].(string); ok {
-		// Get detailed notebooks and find the matching one
-		detailedNotebooks, err := notebookClient.ListNotebooksDetailed()
-		if err != nil {
-			logger.Debug("Failed to get detailed notebooks list", "error", err)
-			// Use basic info as fallback
-			cache.SetNotebook(firstNotebook)
-		} else {
-			// Find the matching detailed notebook
-			var detailedNotebook map[string]interface{}
-			found := false
-			for _, nb := range detailedNotebooks {
-				if nbID, ok := nb["id"].(string); ok && nbID == notebookID {
-					detailedNotebook = nb
-					found = true
-					break
+	if len(availableNotebooks) == 0 {
+		logger.Warn("No notebooks available after authorization filtering")
+		return
+	}
+
+	var selectedNotebook map[string]interface{}
+	var selectionReason string
+
+	// Priority 1: Use configured default notebook name (if authorized)
+	if cfg.NotebookName != "" {
+		logger.Debug("Looking for configured default notebook", "notebook_name", cfg.NotebookName)
+		for _, notebook := range availableNotebooks {
+			if displayName, ok := notebook["displayName"].(string); ok && displayName == cfg.NotebookName {
+				selectedNotebook = notebook
+				selectionReason = "configured_default"
+				logger.Debug("Found configured default notebook", "notebook_name", displayName)
+				break
+			}
+		}
+		
+		if selectedNotebook == nil {
+			logger.Warn("Configured default notebook not found or not authorized",
+				"notebook_name", cfg.NotebookName)
+		}
+	}
+
+	// Priority 2: Look for a notebook marked as default in the API response
+	if selectedNotebook == nil {
+		logger.Debug("Looking for API-marked default notebook")
+		for _, notebook := range availableNotebooks {
+			if isDefault, ok := notebook["isDefault"].(bool); ok && isDefault {
+				selectedNotebook = notebook
+				selectionReason = "api_marked_default"
+				if displayName, ok := notebook["displayName"].(string); ok {
+					logger.Debug("Found API-marked default notebook", "notebook_name", displayName)
 				}
+				break
 			}
+		}
+	}
 
-			if found {
-				cache.SetNotebook(detailedNotebook)
-			} else {
-				// Use basic info as fallback
-				cache.SetNotebook(firstNotebook)
+	// Priority 3: Select the first available authorized notebook
+	if selectedNotebook == nil {
+		selectedNotebook = availableNotebooks[0]
+		selectionReason = "first_available"
+		if displayName, ok := selectedNotebook["displayName"].(string); ok {
+			logger.Debug("Selected first available notebook", "notebook_name", displayName)
+		}
+	}
+
+	// Perform the selection
+	if selectedNotebook != nil {
+		notebookDisplayName, _ := selectedNotebook["displayName"].(string)
+		notebookID, _ := selectedNotebook["id"].(string)
+
+		// Validate authorization if enabled (double-check)
+		if cfg.Authorization != nil && cfg.Authorization.Enabled {
+			if err := cfg.Authorization.SetCurrentNotebook(notebookDisplayName); err != nil {
+				logger.Warn("Failed to authorize default notebook selection",
+					"notebook_name", notebookDisplayName,
+					"error", err)
+				return
 			}
 		}
 
-		if displayName, ok := firstNotebook["displayName"].(string); ok {
-			logger.Info("Initialized default notebook (first available)",
-				"notebook_name", displayName,
-				"notebook_id", notebookID)
+		// Get detailed notebook info for full metadata
+		detailedNotebook, err := notebookClient.GetDetailedNotebookByName(notebookDisplayName)
+		if err != nil {
+			logger.Debug("Failed to get detailed notebook info, using basic info",
+				"notebook_name", notebookDisplayName, "error", err)
+			cache.SetNotebook(selectedNotebook)
+		} else {
+			cache.SetNotebook(detailedNotebook)
 		}
+
+		logger.Info("Default notebook initialized successfully",
+			"notebook_name", notebookDisplayName,
+			"notebook_id", notebookID,
+			"selection_reason", selectionReason)
 	}
 }
 

@@ -75,12 +75,15 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			return mcp.NewToolResultText("[]"), nil
 		}
 
-		// Create a JSON array with id, name, and default status flags for each notebook
+		// Create a JSON array with id, name, default status flags, and permission info for each notebook
 		type NotebookInfo struct {
 			ID                    string `json:"id"`
 			Name                  string `json:"name"`
 			IsAPIDefault          bool   `json:"isAPIDefault"`          // True if this is the default notebook according to Microsoft Graph API
 			IsConfigDefault       bool   `json:"isConfigDefault"`       // True if this matches the configured default notebook name
+			Permission            string `json:"permission"`            // Permission level for this notebook (none, read, write)
+			PermissionSource      string `json:"permissionSource"`      // Source of permission (exact, pattern, default)
+			CanSelect             bool   `json:"canSelect"`             // True if user can select this notebook
 		}
 
 		var notebookList []NotebookInfo
@@ -100,11 +103,26 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 				isConfigDefault = displayName == graphClient.Config.NotebookName
 			}
 
+			// Get permission information
+			var permission string = "read"      // Default fallback
+			var permissionSource string = "default"
+			var canSelect bool = true
+			
+			if authConfig != nil && authConfig.Enabled {
+				actualPermission, _, source := authConfig.GetNotebookPermissionWithSource(displayName)
+				permission = string(actualPermission)
+				permissionSource = source
+				canSelect = actualPermission != authorization.PermissionNone && actualPermission != ""
+			}
+
 			notebookList = append(notebookList, NotebookInfo{
 				ID:                    id,
 				Name:                  displayName,
 				IsAPIDefault:          isAPIDefault,
 				IsConfigDefault:       isConfigDefault,
+				Permission:            permission,
+				PermissionSource:      permissionSource,
+				CanSelect:             canSelect,
 			})
 		}
 
@@ -354,7 +372,20 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			}
 		}
 
-		// Set the notebook in cache
+		// Validate authorization for this notebook selection
+		notebookDisplayName, _ := notebook["displayName"].(string)
+		if authConfig != nil && authConfig.Enabled {
+			if err := authConfig.SetCurrentNotebook(notebookDisplayName); err != nil {
+				logging.ToolsLogger.Error("selectNotebook authorization denied",
+					"notebook_name", notebookDisplayName,
+					"error", err)
+				return mcp.NewToolResultError(fmt.Sprintf("Authorization denied: %v", err)), nil
+			}
+			logging.ToolsLogger.Debug("selectNotebook authorization granted",
+				"notebook_name", notebookDisplayName)
+		}
+
+		// Set the notebook in cache after authorization check
 		notebookCache.SetNotebook(notebook)
 
 		// Prepare response
