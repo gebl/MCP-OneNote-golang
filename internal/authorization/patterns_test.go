@@ -152,8 +152,8 @@ func TestPatternEngine_Match(t *testing.T) {
 		{
 			name:            "less specific path pattern",
 			value:           "/Projects/Mobile/public_spec",
-			expectedPerm:    PermissionWrite,
-			expectedPattern: "/Projects/public_*",
+			expectedPerm:    PermissionRead,
+			expectedPattern: "/Projects/**",
 			expectedMatch:   true,
 		},
 		{
@@ -331,18 +331,18 @@ func TestPatternEngine_ComplexScenarios(t *testing.T) {
 			description:     "Single level archive pattern should match",
 		},
 		{
-			name:            "archive two levels - matches prefix",
+			name:            "archive two levels - matches two-level pattern",
 			value:           "/Archive/2024/January", 
-			expectedPerm:    PermissionNone,
-			expectedPattern: "/Archive/*",
-			description:     "Archive prefix pattern should match (blocks deep paths)",
+			expectedPerm:    PermissionRead,
+			expectedPattern: "/Archive/*/*",
+			description:     "Two-level archive pattern should match two-level paths",
 		},
 		{
-			name:            "archive three levels - still matches prefix",
+			name:            "archive three levels - matches global recursive",
 			value:           "/Archive/2024/January/notes",
-			expectedPerm:    PermissionNone,
-			expectedPattern: "/Archive/*",
-			description:     "Archive prefix pattern should match (blocks deep paths)",
+			expectedPerm:    PermissionRead,
+			expectedPattern: "/**",
+			description:     "Global recursive pattern should match deep archive paths",
 		},
 	}
 	

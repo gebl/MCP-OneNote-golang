@@ -15,16 +15,17 @@ import (
 
 // CompiledPattern represents a compiled permission pattern with precedence
 type CompiledPattern struct {
-	Original    string          // Original pattern string
-	Permission  PermissionLevel // Permission level for this pattern
-	Regex       *regexp.Regexp  // Compiled regex (nil for exact/prefix patterns)
-	Precedence  int             // Lower = higher precedence (0 = highest)
-	IsExact     bool            // True for exact matches (no wildcards)
-	IsPrefix    bool            // True for simple prefix patterns (ends with *)
-	IsSuffix    bool            // True for simple suffix patterns (starts with *)
-	IsRecursive bool            // True for /** patterns
-	PathSegments int            // Number of path segments (for /a/b/c counting)
-	LiteralChars int            // Number of literal characters (more = higher precedence)
+	Original     string          // Original pattern string
+	Permission   PermissionLevel // Permission level for this pattern
+	Regex        *regexp.Regexp  // Compiled regex (nil for exact/prefix patterns)
+	Precedence   int             // Lower = higher precedence (0 = highest)
+	IsExact      bool            // True for exact matches (no wildcards)
+	IsPrefix     bool            // True for simple prefix patterns (ends with *)
+	IsSuffix     bool            // True for simple suffix patterns (starts with *)
+	IsRecursive  bool            // True for /** patterns
+	IsSingleLevel bool           // True for single-level wildcards like /Archive/* (doesn't cross path separators)
+	PathSegments int             // Number of path segments (for /a/b/c counting)
+	LiteralChars int             // Number of literal characters (more = higher precedence)
 }
 
 // PatternEngine handles pattern compilation and matching with precedence
@@ -109,9 +110,25 @@ func (pe *PatternEngine) compilePattern(pattern string, permission PermissionLev
 	} else if hasSingleWildcard {
 		// Single wildcard patterns - medium precedence
 		if strings.HasSuffix(pattern, "*") && !strings.Contains(strings.TrimSuffix(pattern, "*"), "*") {
-			// Simple prefix pattern like "public_*"
-			compiled.IsPrefix = true
-			compiled.Precedence = 100 + (20 - compiled.LiteralChars) + compiled.PathSegments
+			// Check if this is a path-based single-level wildcard or simple prefix
+			prefix := strings.TrimSuffix(pattern, "*")
+			if strings.Contains(prefix, "/") {
+				// Single-level wildcard like "/Archive/*" - should not cross path boundaries
+				compiled.IsSingleLevel = true
+				compiled.Precedence = 110 + (20 - compiled.LiteralChars) + compiled.PathSegments
+				
+				// Create regex that prevents crossing path separators: /Archive/[^/]*$
+				regexPattern := regexp.QuoteMeta(prefix) + "[^/]*$"
+				regex, err := regexp.Compile("^" + regexPattern)
+				if err != nil {
+					return compiled, fmt.Errorf("invalid single-level pattern regex: %v", err)
+				}
+				compiled.Regex = regex
+			} else {
+				// Simple prefix pattern like "public_*" - no path restrictions
+				compiled.IsPrefix = true
+				compiled.Precedence = 100 + (20 - compiled.LiteralChars) + compiled.PathSegments
+			}
 			
 		} else if strings.HasPrefix(pattern, "*") && !strings.Contains(strings.TrimPrefix(pattern, "*"), "*") {
 			// Simple suffix pattern like "*_notes"
@@ -139,6 +156,7 @@ func (pe *PatternEngine) compilePattern(pattern string, permission PermissionLev
 		"is_prefix", compiled.IsPrefix,
 		"is_suffix", compiled.IsSuffix,
 		"is_recursive", compiled.IsRecursive,
+		"is_single_level", compiled.IsSingleLevel,
 		"path_segments", compiled.PathSegments,
 		"literal_chars", compiled.LiteralChars)
 	
@@ -215,6 +233,8 @@ func (pe *PatternEngine) getMatchType(pattern CompiledPattern) string {
 		return "suffix"
 	} else if pattern.IsRecursive {
 		return "recursive"
+	} else if pattern.IsSingleLevel {
+		return "single_level"
 	}
 	return "regex"
 }

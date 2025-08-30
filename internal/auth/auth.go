@@ -95,9 +95,9 @@ type OAuth2Config struct {
 
 // TokenManager handles access/refresh tokens and their expiry.
 type TokenManager struct {
-	AccessToken  string // OAuth2 access token
-	RefreshToken string // OAuth2 refresh token
-	Expiry       int64  // Unix timestamp for token expiry
+	AccessToken  string `json:"access_token"`  // OAuth2 access token
+	RefreshToken string `json:"refresh_token"` // OAuth2 refresh token
+	Expiry       int64  `json:"expiry"`        // Unix timestamp for token expiry
 }
 
 // NewOAuth2Config creates a new OAuth2Config from config values.
@@ -165,7 +165,17 @@ func (c *OAuth2Config) GetAuthURL(state, codeChallenge string) string {
 		url.QueryEscape(state),
 		url.QueryEscape(codeChallenge),
 	)
-	logging.AuthLogger.Info("Generated OAuth authorization URL", "tenant", c.TenantIDOrCommon(), "scope", "Notes.ReadWrite")
+	
+	// Enhanced debugging for troubleshooting unauthorized_client error
+	logging.AuthLogger.Info("Generated OAuth authorization URL", 
+		"tenant", c.TenantIDOrCommon(), 
+		"scope", "Notes.ReadWrite")
+	logging.AuthLogger.Debug("OAuth URL components for troubleshooting", 
+		"client_id", maskSensitiveData(c.ClientID),
+		"redirect_uri", c.RedirectURI,
+		"tenant_id_original", c.TenantID,
+		"tenant_id_used", c.TenantIDOrCommon(),
+		"tenant_is_common", c.TenantID == "" || c.TenantID == "common")
 	return authURL
 }
 
@@ -373,6 +383,18 @@ func LoadTokens(path string) (*TokenManager, error) {
 	logging.AuthLogger.Debug("Token details", "access_token", maskSensitiveData(tm.AccessToken))
 	logging.AuthLogger.Debug("Token details", "refresh_token", maskSensitiveData(tm.RefreshToken))
 	logging.AuthLogger.Debug("Token details", "expiry_timestamp", tm.Expiry, "expires_at", time.Unix(tm.Expiry, 0).Format(time.RFC3339))
+	
+	// Additional debugging to understand token format issues
+	logging.AuthLogger.Debug("Token format validation", 
+		"access_token_length", len(tm.AccessToken),
+		"access_token_empty", tm.AccessToken == "",
+		"access_token_has_dots", strings.Count(tm.AccessToken, "."),
+		"access_token_starts_with", func() string {
+			if len(tm.AccessToken) >= 10 {
+				return tm.AccessToken[:10]
+			}
+			return tm.AccessToken
+		}())
 
 	return tm, nil
 }

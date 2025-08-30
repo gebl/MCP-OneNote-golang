@@ -29,6 +29,14 @@ go test ./internal/notebooks         # Notebook operations
 go test ./internal/pages             # Page operations  
 go test ./internal/sections          # Section operations
 
+# Run comprehensive test coverage analysis
+go test ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out -o coverage.html
+
+# Test authorization security model
+./scripts/test-security-model.sh     # Linux/Mac
+scripts/test-security-model.bat      # Windows
+
 # Build for Docker
 docker build -f docker/Dockerfile -t onenote-mcp-server .
 
@@ -1012,6 +1020,66 @@ go test ./internal/notebooks -v        # Notebook operations
 go test ./internal/pages -v           # Page operations
 go test ./internal/sections -v        # Section operations
 ```
+
+## Recent Improvements and Bug Fixes
+
+### Microsoft Graph API Integration Fixes
+
+**Page Notebook Resolution Enhancement**: Fixed a critical bug in `ResolvePageNotebook()` where Microsoft Graph API v1.0 would return empty parent objects when using `$select` parameter. The solution involved:
+
+- **Root Cause**: Microsoft Graph API v1.0 has a limitation where `$select=parentSection,parentNotebook` on OneNote pages completely omits these fields from the response
+- **Solution**: Changed from `$select=id,title,parentSection,parentNotebook` to `$expand=parentSection,parentNotebook` to force inclusion of parent objects
+- **Impact**: This fixes authorization failures where pages couldn't be properly associated with their notebooks
+- **Enhanced Debugging**: Added comprehensive logging of API responses to troubleshoot similar issues
+
+**Configuration System Enhancements**:
+- **Environment Variable Precedence**: Environment variables now properly override JSON configuration values
+- **Default Toolsets**: Added sensible defaults for toolsets when not specified
+- **Enhanced Error Handling**: Improved error messages and validation during configuration loading
+
+### Comprehensive Test Coverage
+
+**Test Suite Expansion**: Added over 10,000 lines of unit tests providing comprehensive coverage:
+
+- **Domain Testing**: Full test coverage for notebooks, pages, sections, and authorization modules  
+- **HTTP Layer Testing**: Comprehensive testing of Graph API integration and HTTP utilities
+- **Configuration Testing**: Full validation of configuration loading from multiple sources
+- **Authorization Testing**: Complete test coverage of the security model with various scenarios
+- **Functional Testing**: End-to-end testing of core workflows and operations
+
+**Security Model Testing**: Added dedicated test scripts for validation:
+- `scripts/test-security-model.sh` (Linux/Mac)
+- `scripts/test-security-model.bat` (Windows)
+
+**Test Infrastructure**:
+- **Mock-Based Testing**: Uses `testify/mock` for controlled Microsoft Graph API simulation
+- **Coverage Analysis**: Support for HTML coverage reports with `go tool cover`
+- **Isolated Testing**: Each test package can run independently without external dependencies
+
+### Enhanced Debugging and Diagnostics
+
+**Structured Logging Improvements**:
+- **Component-Based Logging**: All modules use consistent structured logging with component prefixes
+- **Enhanced API Debugging**: Raw JSON responses logged for Microsoft Graph API calls
+- **Performance Metrics**: Cache hit/miss ratios and operation durations tracked
+- **Security Event Logging**: Comprehensive logging of authorization decisions and security violations
+
+**Development Tooling**:
+- **Coverage Scripts**: Automated test coverage analysis and HTML report generation  
+- **Security Testing**: Dedicated scripts for testing authorization scenarios
+- **Enhanced Error Messages**: More descriptive error messages with context for troubleshooting
+
+### Configuration and Environment Handling
+
+**Environment Variable Processing**: Enhanced handling with proper precedence rules:
+- Environment variables take precedence over JSON configuration
+- Improved validation and error reporting for configuration issues
+- Support for complex nested configurations via environment variables
+
+**JSON Configuration Enhancements**:
+- Better error handling for malformed JSON files
+- Support for partial configuration overrides
+- Enhanced validation of configuration values
 
 ## Development Notes
 

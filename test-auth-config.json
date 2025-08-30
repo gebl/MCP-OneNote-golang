@@ -1,0 +1,17 @@
+{
+  "authorization": {
+    "enabled": true,
+    "default_notebook_permissions": "none",
+    
+    "notebook_permissions": {
+      "Clippings.io": "write",
+      "My Notebook": "write", 
+      "Organized One Notes": "read",
+      "Gabriel's Notebook": "write"
+    },
+    
+    "section_permissions": {
+      "Clippings.io/Books": "read"
+    }
+  }
+}

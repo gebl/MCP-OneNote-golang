@@ -90,7 +90,8 @@ func (pc *PageClient) ResolvePageNotebook(ctx context.Context, pageID string) (n
 		"page_id", pageID)
 
 	// Use Graph API to get page metadata including parent section and notebook
-	url := fmt.Sprintf("/me/onenote/pages/%s?$select=id,title,parentSection,parentNotebook", pageID)
+	// Note: Using $expand instead of $select because Graph API v1.0 may not return parent objects with $select
+	url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$expand=parentSection,parentNotebook", pageID)
 	
 	response, err := pc.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
 	if err != nil {
@@ -121,22 +122,48 @@ func (pc *PageClient) ResolvePageNotebook(ctx context.Context, pageID string) (n
 		} `json:"parentNotebook"`
 	}
 
-	if err := json.NewDecoder(response.Body).Decode(&pageInfo); err != nil {
+	// Read response body to log it for debugging
+	content, err := pc.ReadResponseBody(response, "ResolvePageNotebook")
+	if err != nil {
+		logging.PageLogger.Error("Failed to read response body for page notebook resolution",
+			"page_id", pageID,
+			"error", err.Error())
+		return "", "", "", "", fmt.Errorf("failed to read page notebook response body: %w", err)
+	}
+	
+	// Log the actual JSON response for debugging
+	logging.PageLogger.Debug("Page notebook resolution response", "page_id", pageID, "response_body", string(content))
+	
+	if err := json.Unmarshal(content, &pageInfo); err != nil {
 		logging.PageLogger.Error("Failed to decode page notebook resolution response",
 			"page_id", pageID,
 			"error", err.Error())
 		return "", "", "", "", fmt.Errorf("failed to decode page notebook response: %w", err)
 	}
 
+	// Log the parsed information for debugging
+	logging.PageLogger.Debug("Parsed page info from JSON", 
+		"page_id", pageID,
+		"parsed_page_id", pageInfo.ID,
+		"parsed_title", pageInfo.Title,
+		"parent_notebook_nil", pageInfo.ParentNotebook == nil,
+		"parent_section_nil", pageInfo.ParentSection == nil)
+
 	// Extract the information
 	if pageInfo.ParentNotebook != nil {
 		notebookID = pageInfo.ParentNotebook.ID
 		notebookName = pageInfo.ParentNotebook.DisplayName
+		logging.PageLogger.Debug("Extracted notebook info", "page_id", pageID, "notebook_id", notebookID, "notebook_name", notebookName)
+	} else {
+		logging.PageLogger.Debug("ParentNotebook is nil in response", "page_id", pageID)
 	}
 	
 	if pageInfo.ParentSection != nil {
 		sectionID = pageInfo.ParentSection.ID
 		sectionName = pageInfo.ParentSection.DisplayName
+		logging.PageLogger.Debug("Extracted section info", "page_id", pageID, "section_id", sectionID, "section_name", sectionName)
+	} else {
+		logging.PageLogger.Debug("ParentSection is nil in response", "page_id", pageID)
 	}
 
 	logging.PageLogger.Info("Successfully resolved page notebook ownership",
@@ -553,14 +580,47 @@ func htmlEscape(s string) string {
 
 // validateTableUpdates checks if any commands are attempting to update individual table elements
 // and returns an error with guidance if table elements are targeted individually.
+// isTableElement determines if a target references a table element that cannot be updated individually
+func isTableElement(target string) bool {
+	target = strings.ToLower(target)
+	
+	// Direct element targeting (e.g., td:, th:, tr:)
+	if strings.HasPrefix(target, "td:") ||
+		strings.HasPrefix(target, "th:") ||
+		strings.HasPrefix(target, "tr:") ||
+		strings.HasPrefix(target, "tbody:") ||
+		strings.HasPrefix(target, "thead:") ||
+		strings.HasPrefix(target, "tfoot:") {
+		return true
+	}
+	
+	// Data-id based targeting (e.g., data-id:cell-123, data-id:tr-456)
+	if strings.HasPrefix(target, "data-id:") {
+		idValue := strings.TrimPrefix(target, "data-id:")
+		
+		// Common table element ID patterns used in OneNote
+		tablePatterns := []string{
+			"cell-", "td-", "th-",          // Table cells
+			"row-", "tr-",                  // Table rows  
+			"tbody-", "thead-", "tfoot-",   // Table sections
+			"col-", "colgroup-",            // Table columns
+		}
+		
+		for _, pattern := range tablePatterns {
+			if strings.Contains(idValue, pattern) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
 func validateTableUpdates(commands []UpdateCommand) error {
 	var tableElementTargets []string
 
 	for _, cmd := range commands {
-		// Check if target is a table element (td, th, tr)
-		if strings.HasPrefix(cmd.Target, "td:") ||
-			strings.HasPrefix(cmd.Target, "th:") ||
-			strings.HasPrefix(cmd.Target, "tr:") {
+		if isTableElement(cmd.Target) {
 			tableElementTargets = append(tableElementTargets, cmd.Target)
 		}
 	}
@@ -581,7 +641,7 @@ Example of CORRECT approach:
 - Content: "<table>...complete table HTML...</table>"
 
 Example of INCORRECT approach (what you're doing):
-- Target: "td:{cell-data-id}"
+- Target: "td:{cell-data-id}" or "data-id:cell-123"
 - Action: "replace" 
 - Content: "<td>new content</td>"
 

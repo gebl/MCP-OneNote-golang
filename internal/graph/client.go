@@ -97,13 +97,31 @@ func NewClientWithTokenRefresh(accessToken string, oauthConfig *auth.OAuth2Confi
 		"token_manager_available", tokenManager != nil)
 
 	authProvider := &StaticTokenProvider{AccessToken: accessToken}
+	
+	logging.GraphLogger.Debug("Creating GraphRequestAdapter", 
+		"auth_provider_nil", authProvider == nil,
+		"access_token_empty", accessToken == "",
+		"access_token_length", len(accessToken))
+	
 	adapter, err := msgraphsdkcore.NewGraphRequestAdapterBase(authProvider, msgraphsdkcore.GraphClientOptions{
 		GraphServiceVersion: "v1.0",
 	})
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create GraphRequestAdapter: %v", err))
 	}
+	
+	if adapter == nil {
+		panic("GraphRequestAdapter is nil after creation")
+	}
+	
 	client := msgraphsdk.NewGraphServiceClient(adapter)
+	if client == nil {
+		panic("GraphServiceClient is nil after creation")
+	}
+	
+	logging.GraphLogger.Debug("Graph client created successfully", 
+		"adapter_nil", adapter == nil,
+		"client_nil", client == nil)
 	return &Client{
 		GraphClient:  client,
 		AuthProvider: authProvider,
@@ -123,6 +141,20 @@ type StaticTokenProvider struct {
 
 // AuthenticateRequest adds the Authorization header to the request.
 func (s *StaticTokenProvider) AuthenticateRequest(ctx context.Context, request *abstractions.RequestInformation, additionalAuthenticationContext map[string]interface{}) error {
+	if request == nil {
+		logging.GraphLogger.Error("Request is nil in AuthenticateRequest")
+		return fmt.Errorf("request cannot be nil")
+	}
+	if request.Headers == nil {
+		logging.GraphLogger.Error("Request headers is nil in AuthenticateRequest")
+		return fmt.Errorf("request headers cannot be nil")
+	}
+	if s.AccessToken == "" {
+		logging.GraphLogger.Error("Access token is empty in AuthenticateRequest")
+		return fmt.Errorf("access token cannot be empty")
+	}
+	
+	logging.GraphLogger.Debug("Adding authorization header", "token_length", len(s.AccessToken))
 	request.Headers.Add("Authorization", "Bearer "+s.AccessToken)
 	return nil
 }

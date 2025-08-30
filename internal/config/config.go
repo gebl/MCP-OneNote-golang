@@ -236,21 +236,46 @@ func Load() (*Config, error) {
 		"CONTENT_LOG_LEVEL", maskEnvironmentValue("CONTENT_LOG_LEVEL"))
 
 	// Toolsets from env (comma-separated string)
+	var envHasToolsets bool
 	if toolsets := os.Getenv("ONENOTE_TOOLSETS"); toolsets != "" {
 		cfg.Toolsets = strings.Split(toolsets, ",")
+		envHasToolsets = true
 		logger.Debug("Loaded toolsets from environment", "toolsets", cfg.Toolsets)
 	} else {
-		logger.Debug("No toolsets specified in environment")
+		logger.Debug("No toolsets specified in environment - using defaults")
+		cfg.Toolsets = []string{"notebooks", "sections", "pages", "content"}
 	}
 
-	// Set default date format if not provided from environment
-	if cfg.QuickNote.DateFormat == "" {
-		cfg.QuickNote.DateFormat = "January 2, 2006 - 3:04 PM"
-	}
 
 	// Optionally load from config file if ONENOTE_MCP_CONFIG is set
 	if path := os.Getenv("ONENOTE_MCP_CONFIG"); path != "" {
 		logger.Debug("Loading from config file", "path", path)
+
+		// Save environment variable values to restore after JSON loading
+		// (environment variables have higher precedence than JSON)
+		envClientID := cfg.ClientID
+		envTenantID := cfg.TenantID
+		envRedirectURI := cfg.RedirectURI
+		envNotebookName := cfg.NotebookName
+		var envToolsets []string
+		if envHasToolsets {
+			envToolsets = make([]string, len(cfg.Toolsets))
+			copy(envToolsets, cfg.Toolsets)
+		}
+		envQuickNote := QuickNoteConfig{
+			NotebookName: cfg.QuickNote.NotebookName,
+			PageName:     cfg.QuickNote.PageName,
+			DateFormat:   cfg.QuickNote.DateFormat,
+		}
+		envMCPAuth := MCPAuthConfig{
+			Enabled:     cfg.MCPAuth.Enabled,
+			BearerToken: cfg.MCPAuth.BearerToken,
+		}
+		envStateless := cfg.Stateless
+		envLogLevel := cfg.LogLevel
+		envLogFormat := cfg.LogFormat
+		envLogFile := cfg.LogFile
+		envContentLogLevel := cfg.ContentLogLevel
 
 		fileInfo, err := os.Stat(path)
 		if err != nil {
@@ -270,6 +295,54 @@ func Load() (*Config, error) {
 		if err := dec.Decode(cfg); err != nil {
 			logger.Error("Failed to decode JSON from config file", "path", path, "error", err)
 			return nil, fmt.Errorf("failed to parse config file JSON: %v", err)
+		}
+
+		// Restore environment variable values (they have higher precedence)
+		if envClientID != "" {
+			cfg.ClientID = envClientID
+		}
+		if envTenantID != "" {
+			cfg.TenantID = envTenantID
+		}
+		if envRedirectURI != "" {
+			cfg.RedirectURI = envRedirectURI
+		}
+		if envNotebookName != "" {
+			cfg.NotebookName = envNotebookName
+		}
+		if len(envToolsets) > 0 {
+			cfg.Toolsets = envToolsets
+		}
+		if envQuickNote.NotebookName != "" {
+			cfg.QuickNote.NotebookName = envQuickNote.NotebookName
+		}
+		if envQuickNote.PageName != "" {
+			cfg.QuickNote.PageName = envQuickNote.PageName
+		}
+		if envQuickNote.DateFormat != "" {
+			cfg.QuickNote.DateFormat = envQuickNote.DateFormat
+		}
+		if cfg.MCPAuth == nil {
+			cfg.MCPAuth = &MCPAuthConfig{}
+		}
+		if envMCPAuth.Enabled || envMCPAuth.BearerToken != "" {
+			cfg.MCPAuth.Enabled = envMCPAuth.Enabled
+			cfg.MCPAuth.BearerToken = envMCPAuth.BearerToken
+		}
+		if envStateless != nil {
+			cfg.Stateless = envStateless
+		}
+		if envLogLevel != "" {
+			cfg.LogLevel = envLogLevel
+		}
+		if envLogFormat != "" {
+			cfg.LogFormat = envLogFormat
+		}
+		if envLogFile != "" {
+			cfg.LogFile = envLogFile
+		}
+		if envContentLogLevel != "" {
+			cfg.ContentLogLevel = envContentLogLevel
 		}
 
 		// Ensure stateless has a default value if not set in JSON
@@ -296,6 +369,11 @@ func Load() (*Config, error) {
 		// Ensure DefaultNotebookPermissions has a valid default if not set in JSON
 		if cfg.Authorization.DefaultNotebookPermissions == "" {
 			cfg.Authorization.DefaultNotebookPermissions = authorization.PermissionRead
+		}
+
+		// Set default toolsets if not specified in JSON
+		if len(cfg.Toolsets) == 0 {
+			cfg.Toolsets = []string{"notebooks", "sections", "pages", "content"}
 		}
 
 		logger.Debug("Successfully loaded from config file",
@@ -327,6 +405,58 @@ func Load() (*Config, error) {
 			"logging_configured", cfg.LogLevel != "" || cfg.LogFormat != "" || cfg.LogFile != "" || cfg.ContentLogLevel != "")
 	} else {
 		logger.Debug("No config file specified (ONENOTE_MCP_CONFIG not set)")
+		
+		// Set default date format if not provided from environment
+		if cfg.QuickNote.DateFormat == "" {
+			cfg.QuickNote.DateFormat = "January 2, 2006 - 3:04 PM"
+		}
+	}
+
+	// Apply environment variable overrides for authorization configuration
+	if cfg.Authorization != nil {
+		if authEnabled := os.Getenv("AUTHORIZATION_ENABLED"); authEnabled != "" {
+			cfg.Authorization.Enabled = authEnabled == "true"
+		}
+		if defaultMode := os.Getenv("AUTHORIZATION_DEFAULT_MODE"); defaultMode != "" {
+			cfg.Authorization.DefaultNotebookPermissions = authorization.PermissionLevel(defaultMode)
+		}
+		// Parse authorization permissions from environment variables if present
+		if notebookPerms := os.Getenv("AUTHORIZATION_NOTEBOOK_PERMISSIONS"); notebookPerms != "" {
+			// Parse JSON format: {"pattern":"permission",...}
+			var perms map[string]string
+			if err := json.Unmarshal([]byte(notebookPerms), &perms); err == nil {
+				for pattern, perm := range perms {
+					cfg.Authorization.NotebookPermissions[pattern] = authorization.PermissionLevel(perm)
+				}
+			}
+		}
+		if sectionPerms := os.Getenv("AUTHORIZATION_SECTION_PERMISSIONS"); sectionPerms != "" {
+			var perms map[string]string
+			if err := json.Unmarshal([]byte(sectionPerms), &perms); err == nil {
+				for pattern, perm := range perms {
+					cfg.Authorization.SectionPermissions[pattern] = authorization.PermissionLevel(perm)
+				}
+			}
+		}
+		if pagePerms := os.Getenv("AUTHORIZATION_PAGE_PERMISSIONS"); pagePerms != "" {
+			var perms map[string]string
+			if err := json.Unmarshal([]byte(pagePerms), &perms); err == nil {
+				for pattern, perm := range perms {
+					cfg.Authorization.PagePermissions[pattern] = authorization.PermissionLevel(perm)
+				}
+			}
+		}
+	}
+
+	// Apply defaults for empty fields
+	if cfg.LogLevel == "" {
+		cfg.LogLevel = "INFO"
+	}
+	if cfg.LogFormat == "" {
+		cfg.LogFormat = "text"
+	}
+	if cfg.ContentLogLevel == "" {
+		cfg.ContentLogLevel = "INFO"
 	}
 
 	// Validate configuration

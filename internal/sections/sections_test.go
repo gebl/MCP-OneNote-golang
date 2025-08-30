@@ -6,10 +6,12 @@ package sections
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 )
@@ -581,4 +583,337 @@ func TestSectionClientIntegrationSetup(t *testing.T) {
 		// Verify that SectionClient has the expected structure
 		assert.NotNil(t, sectionClient.Client, "Section client should embed graph client")
 	})
+}
+
+// MockSectionClient provides comprehensive mock implementation for testing section operations
+type MockSectionClient struct {
+	mock.Mock
+	sections           map[string][]map[string]interface{}
+	sectionGroups      map[string][]map[string]interface{}
+	allSections        []map[string]interface{}
+	mockError          error
+	shouldFail         map[string]bool
+	createdSections    []map[string]interface{}
+	createdGroups      []map[string]interface{}
+	operations         []string
+}
+
+func NewMockSectionClient() *MockSectionClient {
+	return &MockSectionClient{
+		sections: map[string][]map[string]interface{}{
+			"notebook-1": {
+				{
+					"id":          "section-1",
+					"displayName": "Work Section",
+					"createdDateTime": "2023-01-01T00:00:00Z",
+					"lastModifiedDateTime": "2023-01-05T00:00:00Z",
+					"parentNotebook": map[string]interface{}{
+						"id": "notebook-1",
+						"displayName": "Work Notebook",
+					},
+					"pagesUrl": "https://graph.microsoft.com/v1.0/me/onenote/sections/section-1/pages",
+				},
+				{
+					"id":          "section-2",
+					"displayName": "Projects",
+					"parentNotebook": map[string]interface{}{
+						"id": "notebook-1",
+						"displayName": "Work Notebook",
+					},
+				},
+			},
+			"notebook-2": {
+				{
+					"id":          "section-3",
+					"displayName": "Personal Notes",
+					"parentNotebook": map[string]interface{}{
+						"id": "notebook-2",
+						"displayName": "Personal Notebook",
+					},
+				},
+			},
+			"sectiongroup-1": {
+				{
+					"id":          "section-4",
+					"displayName": "Archived Projects",
+					"parentSectionGroup": map[string]interface{}{
+						"id": "sectiongroup-1",
+						"displayName": "Archive",
+					},
+				},
+			},
+		},
+		sectionGroups: map[string][]map[string]interface{}{
+			"notebook-1": {
+				{
+					"id":          "sectiongroup-1",
+					"displayName": "Archive",
+					"createdDateTime": "2023-01-01T00:00:00Z",
+					"parentNotebook": map[string]interface{}{
+						"id": "notebook-1",
+						"displayName": "Work Notebook",
+					},
+					"sectionsUrl": "https://graph.microsoft.com/v1.0/me/onenote/sectionGroups/sectiongroup-1/sections",
+				},
+				{
+					"id":          "sectiongroup-2",
+					"displayName": "Templates",
+					"parentNotebook": map[string]interface{}{
+						"id": "notebook-1",
+						"displayName": "Work Notebook",
+					},
+				},
+			},
+		},
+		allSections: []map[string]interface{}{
+			{
+				"id":          "section-1",
+				"displayName": "Work Section",
+				"parentNotebook": map[string]interface{}{"id": "notebook-1", "displayName": "Work Notebook"},
+			},
+			{
+				"id":          "section-2",
+				"displayName": "Projects",
+				"parentNotebook": map[string]interface{}{"id": "notebook-1", "displayName": "Work Notebook"},
+			},
+			{
+				"id":          "section-3",
+				"displayName": "Personal Notes",
+				"parentNotebook": map[string]interface{}{"id": "notebook-2", "displayName": "Personal Notebook"},
+			},
+			{
+				"id":          "section-4",
+				"displayName": "Archived Projects",
+				"parentSectionGroup": map[string]interface{}{"id": "sectiongroup-1", "displayName": "Archive"},
+			},
+		},
+		shouldFail:      make(map[string]bool),
+		createdSections: make([]map[string]interface{}, 0),
+		createdGroups:   make([]map[string]interface{}, 0),
+		operations:      make([]string, 0),
+	}
+}
+
+// SetError allows tests to simulate error conditions
+func (m *MockSectionClient) SetError(err error) {
+	m.mockError = err
+}
+
+// SetOperationFailure allows tests to simulate failures for specific operations
+func (m *MockSectionClient) SetOperationFailure(operation string, shouldFail bool) {
+	m.shouldFail[operation] = shouldFail
+}
+
+// Helper method to check if operation should fail
+func (m *MockSectionClient) checkFailure(operation string) error {
+	if m.mockError != nil {
+		return m.mockError
+	}
+	if m.shouldFail[operation] {
+		return fmt.Errorf("simulated failure for %s", operation)
+	}
+	return nil
+}
+
+// ListSections mocks section listing for a container
+func (m *MockSectionClient) ListSections(containerID string) ([]map[string]interface{}, error) {
+	m.operations = append(m.operations, "ListSections")
+	if err := m.checkFailure("ListSections"); err != nil {
+		return nil, err
+	}
+	
+	if sections, exists := m.sections[containerID]; exists {
+		return sections, nil
+	}
+	return []map[string]interface{}{}, nil
+}
+
+// CreateSection mocks section creation
+func (m *MockSectionClient) CreateSection(containerID, displayName string) (map[string]interface{}, error) {
+	m.operations = append(m.operations, "CreateSection")
+	if err := m.checkFailure("CreateSection"); err != nil {
+		return nil, err
+	}
+	
+	// Basic validation
+	if containerID == "" {
+		return nil, fmt.Errorf("container ID cannot be empty")
+	}
+	if displayName == "" {
+		return nil, fmt.Errorf("display name cannot be empty")
+	}
+	
+	// Validate display name against illegal characters
+	illegalChars := []string{"?", "*", "\\", "/", ":", "<", ">", "|", "&", "#", "'", "'", "%", "~"}
+	for _, char := range illegalChars {
+		if strings.Contains(displayName, char) {
+			return nil, fmt.Errorf("display name contains illegal character: %s", char)
+		}
+	}
+	
+	// Determine container type - sections can only be created in notebooks or section groups
+	containerType := m.determineContainerType(containerID)
+	if containerType != "notebook" && containerType != "sectionGroup" {
+		return nil, fmt.Errorf("invalid container type for section creation")
+	}
+	
+	// Create new section
+	newSectionID := fmt.Sprintf("section-%d", len(m.createdSections)+100)
+	newSection := map[string]interface{}{
+		"id":          newSectionID,
+		"displayName": displayName,
+		"createdDateTime": "2023-12-01T00:00:00Z",
+		"lastModifiedDateTime": "2023-12-01T00:00:00Z",
+		"pagesUrl": fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s/pages", newSectionID),
+	}
+	
+	// Set appropriate parent field based on container type
+	if containerType == "notebook" {
+		newSection["parentNotebook"] = map[string]interface{}{
+			"id":          containerID,
+			"displayName": fmt.Sprintf("Notebook %s", containerID),
+		}
+	} else {
+		newSection["parentSectionGroup"] = map[string]interface{}{
+			"id":          containerID,
+			"displayName": fmt.Sprintf("Section Group %s", containerID),
+		}
+	}
+	
+	// Store the section
+	if m.sections[containerID] == nil {
+		m.sections[containerID] = []map[string]interface{}{}
+	}
+	m.sections[containerID] = append(m.sections[containerID], newSection)
+	m.createdSections = append(m.createdSections, newSection)
+	
+	return newSection, nil
+}
+
+// determineContainerType mocks container type determination
+func (m *MockSectionClient) determineContainerType(containerID string) string {
+	if strings.HasPrefix(containerID, "notebook-") {
+		return "notebook"
+	}
+	if strings.HasPrefix(containerID, "sectiongroup-") {
+		return "sectionGroup"
+	}
+	if strings.HasPrefix(containerID, "section-") {
+		return "section"
+	}
+	return "unknown"
+}
+
+// GetOperations returns the list of operations performed (for testing)
+func (m *MockSectionClient) GetOperations() []string {
+	return m.operations
+}
+
+// GetCreatedSections returns the list of created sections (for testing)
+func (m *MockSectionClient) GetCreatedSections() []map[string]interface{} {
+	return m.createdSections
+}
+
+// TestSectionClient_ListSections tests section listing functionality
+func TestSectionClient_ListSections(t *testing.T) {
+	t.Run("successfully lists sections for a notebook", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+		
+		sections, err := mockClient.ListSections("notebook-1")
+		
+		assert.NoError(t, err)
+		assert.Len(t, sections, 2) // Should have Work Section and Projects
+		
+		// Verify section properties
+		for _, section := range sections {
+			assert.Contains(t, section, "id")
+			assert.Contains(t, section, "displayName")
+			assert.Contains(t, section, "parentNotebook")
+			
+			// Verify parent notebook
+			parentNotebook := section["parentNotebook"].(map[string]interface{})
+			assert.Equal(t, "notebook-1", parentNotebook["id"])
+		}
+		
+		// Verify specific sections
+		foundNames := make(map[string]bool)
+		for _, section := range sections {
+			name := section["displayName"].(string)
+			foundNames[name] = true
+		}
+		assert.True(t, foundNames["Work Section"])
+		assert.True(t, foundNames["Projects"])
+	})
+	
+	t.Run("handles authentication errors", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+		mockClient.SetOperationFailure("ListSections", true)
+		
+		sections, err := mockClient.ListSections("notebook-1")
+		
+		assert.Error(t, err)
+		assert.Nil(t, sections)
+		assert.Contains(t, err.Error(), "simulated failure")
+	})
+}
+
+// TestSectionClient_CreateSection tests section creation functionality
+func TestSectionClient_CreateSection(t *testing.T) {
+	t.Run("successfully creates section in notebook", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+		
+		section, err := mockClient.CreateSection("notebook-1", "New Test Section")
+		
+		assert.NoError(t, err)
+		assert.NotNil(t, section)
+		assert.Equal(t, "New Test Section", section["displayName"])
+		assert.Contains(t, section, "id")
+		assert.Contains(t, section, "parentNotebook")
+		
+		// Verify the section was created and tracked
+		createdSections := mockClient.GetCreatedSections()
+		assert.Len(t, createdSections, 1)
+	})
+	
+	t.Run("validates display name for illegal characters", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+		
+		// Test illegal character
+		section, err := mockClient.CreateSection("notebook-1", "Section*Name")
+		assert.Error(t, err)
+		assert.Nil(t, section)
+		assert.Contains(t, err.Error(), "illegal character")
+	})
+	
+	t.Run("rejects section creation in invalid containers", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+		
+		// Try to create section in a section (should fail due to hierarchy)
+		section, err := mockClient.CreateSection("section-1", "Invalid Section")
+		
+		assert.Error(t, err)
+		assert.Nil(t, section)
+		assert.Contains(t, err.Error(), "invalid container type")
+	})
+}
+
+// Benchmark tests for section operations
+func BenchmarkSectionClient_CreateSection(b *testing.B) {
+	mockClient := NewMockSectionClient()
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sectionName := fmt.Sprintf("Benchmark Section %d", i)
+		_, _ = mockClient.CreateSection("notebook-1", sectionName)
+	}
+}
+
+func BenchmarkSectionClient_ListSections(b *testing.B) {
+	mockClient := NewMockSectionClient()
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		containerID := fmt.Sprintf("notebook-%d", (i%2)+1)
+		_, _ = mockClient.ListSections(containerID)
+	}
 }

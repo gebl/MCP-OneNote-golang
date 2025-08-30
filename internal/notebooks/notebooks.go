@@ -136,6 +136,17 @@ func (c *NotebookClient) ListNotebooksDetailed() ([]map[string]interface{}, erro
 	}
 
 	ctx := context.Background()
+	
+	// Add debugging to understand why we're getting ArgumentNull error
+	logging.NotebookLogger.Debug("About to call Graph SDK", 
+		"graph_client_nil", c.GraphClient == nil,
+		"access_token_empty", c.AccessToken == "",
+		"access_token_length", len(c.AccessToken))
+	
+	if c.GraphClient == nil {
+		return nil, fmt.Errorf("GraphClient is nil")
+	}
+	
 	result, err := c.GraphClient.Me().Onenote().Notebooks().Get(ctx, nil)
 	logging.NotebookLogger.Debug("SDK result for detailed notebooks", "result", result)
 	if err != nil {
