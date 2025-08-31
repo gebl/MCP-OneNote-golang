@@ -174,3 +174,227 @@ func TestMarkdownAdvancedFeatures(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateDisplayName(t *testing.T) {
+	tests := []struct {
+		name        string
+		displayName string
+		expectError bool
+		expectedChar string
+	}{
+		{
+			name:        "Valid display name",
+			displayName: "My Valid Section",
+			expectError: false,
+		},
+		{
+			name:        "Display name with question mark",
+			displayName: "What is this?",
+			expectError: true,
+			expectedChar: "?",
+		},
+		{
+			name:        "Display name with asterisk",
+			displayName: "Section*Notes",
+			expectError: true,
+			expectedChar: "*",
+		},
+		{
+			name:        "Display name with backslash",
+			displayName: "Section\\Notes",
+			expectError: true,
+			expectedChar: "\\",
+		},
+		{
+			name:        "Empty display name",
+			displayName: "",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDisplayName(tt.displayName)
+			
+			if tt.expectError && err == nil {
+				t.Error("Expected an error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			
+			if tt.expectError && err != nil {
+				errorMsg := err.Error()
+				if !strings.Contains(errorMsg, tt.expectedChar) {
+					t.Errorf("Expected error message to contain '%s', got: %s", tt.expectedChar, errorMsg)
+				}
+				if !strings.Contains(errorMsg, "illegal character") {
+					t.Error("Error message should mention 'illegal character'")
+				}
+			}
+		})
+	}
+}
+
+func TestSuggestValidName(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		illegalChar string
+		expected    string
+	}{
+		{
+			name:        "Replace question mark with period",
+			input:       "What is this?",
+			illegalChar: "?",
+			expected:    "What is this.",
+		},
+		{
+			name:        "Replace asterisk with period",
+			input:       "Section*Notes",
+			illegalChar: "*",
+			expected:    "Section.Notes",
+		},
+		{
+			name:        "Replace ampersand with 'and'",
+			input:       "Section&Notes",
+			illegalChar: "&",
+			expected:    "SectionandNotes",
+		},
+		{
+			name:        "Unknown illegal character - no change",
+			input:       "Section@Notes",
+			illegalChar: "@",
+			expected:    "Section@Notes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SuggestValidName(tt.input, tt.illegalChar)
+			if result != tt.expected {
+				t.Errorf("SuggestValidName(%q, %q) = %q, want %q", tt.input, tt.illegalChar, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetReplacementChar(t *testing.T) {
+	tests := []struct {
+		name        string
+		illegalChar string
+		expected    string
+	}{
+		{"Question mark", "?", "."},
+		{"Asterisk", "*", "."},
+		{"Ampersand", "&", "and"},
+		{"Unknown character", "@", "-"}, // Default fallback
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetReplacementChar(tt.illegalChar)
+			if result != tt.expected {
+				t.Errorf("GetReplacementChar(%q) = %q, want %q", tt.illegalChar, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestConvertHTMLToMarkdown(t *testing.T) {
+	tests := []struct {
+		name          string
+		htmlContent   string
+		shouldContain []string
+		expectError   bool
+	}{
+		{
+			name:          "Simple paragraph",
+			htmlContent:   "<p>This is a paragraph.</p>",
+			shouldContain: []string{"This is a paragraph."},
+			expectError:   false,
+		},
+		{
+			name:          "Heading conversion",
+			htmlContent:   "<h1>Main Title</h1>",
+			shouldContain: []string{"# Main Title"},
+			expectError:   false,
+		},
+		{
+			name:          "Empty HTML",
+			htmlContent:   "",
+			shouldContain: []string{},
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ConvertHTMLToMarkdown(tt.htmlContent)
+			
+			if tt.expectError && err == nil {
+				t.Error("Expected an error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			
+			if !tt.expectError {
+				for _, expected := range tt.shouldContain {
+					if !strings.Contains(result, expected) {
+						t.Errorf("Result should contain %q, got: %s", expected, result)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestConvertHTMLToText(t *testing.T) {
+	tests := []struct {
+		name          string
+		htmlContent   string
+		shouldContain []string
+		expectError   bool
+	}{
+		{
+			name:          "Simple paragraph",
+			htmlContent:   "<p>This is a paragraph.</p>",
+			shouldContain: []string{"This is a paragraph."},
+			expectError:   false,
+		},
+		{
+			name:          "Multiple paragraphs",
+			htmlContent:   "<p>First.</p><p>Second.</p>",
+			shouldContain: []string{"First.", "Second."},
+			expectError:   false,
+		},
+		{
+			name:          "Empty HTML",
+			htmlContent:   "",
+			shouldContain: []string{},
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ConvertHTMLToText(tt.htmlContent)
+			
+			if tt.expectError && err == nil {
+				t.Error("Expected an error but got none")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+			
+			if !tt.expectError {
+				for _, expected := range tt.shouldContain {
+					if !strings.Contains(result, expected) {
+						t.Errorf("Result should contain %q, got: %s", expected, result)
+					}
+				}
+			}
+		})
+	}
+}
