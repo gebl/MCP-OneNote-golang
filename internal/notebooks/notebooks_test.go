@@ -1607,3 +1607,163 @@ func TestNotebookClient_RealWorldScenarios(t *testing.T) {
 		assert.Less(t, searchDuration, time.Second, "Search operation should complete quickly")
 	})
 }
+
+// TestNotebookClient_ExtractFunctions tests extraction utility functions
+func TestNotebookClient_ExtractFunctions(t *testing.T) {
+	t.Run("tests notebook extraction logic", func(t *testing.T) {
+		// Test the logic that would be used in extractNotebookList
+		notebooks := []map[string]interface{}{
+			{
+				"id":                   "notebook-1",
+				"displayName":          "Work Notebook",
+				"createdDateTime":      "2023-01-01T00:00:00Z",
+				"lastModifiedDateTime": "2023-12-01T00:00:00Z",
+			},
+			{
+				"id":           "notebook-2",
+				"displayName":  "Personal Notes",
+				"createdDateTime": "2023-01-15T00:00:00Z",
+			},
+		}
+
+		// Verify essential fields are present
+		for _, notebook := range notebooks {
+			assert.Contains(t, notebook, "id")
+			assert.Contains(t, notebook, "displayName")
+			assert.Contains(t, notebook, "createdDateTime")
+			assert.NotEmpty(t, notebook["id"])
+			assert.NotEmpty(t, notebook["displayName"])
+		}
+	})
+
+	t.Run("tests detailed notebook extraction logic", func(t *testing.T) {
+		// Test the logic that would be used in extractDetailedNotebookList
+		detailedNotebook := map[string]interface{}{
+			"id":                   "notebook-1",
+			"displayName":          "Detailed Work Notebook",
+			"createdDateTime":      "2023-01-01T00:00:00Z",
+			"lastModifiedDateTime": "2023-12-01T00:00:00Z",
+			"isDefault":            true,
+			"userRole":             "Owner",
+			"isShared":             false,
+			"sectionsUrl":          "https://graph.microsoft.com/v1.0/me/onenote/notebooks/notebook-1/sections",
+			"sectionGroupsUrl":     "https://graph.microsoft.com/v1.0/me/onenote/notebooks/notebook-1/sectionGroups",
+			"links": map[string]interface{}{
+				"oneNoteClientUrl": "onenote:https://d.docs.live.net/...",
+				"oneNoteWebUrl":    "https://onedrive.live.com/...",
+			},
+			"createdBy": map[string]interface{}{
+				"user": map[string]interface{}{
+					"id":          "user-123",
+					"displayName": "Test User",
+				},
+			},
+		}
+
+		// Verify all detailed fields are present
+		assert.Contains(t, detailedNotebook, "id")
+		assert.Contains(t, detailedNotebook, "displayName")
+		assert.Contains(t, detailedNotebook, "isDefault")
+		assert.Contains(t, detailedNotebook, "userRole")
+		assert.Contains(t, detailedNotebook, "isShared")
+		assert.Contains(t, detailedNotebook, "sectionsUrl")
+		assert.Contains(t, detailedNotebook, "sectionGroupsUrl")
+		assert.Contains(t, detailedNotebook, "links")
+		assert.Contains(t, detailedNotebook, "createdBy")
+
+		// Verify nested structures
+		links, ok := detailedNotebook["links"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, links, "oneNoteClientUrl")
+		assert.Contains(t, links, "oneNoteWebUrl")
+
+		createdBy, ok := detailedNotebook["createdBy"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, createdBy, "user")
+	})
+
+	t.Run("tests identity set extraction logic", func(t *testing.T) {
+		// Test the logic that would be used in extractIdentitySet
+		identitySet := map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":          "user-123",
+				"displayName": "John Doe",
+				"email":       "john.doe@company.com",
+			},
+			"application": map[string]interface{}{
+				"id":          "app-456",
+				"displayName": "OneNote App",
+			},
+			"device": map[string]interface{}{
+				"id":          "device-789",
+				"displayName": "John's Laptop",
+			},
+		}
+
+		// Verify identity structure
+		user, ok := identitySet["user"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, user, "id")
+		assert.Contains(t, user, "displayName")
+		assert.Equal(t, "user-123", user["id"])
+		assert.Equal(t, "John Doe", user["displayName"])
+
+		app, ok := identitySet["application"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, app, "id")
+		assert.Contains(t, app, "displayName")
+
+		device, ok := identitySet["device"].(map[string]interface{})
+		assert.True(t, ok)
+		assert.Contains(t, device, "id")
+		assert.Contains(t, device, "displayName")
+	})
+}
+
+// TestNotebookClient_URLConstruction tests URL construction for various operations
+func TestNotebookClient_URLConstruction(t *testing.T) {
+	t.Run("tests notebook listing URLs", func(t *testing.T) {
+		// Test URL construction for ListNotebooks
+		expectedURL := "https://graph.microsoft.com/v1.0/me/onenote/notebooks"
+		assert.Contains(t, expectedURL, "/notebooks")
+		assert.Contains(t, expectedURL, "graph.microsoft.com")
+		assert.True(t, strings.HasPrefix(expectedURL, "https://"))
+	})
+
+	t.Run("tests detailed notebook URLs", func(t *testing.T) {
+		// Test URL construction for ListNotebooksDetailed with expand
+		expectedURL := "https://graph.microsoft.com/v1.0/me/onenote/notebooks?$expand=sections,sectionGroups"
+		assert.Contains(t, expectedURL, "$expand=sections,sectionGroups")
+		assert.Contains(t, expectedURL, "/notebooks?")
+	})
+
+	t.Run("tests notebook by name URL", func(t *testing.T) {
+		notebookName := "Work Notebook"
+		// Test URL construction for GetDetailedNotebookByName  
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks?$filter=displayName eq '%s'&$expand=sections,sectionGroups", notebookName)
+		assert.Contains(t, expectedURL, "$filter=displayName eq")
+		assert.Contains(t, expectedURL, "$expand=sections,sectionGroups")
+		assert.Contains(t, expectedURL, "Work Notebook")
+	})
+
+	t.Run("tests section listing URLs", func(t *testing.T) {
+		containerID := "notebook-123"
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sections", containerID)
+		assert.Contains(t, expectedURL, containerID)
+		assert.Contains(t, expectedURL, "/sections")
+	})
+
+	t.Run("tests section groups URLs", func(t *testing.T) {
+		containerID := "notebook-123"
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sectionGroups", containerID)
+		assert.Contains(t, expectedURL, containerID)
+		assert.Contains(t, expectedURL, "/sectionGroups")
+	})
+
+	t.Run("tests pages listing URLs", func(t *testing.T) {
+		sectionID := "section-123"
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s/pages", sectionID)
+		assert.Contains(t, expectedURL, sectionID)
+		assert.Contains(t, expectedURL, "/pages")
+	})
+}

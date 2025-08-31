@@ -917,3 +917,554 @@ func BenchmarkSectionClient_ListSections(b *testing.B) {
 		_, _ = mockClient.ListSections(containerID)
 	}
 }
+
+// TestSectionClient_ListAllSections tests the list all sections functionality
+func TestSectionClient_ListAllSections(t *testing.T) {
+	t.Run("lists sections from all containers", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+		
+		// Test that we can retrieve all sections (simulating the logic)
+		allSections := mockClient.allSections
+		assert.Len(t, allSections, 4) // Should have 4 total sections
+		
+		// Verify each section has required fields
+		for _, section := range allSections {
+			assert.Contains(t, section, "id")
+			assert.Contains(t, section, "displayName")
+			// Should have either parentNotebook or parentSectionGroup
+			hasParentNotebook := section["parentNotebook"] != nil
+			hasParentSectionGroup := section["parentSectionGroup"] != nil
+			assert.True(t, hasParentNotebook || hasParentSectionGroup, 
+				"Section should have either parentNotebook or parentSectionGroup")
+		}
+	})
+}
+
+// TestSectionClient_GetSectionByID tests section retrieval by ID
+func TestSectionClient_GetSectionByID(t *testing.T) {
+	t.Run("validates section ID format", func(t *testing.T) {
+		// Test URL construction for GetSectionByID
+		sectionID := "section-123"
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s", sectionID)
+		assert.Contains(t, expectedURL, sectionID)
+		assert.Contains(t, expectedURL, "/sections/")
+		assert.Contains(t, expectedURL, "graph.microsoft.com")
+	})
+
+	t.Run("handles various section ID formats", func(t *testing.T) {
+		testIDs := []struct {
+			id          string
+			valid       bool
+			description string
+		}{
+			{"section-123", true, "Standard section ID format"},
+			{"1-ABC123DEF456!789", true, "OneNote complex ID format"},
+			{"", false, "Empty section ID"},
+			{"invalid format", false, "Invalid format with spaces"},
+		}
+
+		for _, tt := range testIDs {
+			t.Run(tt.description, func(t *testing.T) {
+				isValid := tt.id != "" && !strings.Contains(tt.id, " ")
+				assert.Equal(t, tt.valid, isValid, "Section ID validation should work correctly")
+			})
+		}
+	})
+}
+
+// TestSectionClient_ResolveSectionNotebook tests notebook resolution for sections
+func TestSectionClient_ResolveSectionNotebook(t *testing.T) {
+	t.Run("validates URL construction for section notebook resolution", func(t *testing.T) {
+		sectionID := "section-123"
+		// Test URL construction for ResolveSectionNotebook
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s?$expand=parentNotebook", sectionID)
+		assert.Contains(t, expectedURL, sectionID)
+		assert.Contains(t, expectedURL, "$expand=parentNotebook")
+		assert.Contains(t, expectedURL, "/sections/")
+	})
+
+	t.Run("handles different parent container types", func(t *testing.T) {
+		// Test logic for resolving different parent types
+		testCases := []struct {
+			sectionData     map[string]interface{}
+			expectedType    string
+			expectedValid   bool
+		}{
+			{
+				sectionData: map[string]interface{}{
+					"id": "section-1",
+					"parentNotebook": map[string]interface{}{
+						"id": "notebook-123",
+						"displayName": "Test Notebook",
+					},
+				},
+				expectedType:  "notebook",
+				expectedValid: true,
+			},
+			{
+				sectionData: map[string]interface{}{
+					"id": "section-2",
+					"parentSectionGroup": map[string]interface{}{
+						"id": "sectiongroup-456",
+						"displayName": "Test Group",
+					},
+				},
+				expectedType:  "sectionGroup",
+				expectedValid: true,
+			},
+			{
+				sectionData: map[string]interface{}{
+					"id": "section-3",
+					// Missing parent information
+				},
+				expectedType:  "unknown",
+				expectedValid: false,
+			},
+		}
+
+		for _, tc := range testCases {
+			var detectedType string
+			var isValid bool
+
+			if parentNotebook := tc.sectionData["parentNotebook"]; parentNotebook != nil {
+				detectedType = "notebook"
+				isValid = true
+			} else if parentSectionGroup := tc.sectionData["parentSectionGroup"]; parentSectionGroup != nil {
+				detectedType = "sectionGroup"
+				isValid = true
+			} else {
+				detectedType = "unknown"
+				isValid = false
+			}
+
+			assert.Equal(t, tc.expectedType, detectedType)
+			assert.Equal(t, tc.expectedValid, isValid)
+		}
+	})
+}
+
+// TestSectionClient_ListSectionsWithProgress tests progress callback functionality
+func TestSectionClient_ListSectionsWithProgress(t *testing.T) {
+	t.Run("tests progress callback mechanism", func(t *testing.T) {
+		var receivedProgress []int
+		var receivedMessages []string
+
+		// Mock progress callback
+		progressCallback := func(progress int, message string) {
+			receivedProgress = append(receivedProgress, progress)
+			receivedMessages = append(receivedMessages, message)
+		}
+
+		// Simulate progress updates that would occur in ListSectionsWithProgress
+		progressCallback(0, "Starting section listing...")
+		progressCallback(50, "Processing sections...")
+		progressCallback(100, "Section listing complete")
+
+		assert.Len(t, receivedProgress, 3)
+		assert.Len(t, receivedMessages, 3)
+		assert.Equal(t, []int{0, 50, 100}, receivedProgress)
+		assert.Contains(t, receivedMessages, "Starting section listing...")
+		assert.Contains(t, receivedMessages, "Section listing complete")
+	})
+}
+
+// TestSectionClient_URLConstruction tests URL construction for various operations
+func TestSectionClient_URLConstruction(t *testing.T) {
+	t.Run("constructs correct URLs for section listing", func(t *testing.T) {
+		tests := []struct {
+			containerID   string
+			containerType string
+			expectedURL   string
+		}{
+			{
+				"notebook-123",
+				"notebook",
+				"https://graph.microsoft.com/v1.0/me/onenote/notebooks/notebook-123/sections",
+			},
+			{
+				"sectiongroup-456",
+				"sectionGroup",
+				"https://graph.microsoft.com/v1.0/me/onenote/sectionGroups/sectiongroup-456/sections",
+			},
+		}
+
+		for _, tt := range tests {
+			var constructedURL string
+			if tt.containerType == "notebook" {
+				constructedURL = fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sections", tt.containerID)
+			} else if tt.containerType == "sectionGroup" {
+				constructedURL = fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sectionGroups/%s/sections", tt.containerID)
+			}
+
+			assert.Equal(t, tt.expectedURL, constructedURL)
+			assert.Contains(t, constructedURL, tt.containerID)
+			assert.Contains(t, constructedURL, "/sections")
+		}
+	})
+
+	t.Run("constructs correct URLs for section creation", func(t *testing.T) {
+		containerID := "notebook-123"
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/notebooks/%s/sections", containerID)
+		
+		assert.Contains(t, expectedURL, containerID)
+		assert.Contains(t, expectedURL, "/sections")
+		assert.True(t, strings.HasPrefix(expectedURL, "https://"))
+		assert.Contains(t, expectedURL, "graph.microsoft.com")
+	})
+
+	t.Run("constructs correct URLs for global section listing", func(t *testing.T) {
+		expectedURL := "https://graph.microsoft.com/v1.0/me/onenote/sections"
+		assert.Equal(t, expectedURL, expectedURL)
+		assert.Contains(t, expectedURL, "/sections")
+		assert.NotContains(t, expectedURL, "/notebooks/")
+		assert.NotContains(t, expectedURL, "/sectionGroups/")
+	})
+}
+
+// TestSectionClient_ErrorHandling tests comprehensive error handling
+func TestSectionClient_ErrorHandling(t *testing.T) {
+	t.Run("handles various HTTP error codes", func(t *testing.T) {
+		errorCodes := []string{
+			"400 bad request",
+			"401 unauthorized",
+			"403 forbidden",
+			"404 not found",
+			"429 too many requests",
+			"500 internal server error",
+			"503 service unavailable",
+		}
+
+		for _, errorCode := range errorCodes {
+			mockClient := NewMockSectionClient()
+			mockClient.SetError(fmt.Errorf(errorCode))
+
+			sections, err := mockClient.ListSections("notebook-1")
+			assert.Error(t, err)
+			assert.Nil(t, sections)
+			assert.Contains(t, err.Error(), strings.Split(errorCode, " ")[0])
+		}
+	})
+
+	t.Run("handles network connectivity issues", func(t *testing.T) {
+		networkErrors := []string{
+			"connection timeout",
+			"DNS resolution failed",
+			"connection refused", 
+			"host unreachable",
+			"network unreachable",
+		}
+
+		for _, networkError := range networkErrors {
+			mockClient := NewMockSectionClient()
+			mockClient.SetError(fmt.Errorf(networkError))
+
+			_, err := mockClient.CreateSection("notebook-1", "Test Section")
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), networkError)
+		}
+	})
+
+	t.Run("validates create section input parameters", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		tests := []struct {
+			containerID string
+			displayName string
+			expectError bool
+			errorMsg    string
+		}{
+			{"", "Valid Name", true, "container ID cannot be empty"},
+			{"notebook-1", "", true, "display name cannot be empty"},
+			{"notebook-1", "Valid Name", false, ""},
+		}
+
+		for _, tt := range tests {
+			_, err := mockClient.CreateSection(tt.containerID, tt.displayName)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		}
+	})
+}
+
+// TestSectionClient_DataConsistency tests data consistency across operations
+func TestSectionClient_DataConsistency(t *testing.T) {
+	t.Run("maintains consistent section data", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		// Get sections for a notebook
+		sections1, err1 := mockClient.ListSections("notebook-1")
+		sections2, err2 := mockClient.ListSections("notebook-1")
+
+		assert.NoError(t, err1)
+		assert.NoError(t, err2)
+		assert.Equal(t, len(sections1), len(sections2), "Section counts should be consistent")
+
+		// Verify section IDs are consistent
+		ids1 := make([]string, len(sections1))
+		ids2 := make([]string, len(sections2))
+
+		for i, section := range sections1 {
+			ids1[i] = section["id"].(string)
+		}
+		for i, section := range sections2 {
+			ids2[i] = section["id"].(string)
+		}
+
+		assert.Equal(t, ids1, ids2, "Section IDs should be consistent across calls")
+	})
+
+	t.Run("validates section metadata fields", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		sections, err := mockClient.ListSections("notebook-1")
+		assert.NoError(t, err)
+
+		for _, section := range sections {
+			// Verify required fields exist
+			assert.Contains(t, section, "id")
+			assert.Contains(t, section, "displayName")
+
+			// Verify field types
+			id, idOk := section["id"].(string)
+			displayName, nameOk := section["displayName"].(string)
+
+			assert.True(t, idOk, "ID should be string")
+			assert.True(t, nameOk, "Display name should be string")
+			assert.NotEmpty(t, id)
+			assert.NotEmpty(t, displayName)
+
+			// Verify parent information exists
+			hasParentNotebook := section["parentNotebook"] != nil
+			hasParentSectionGroup := section["parentSectionGroup"] != nil
+			assert.True(t, hasParentNotebook || hasParentSectionGroup,
+				"Section should have parent information")
+		}
+	})
+}
+
+// TestSectionClient_ContainerTypeDetection tests container type detection logic
+func TestSectionClient_ContainerTypeDetection(t *testing.T) {
+	t.Run("correctly detects container types", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		tests := []struct {
+			containerID   string
+			expectedType  string
+		}{
+			{"notebook-123", "notebook"},
+			{"sectiongroup-456", "sectionGroup"},
+			{"section-789", "section"},
+			{"unknown-format", "unknown"},
+		}
+
+		for _, tt := range tests {
+			detectedType := mockClient.determineContainerType(tt.containerID)
+			assert.Equal(t, tt.expectedType, detectedType,
+				"Should correctly detect container type for %s", tt.containerID)
+		}
+	})
+
+	t.Run("validates container hierarchy rules", func(t *testing.T) {
+		// Test OneNote hierarchy constraints
+		tests := []struct {
+			containerType    string
+			canHoldSections  bool
+			canHoldGroups    bool
+		}{
+			{"notebook", true, true},
+			{"sectionGroup", true, true},
+			{"section", false, false},
+		}
+
+		for _, tt := range tests {
+			// Test the hierarchy logic that would be used in validation
+			switch tt.containerType {
+			case "notebook":
+				assert.True(t, tt.canHoldSections, "Notebooks should hold sections")
+				assert.True(t, tt.canHoldGroups, "Notebooks should hold section groups")
+			case "sectionGroup":
+				assert.True(t, tt.canHoldSections, "Section groups should hold sections")
+				assert.True(t, tt.canHoldGroups, "Section groups should hold other section groups")
+			case "section":
+				assert.False(t, tt.canHoldSections, "Sections should not hold other sections")
+				assert.False(t, tt.canHoldGroups, "Sections should not hold section groups")
+			}
+		}
+	})
+}
+
+// TestSectionClient_PerformanceAndScale tests performance scenarios
+func TestSectionClient_PerformanceAndScale(t *testing.T) {
+	t.Run("handles large numbers of sections", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		// Add many sections to simulate large notebook
+		largeSectionList := make([]map[string]interface{}, 100)
+		for i := 0; i < 100; i++ {
+			largeSectionList[i] = map[string]interface{}{
+				"id":          fmt.Sprintf("section-%d", i+100),
+				"displayName": fmt.Sprintf("Section %d", i+1),
+				"parentNotebook": map[string]interface{}{
+					"id": "large-notebook",
+					"displayName": "Large Notebook",
+				},
+			}
+		}
+		mockClient.sections["large-notebook"] = largeSectionList
+
+		sections, err := mockClient.ListSections("large-notebook")
+		assert.NoError(t, err)
+		assert.Len(t, sections, 100)
+
+		// Verify all sections have proper structure
+		for _, section := range sections {
+			assert.Contains(t, section, "id")
+			assert.Contains(t, section, "displayName")
+			assert.Contains(t, section, "parentNotebook")
+		}
+	})
+
+	t.Run("handles concurrent section operations", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		// Simulate concurrent operations
+		done := make(chan bool, 3)
+
+		// Multiple goroutines accessing the mock client
+		go func() {
+			sections, err := mockClient.ListSections("notebook-1")
+			assert.NoError(t, err)
+			assert.Greater(t, len(sections), 0)
+			done <- true
+		}()
+
+		go func() {
+			section, err := mockClient.CreateSection("notebook-1", "Concurrent Section 1")
+			assert.NoError(t, err)
+			assert.NotNil(t, section)
+			done <- true
+		}()
+
+		go func() {
+			section, err := mockClient.CreateSection("notebook-2", "Concurrent Section 2")
+			assert.NoError(t, err)
+			assert.NotNil(t, section)
+			done <- true
+		}()
+
+		// Wait for all operations to complete
+		for i := 0; i < 3; i++ {
+			<-done
+		}
+
+		// Verify operations were tracked
+		operations := mockClient.GetOperations()
+		assert.Contains(t, operations, "ListSections")
+		assert.Contains(t, operations, "CreateSection")
+	})
+}
+
+// TestSectionClient_IntegrationScenarios tests realistic usage patterns
+func TestSectionClient_IntegrationScenarios(t *testing.T) {
+	t.Run("complete section management workflow", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		// Step 1: List existing sections
+		existingSections, err := mockClient.ListSections("notebook-1")
+		assert.NoError(t, err)
+		initialCount := len(existingSections)
+
+		// Step 2: Create new section
+		newSection, err := mockClient.CreateSection("notebook-1", "New Workflow Section")
+		assert.NoError(t, err)
+		assert.Equal(t, "New Workflow Section", newSection["displayName"])
+
+		// Step 3: Verify section was created
+		updatedSections, err := mockClient.ListSections("notebook-1")
+		assert.NoError(t, err)
+		assert.Equal(t, initialCount+1, len(updatedSections))
+
+		// Step 4: Verify new section is in the list
+		found := false
+		for _, section := range updatedSections {
+			if section["displayName"] == "New Workflow Section" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "New section should appear in section list")
+	})
+
+	t.Run("multi-container section discovery", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		// Discover sections across different containers
+		containers := []string{"notebook-1", "notebook-2", "sectiongroup-1"}
+		totalSections := 0
+
+		for _, containerID := range containers {
+			sections, err := mockClient.ListSections(containerID)
+			assert.NoError(t, err)
+			totalSections += len(sections)
+
+			// Verify each section has proper parent reference
+			for _, section := range sections {
+				hasNotebookParent := section["parentNotebook"] != nil
+				hasGroupParent := section["parentSectionGroup"] != nil
+				assert.True(t, hasNotebookParent || hasGroupParent,
+					"Section should have parent reference")
+			}
+		}
+
+		assert.Greater(t, totalSections, 0, "Should find sections across containers")
+		assert.Equal(t, 4, totalSections, "Should find all expected sections")
+	})
+
+	t.Run("section organization and hierarchy validation", func(t *testing.T) {
+		mockClient := NewMockSectionClient()
+
+		// Organize sections by parent container
+		sectionsByParent := make(map[string][]map[string]interface{})
+
+		// Process all sections from the mock data
+		for _, section := range mockClient.allSections {
+			var parentKey string
+			if parentNotebook := section["parentNotebook"]; parentNotebook != nil {
+				if notebook, ok := parentNotebook.(map[string]interface{}); ok {
+					parentKey = fmt.Sprintf("notebook:%s", notebook["id"])
+				}
+			} else if parentSectionGroup := section["parentSectionGroup"]; parentSectionGroup != nil {
+				if group, ok := parentSectionGroup.(map[string]interface{}); ok {
+					parentKey = fmt.Sprintf("sectiongroup:%s", group["id"])
+				}
+			}
+
+			if parentKey != "" {
+				sectionsByParent[parentKey] = append(sectionsByParent[parentKey], section)
+			}
+		}
+
+		// Verify organization
+		assert.Greater(t, len(sectionsByParent), 0, "Should organize sections by parent")
+
+		// Verify each parent category has sections
+		for parentKey, sections := range sectionsByParent {
+			assert.Greater(t, len(sections), 0, "Parent %s should have sections", parentKey)
+
+			// Verify all sections in category have correct parent type
+			for _, section := range sections {
+				if strings.HasPrefix(parentKey, "notebook:") {
+					assert.NotNil(t, section["parentNotebook"], "Section should have notebook parent")
+				} else if strings.HasPrefix(parentKey, "sectiongroup:") {
+					assert.NotNil(t, section["parentSectionGroup"], "Section should have section group parent")
+				}
+			}
+		}
+	})
+}

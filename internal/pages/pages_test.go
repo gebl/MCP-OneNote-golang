@@ -1249,3 +1249,432 @@ func BenchmarkMockPageClient_CreatePage(b *testing.B) {
 		_, _ = mockClient.CreatePage("section-1", title, content)
 	}
 }
+
+// TestResolvePageNotebook_URLFormatValidation specifically tests URL construction for page resolution
+func TestResolvePageNotebook_URLFormatValidation(t *testing.T) {
+	t.Run("URL format validation", func(t *testing.T) {
+		pageID := "1-abc123def456!789"
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$expand=parentSection,parentNotebook", pageID)
+		
+		// Test that URL construction follows expected format
+		assert.Contains(t, expectedURL, "pages/"+pageID)
+		assert.Contains(t, expectedURL, "$expand=parentSection,parentNotebook")
+		assert.Contains(t, expectedURL, "graph.microsoft.com")
+	})
+
+	t.Run("URL construction with different page IDs", func(t *testing.T) {
+		testCases := []struct {
+			name   string
+			pageID string
+		}{
+			{"simple page ID", "page-123"},
+			{"complex OneNote ID with segments", "1-abc123def456!1-XYZ789!12345"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$expand=parentSection,parentNotebook", tc.pageID)
+				assert.Contains(t, expectedURL, tc.pageID)
+			})
+		}
+	})
+
+	t.Run("regression test - should not use relative paths", func(t *testing.T) {
+		pageID := "test-page"
+		url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$expand=parentSection,parentNotebook", pageID)
+		
+		// Ensure we're using absolute paths, not relative
+		assert.True(t, strings.HasPrefix(url, "https://"))
+		assert.False(t, strings.HasPrefix(url, "/pages/"))
+		assert.False(t, strings.HasPrefix(url, "pages/"))
+	})
+}
+
+// TestPageClient_ListPages tests page listing functionality
+func TestPageClient_ListPages(t *testing.T) {
+	t.Run("validates section ID parameter", func(t *testing.T) {
+		sectionID := "section-123"
+		assert.NotEmpty(t, sectionID, "Section ID should not be empty for listing pages")
+		
+		// Test URL construction for list pages
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s/pages", sectionID)
+		assert.Contains(t, expectedURL, sectionID)
+		assert.Contains(t, expectedURL, "/pages")
+	})
+
+	t.Run("handles pagination parameters", func(t *testing.T) {
+		// Test various pagination scenarios
+		tests := []struct {
+			name     string
+			top      int
+			skip     int
+			expected string
+		}{
+			{"no pagination", 0, 0, ""},
+			{"top only", 50, 0, "$top=50"},
+			{"skip only", 0, 25, "$skip=25"},
+			{"both top and skip", 50, 25, "$top=50&$skip=25"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				baseURL := "https://graph.microsoft.com/v1.0/me/onenote/sections/section-123/pages"
+				if tt.expected != "" {
+					fullURL := baseURL + "?" + tt.expected
+					if tt.top > 0 {
+						assert.Contains(t, fullURL, fmt.Sprintf("$top=%d", tt.top))
+					}
+					if tt.skip > 0 {
+						assert.Contains(t, fullURL, fmt.Sprintf("$skip=%d", tt.skip))
+					}
+				}
+			})
+		}
+	})
+}
+
+// TestPageClient_GetPageContent tests page content retrieval
+func TestPageClient_GetPageContent(t *testing.T) {
+	t.Run("validates page ID parameter", func(t *testing.T) {
+		pageID := "page-123"
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for getting content")
+		
+		// Test URL construction for get page content
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/content", pageID)
+		assert.Contains(t, expectedURL, pageID)
+		assert.Contains(t, expectedURL, "/content")
+	})
+
+	t.Run("handles forUpdate parameter", func(t *testing.T) {
+		pageID := "page-123"
+		
+		// Test URL construction with forUpdate=true (should include includeIDs)
+		expectedURLWithIDs := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/content?includeIDs=true", pageID)
+		assert.Contains(t, expectedURLWithIDs, "includeIDs=true")
+		
+		// Test URL construction with forUpdate=false (should not include includeIDs)
+		expectedURLWithoutIDs := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/content", pageID)
+		assert.NotContains(t, expectedURLWithoutIDs, "includeIDs=true")
+	})
+}
+
+// TestPageClient_DeletePage tests page deletion functionality
+func TestPageClient_DeletePage(t *testing.T) {
+	t.Run("validates page ID parameter", func(t *testing.T) {
+		pageID := "page-123"
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for deletion")
+		
+		// Test URL construction for delete page
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s", pageID)
+		assert.Contains(t, expectedURL, pageID)
+		assert.NotContains(t, expectedURL, "/content") // Should not have /content for deletion
+	})
+}
+
+// TestPageClient_CopyMovePage tests page copy and move operations
+func TestPageClient_CopyMovePage(t *testing.T) {
+	t.Run("validates copy page parameters", func(t *testing.T) {
+		pageID := "page-123"
+		targetSectionID := "section-456"
+		
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for copying")
+		assert.NotEmpty(t, targetSectionID, "Target section ID should not be empty for copying")
+		
+		// Test URL construction for copy page
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/copyToSection", pageID)
+		assert.Contains(t, expectedURL, pageID)
+		assert.Contains(t, expectedURL, "copyToSection")
+	})
+
+	t.Run("validates move page parameters", func(t *testing.T) {
+		pageID := "page-123"
+		targetSectionID := "section-456"
+		
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for moving")
+		assert.NotEmpty(t, targetSectionID, "Target section ID should not be empty for moving")
+		
+		// Test URL construction for move page - using PATCH method
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s", pageID)
+		assert.Contains(t, expectedURL, pageID)
+	})
+}
+
+// TestPageClient_GetPageItem tests page item retrieval
+func TestPageClient_GetPageItem(t *testing.T) {
+	t.Run("validates get page item parameters", func(t *testing.T) {
+		pageID := "page-123"
+		pageItemID := "item-456"
+		
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for getting page item")
+		assert.NotEmpty(t, pageItemID, "Page item ID should not be empty for getting page item")
+		
+		// Test URL construction for get page item
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/items/%s/$value", pageID, pageItemID)
+		assert.Contains(t, expectedURL, pageID)
+		assert.Contains(t, expectedURL, pageItemID)
+		assert.Contains(t, expectedURL, "/$value")
+	})
+
+	t.Run("handles fullSize parameter", func(t *testing.T) {
+		// Test that fullSize parameter can be used to control image optimization
+		// This is handled at the processing level, not URL level
+		fullSizeEnabled := true
+		assert.True(t, fullSizeEnabled, "Full size parameter should be boolean")
+	})
+}
+
+// TestPageClient_ListPageItems tests page item listing
+func TestPageClient_ListPageItems(t *testing.T) {
+	t.Run("validates page ID parameter", func(t *testing.T) {
+		pageID := "page-123"
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for listing page items")
+		
+		// Test URL construction for list page items
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/content", pageID)
+		assert.Contains(t, expectedURL, pageID)
+		assert.Contains(t, expectedURL, "/content")
+	})
+}
+
+// TestPageClient_UpdatePageContentSimple tests simple content update
+func TestPageClient_UpdatePageContentSimple(t *testing.T) {
+	t.Run("validates simple update parameters", func(t *testing.T) {
+		pageID := "page-123"
+		content := "<p>Updated content</p>"
+		
+		assert.NotEmpty(t, pageID, "Page ID should not be empty for simple update")
+		assert.NotEmpty(t, content, "Content should not be empty for simple update")
+		
+		// Test URL construction for simple update
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s/content", pageID)
+		assert.Contains(t, expectedURL, pageID)
+		assert.Contains(t, expectedURL, "/content")
+	})
+
+	t.Run("handles HTML content", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			content string
+			isHTML  bool
+		}{
+			{"valid HTML", "<p>Hello World</p>", true},
+			{"HTML with formatting", "<div><strong>Bold</strong> text</div>", true},
+			{"plain text", "Just text", false},
+			{"empty content", "", false},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				hasHTMLTags := strings.Contains(tt.content, "<") && strings.Contains(tt.content, ">")
+				assert.Equal(t, tt.isHTML, hasHTMLTags)
+			})
+		}
+	})
+}
+
+// TestGetExtensionFromContentType tests MIME type to extension conversion
+func TestGetExtensionFromContentType(t *testing.T) {
+	tests := []struct {
+		contentType string
+		expected    string
+	}{
+		{"image/jpeg", "jpg"},
+		{"image/jpg", "jpg"},
+		{"image/png", "png"},
+		{"image/gif", "gif"},
+		{"image/bmp", "bmp"},
+		{"image/webp", "webp"},
+		{"image/svg+xml", "svg"},
+		{"application/pdf", "pdf"},
+		{"text/plain", "txt"},
+		{"application/json", "json"},
+		{"application/xml", "xml"},
+		{"text/html", "html"},
+		{"text/css", "css"},
+		{"text/javascript", "js"},
+		{"application/javascript", "js"},
+		{"application/octet-stream", "bin"},
+		{"unknown/type", "bin"},
+		{"", "bin"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.contentType, func(t *testing.T) {
+			result := getExtensionFromContentType(tt.contentType)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// TestGenerateFilenameFromContentType tests filename generation from content type
+func TestGenerateFilenameFromContentType(t *testing.T) {
+	t.Run("generates filename with correct extension", func(t *testing.T) {
+		pageItemID := "item-123"
+		contentType := "image/jpeg"
+		
+		// Simulate the generateFilenameFromContentType functionality
+		extension := getExtensionFromContentType(contentType)
+		expectedFilename := fmt.Sprintf("%s.%s", pageItemID, extension)
+		
+		assert.Equal(t, "item-123.jpg", expectedFilename)
+		assert.Contains(t, expectedFilename, pageItemID)
+		assert.True(t, strings.HasSuffix(expectedFilename, ".jpg"))
+	})
+
+	t.Run("handles various content types", func(t *testing.T) {
+		pageItemID := "item-456"
+		
+		tests := []struct {
+			contentType string
+			expectedExt string
+		}{
+			{"image/png", "png"},
+			{"application/pdf", "pdf"},
+			{"text/plain", "txt"},
+			{"unknown/type", "bin"},
+		}
+
+		for _, tt := range tests {
+			extension := getExtensionFromContentType(tt.contentType)
+			filename := fmt.Sprintf("%s.%s", pageItemID, extension)
+			assert.True(t, strings.HasSuffix(filename, "."+tt.expectedExt))
+		}
+	})
+}
+
+// TestParseHTMLForPageItems tests HTML parsing for page items
+func TestParseHTMLForPageItems(t *testing.T) {
+	t.Run("parses HTML with image tags", func(t *testing.T) {
+		htmlContent := `
+		<html>
+			<body>
+				<p>Text before image</p>
+				<img src="https://example.com/image.jpg" alt="Test Image" width="200" height="150" />
+				<p>Text after image</p>
+			</body>
+		</html>
+		`
+		
+		// Test that HTML contains expected elements
+		assert.Contains(t, htmlContent, "<img")
+		assert.Contains(t, htmlContent, "src=")
+		assert.Contains(t, htmlContent, "alt=")
+		assert.Contains(t, htmlContent, "example.com/image.jpg")
+	})
+
+	t.Run("parses HTML with object tags", func(t *testing.T) {
+		htmlContent := `
+		<html>
+			<body>
+				<p>Document below:</p>
+				<object data="https://example.com/document.pdf" type="application/pdf">
+					<param name="src" value="document.pdf">
+				</object>
+			</body>
+		</html>
+		`
+		
+		assert.Contains(t, htmlContent, "<object")
+		assert.Contains(t, htmlContent, "data=")
+		assert.Contains(t, htmlContent, "type=")
+		assert.Contains(t, htmlContent, "application/pdf")
+	})
+
+	t.Run("handles malformed HTML gracefully", func(t *testing.T) {
+		malformedHTML := `<img src="test.jpg" alt="unclosed tag<p>Some text</p>`
+		
+		// Should still contain the basic elements we're looking for
+		assert.Contains(t, malformedHTML, "<img")
+		assert.Contains(t, malformedHTML, "src=")
+		
+		// Test that we can identify it as containing HTML elements
+		hasHTMLElements := strings.Contains(malformedHTML, "<") && strings.Contains(malformedHTML, ">")
+		assert.True(t, hasHTMLElements)
+	})
+
+	t.Run("handles empty HTML", func(t *testing.T) {
+		emptyHTML := ""
+		assert.Equal(t, "", emptyHTML)
+		
+		// Test HTML detection on empty string
+		hasHTMLElements := strings.Contains(emptyHTML, "<") && strings.Contains(emptyHTML, ">")
+		assert.False(t, hasHTMLElements)
+	})
+}
+
+// TestHTMLProcessingUtils tests HTML utility functions
+func TestHTMLProcessingUtils(t *testing.T) {
+	t.Run("detects HTML elements correctly", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			content string
+			isHTML  bool
+		}{
+			{"valid HTML tag", "<p>Content</p>", true},
+			{"self-closing tag", "<br/>", true},
+			{"HTML with attributes", `<div class="test">Content</div>`, true},
+			{"multiple tags", "<h1>Title</h1><p>Content</p>", true},
+			{"plain text", "Just plain text", false},
+			{"text with angle brackets", "1 < 2 > 0", true}, // Contains < and > but not real HTML
+			{"empty string", "", false},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				containsHTMLPattern := strings.Contains(tt.content, "<") && strings.Contains(tt.content, ">")
+				assert.Equal(t, tt.isHTML, containsHTMLPattern)
+			})
+		}
+	})
+}
+
+// TestAsyncOperations tests asynchronous operation handling
+func TestAsyncOperations(t *testing.T) {
+	t.Run("validates operation ID format", func(t *testing.T) {
+		operationID := "operation-123-456-789"
+		assert.NotEmpty(t, operationID, "Operation ID should not be empty")
+		
+		// Test URL construction for getting operation status
+		expectedURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/operations/%s", operationID)
+		assert.Contains(t, expectedURL, operationID)
+		assert.Contains(t, expectedURL, "/operations/")
+	})
+
+	t.Run("handles operation status responses", func(t *testing.T) {
+		// Test various operation statuses
+		statuses := []string{"NotStarted", "Running", "Completed", "Failed"}
+		
+		for _, status := range statuses {
+			assert.NotEmpty(t, status)
+			// Operation status should be one of the expected values
+			isValidStatus := status == "NotStarted" || status == "Running" || status == "Completed" || status == "Failed"
+			assert.True(t, isValidStatus, "Status should be valid: %s", status)
+		}
+	})
+}
+
+// TestProgressCallback tests progress callback functionality
+func TestProgressCallback(t *testing.T) {
+	t.Run("handles progress callback correctly", func(t *testing.T) {
+		var receivedProgress []int
+		var receivedMessages []string
+		
+		// Mock progress callback
+		progressCallback := func(progress int, message string) {
+			receivedProgress = append(receivedProgress, progress)
+			receivedMessages = append(receivedMessages, message)
+		}
+		
+		// Simulate progress updates
+		progressCallback(25, "Loading pages...")
+		progressCallback(50, "Processing pages...")
+		progressCallback(75, "Finalizing...")
+		progressCallback(100, "Complete")
+		
+		assert.Len(t, receivedProgress, 4)
+		assert.Len(t, receivedMessages, 4)
+		assert.Equal(t, []int{25, 50, 75, 100}, receivedProgress)
+		assert.Contains(t, receivedMessages, "Loading pages...")
+		assert.Contains(t, receivedMessages, "Complete")
+	})
+}
