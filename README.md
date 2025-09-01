@@ -27,12 +27,9 @@ This server enables AI assistants and other MCP clients to read, create, update,
 {
   "authorization": {
     "enabled": true,
-    "default_mode": "read",
-    "default_notebook_mode": "none",
-    "tool_permissions": {
-      "auth_tools": "full",
-      "page_read": "read",
-      "page_write": "none"
+    "default_notebook_permissions": "none",
+    "notebook_permissions": {
+      "AI Test Notebook": "write"
     }
   }
 }
@@ -47,11 +44,11 @@ By using this software, you acknowledge that you understand these risks and have
 - **Multi-Format Support**: Automatic conversion between Markdown, HTML, and plain text with proper formatting preservation
 - **Configurable Templates**: Customizable date formats and target notebook/page configurations
 
-### 🔐 Enterprise Security & Authorization
-- **Granular Authorization System**: Comprehensive permission-based access control with hierarchical inheritance
+### 🔐 AI Safety & Authorization
+- **Notebook-Scoped Authorization**: Simple permission system to prevent AI agents from accessing wrong notebooks
 - **OAuth 2.0 PKCE Flow**: Secure authentication using Proof Key for Code Exchange with non-blocking startup
-- **Default-Deny Security Model**: Secure defaults with explicit permission grants following principle of least privilege
-- **Audit Logging**: Complete authorization decision logging with security monitoring capabilities
+- **Safety-First Design**: Prevent AI agents from accidentally modifying sensitive notebooks
+- **Audit Logging**: Authorization decision logging for AI agent safety monitoring
 - **MCP Authentication Tools**: Built-in tools for authentication management (`getAuthStatus`, `initiateAuth`, `refreshToken`, `clearAuth`)
 
 ### 🚀 High-Performance Architecture
@@ -188,8 +185,7 @@ The OneNote MCP Server supports two different modes for client communication:
 | `QUICKNOTE_DATE_FORMAT` | Go time format for timestamps | No | Default format |
 | **Authorization Configuration** | | | |
 | `AUTHORIZATION_ENABLED` | Enable authorization system | No | false |
-| `AUTHORIZATION_DEFAULT_MODE` | Global default permission | No | read |
-| `AUTHORIZATION_CONFIG` | Path to authorization JSON config | No | - |
+| `AUTHORIZATION_DEFAULT_NOTEBOOK_PERMISSIONS` | Default notebook permission level | No | read |
 | **MCP Authentication (HTTP mode)** | | | |
 | `MCP_AUTH_ENABLED` | Enable bearer token auth for HTTP mode | No | false |
 | `MCP_BEARER_TOKEN` | Bearer token for HTTP authentication | No | - |
@@ -218,27 +214,12 @@ Create `configs/config.json` with full feature support:
   
   "authorization": {
     "enabled": true,
-    "default_mode": "read",
-    "default_tool_mode": "read", 
-    "default_notebook_mode": "none",
-    "default_section_mode": "read",
-    "default_page_mode": "none",
-    "tool_permissions": {
-      "auth_tools": "full",
-      "page_write": "write",
-      "notebook_management": "read"
-    },
+    "default_notebook_permissions": "read",
     "notebook_permissions": {
       "Personal Notes": "write",
-      "Work Notes": "read" 
-    },
-    "section_permissions": {
-      "Meeting Notes": "write",
-      "Projects": "read"
-    },
-    "page_permissions": {
-      "Daily Journal": "write",
-      "Quick Notes": "write"
+      "Work Notes": "read",
+      "AI Sandbox": "write",
+      "Private Thoughts": "none"
     }
   },
   
@@ -249,6 +230,7 @@ Create `configs/config.json` with full feature support:
   
   "log_level": "INFO",
   "log_format": "text",
+  "log_file": "mcp-server.log",
   "content_log_level": "INFO"
 }
 ```
@@ -683,22 +665,36 @@ MCP-OneNote-golang/
 │   └── PageResources.go            # Page-related MCP resources
 ├── internal/                       # Domain-specific modules
 │   ├── auth/                       # OAuth2 authentication and token management
-│   │   └── auth.go                 # PKCE flow, token refresh, secure storage
-│   ├── authorization/              # Granular permission system
-│   │   └── authorization.go        # Permission evaluation and enforcement
+│   │   ├── auth.go                 # PKCE flow, token refresh, secure storage
+│   │   ├── manager.go              # Authentication manager
+│   │   └── middleware.go           # Authentication middleware
+│   ├── authorization/              # Simplified notebook-scoped permission system
+│   │   ├── authorization.go        # Permission evaluation and enforcement
+│   │   ├── context.go              # Authorization context management
+│   │   ├── wrapper.go              # Tool authorization wrapper
+│   │   └── adapters.go             # Configuration adapters
 │   ├── config/                     # Multi-source configuration management
 │   │   └── config.go               # Environment vars, JSON files, defaults
 │   ├── graph/                      # Microsoft Graph SDK integration
-│   │   └── client.go               # HTTP client and authentication
+│   │   ├── client.go               # HTTP client and authentication
+│   │   ├── http.go                 # HTTP utilities
+│   │   └── utils.go                # Graph API utilities
+│   ├── http/                       # Shared HTTP utilities
+│   │   └── helpers.go              # HTTP helper functions
 │   ├── notebooks/                  # Notebook domain operations
 │   │   └── notebooks.go            # Notebook CRUD and management
 │   ├── pages/                      # Page domain operations
 │   │   └── pages.go                # Page content, items, and formatting
 │   ├── sections/                   # Section domain operations
-│   │   └── sections.go             # Section and section group operations
+│   │   ├── sections.go             # Section and section group operations
+│   │   └── groups.go               # Section group operations
+│   ├── resources/                  # MCP resource descriptions
+│   │   └── descriptions.go         # Resource documentation
 │   ├── utils/                      # Shared utilities
 │   │   ├── validation.go           # Input validation and sanitization
-│   │   └── image.go                # Image processing and optimization
+│   │   ├── image.go                # Image processing and optimization
+│   │   ├── progress.go             # Progress notification utilities
+│   │   └── tool_helpers.go         # MCP tool helper functions
 │   └── logging/                    # Structured logging system
 │       └── logger.go               # Configurable logging with levels
 ├── configs/                        # Configuration files and examples
@@ -723,7 +719,7 @@ MCP-OneNote-golang/
 
 **Client Composition Pattern**: Core `graph.Client` composed into specialized domain clients (`NotebookClient`, `PageClient`, `SectionClient`) sharing HTTP/auth functionality.
 
-**Comprehensive Authorization**: Hierarchical permission system with tool-level, resource-level, and default permissions supporting fine-grained access control.
+**Notebook-Scoped Authorization**: Simplified permission system focused on notebook-level access control for AI agent safety.
 
 **Multi-Layer Caching**: Thread-safe caching system with page metadata, search results, and notebook lookup caches providing 5-minute expiration and automatic invalidation.
 
