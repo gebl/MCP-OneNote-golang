@@ -2,9 +2,38 @@
 
 **Created by Gabriel Lawrence**
 
-A Go-based Model Context Protocol (MCP) server that provides seamless integration with Microsoft OneNote via the Microsoft Graph API. This project was created to experiment with AI-assisted development using Claude, GitHub Copilot, and Cursor, while learning about MCP server architecture and capabilities.
+## 🚀 Why This Project Exists
 
-This server enables AI assistants and other MCP clients to read, create, update, and manage OneNote notebooks, sections, pages, and embedded content with enterprise-grade features including comprehensive authorization, caching, and intelligent content processing.
+For the longest time, I've been dumping information into OneNote with the vision that **eventually AI will be able to organize and synthesize it into useful, searchable content**. This project represents the realization of that vision - giving AI direct access to OneNote through the **Model Context Protocol (MCP)** so it can finally help organize, search, and make sense of years of accumulated information.
+
+### 🎯 Three Goals in One Project
+
+1. **Solve a Real Problem**: Enable AI to organize and work with my OneNote knowledge base
+2. **Learn MCP**: Experiment with the Model Context Protocol and understand how AI agents can interact with external systems
+3. **Test AI-Assisted Development**: Try "vibe coding" with Claude, GitHub Copilot, and Cursor to see what AI can actually build
+
+### 🤖 AI Coding Experience: The Good and The Challenging
+
+Overall, I've been **pretty impressed with what AI can accomplish**. This entire codebase was primarily built through AI assistance, and the results exceeded expectations in many areas:
+
+**What AI Excelled At:**
+- Rapid prototyping and initial implementation
+- Comprehensive test coverage generation
+- Documentation writing and maintenance
+- Understanding complex APIs (Microsoft Graph)
+- Code organization and modular architecture
+
+**Where Humans Were Still Essential:**
+- **Security vulnerabilities**: AI frequently introduced IDOR (Insecure Direct Object Reference) bugs
+- **Complex debugging**: Some bugs required human intuition to understand root causes
+- **Authorization design**: AI struggled with secure permission models and kept over-engineering solutions
+- **Performance optimization**: Understanding real-world usage patterns and bottlenecks
+
+This project serves as both a **practical tool** for AI-powered knowledge management and a **learning playground** for understanding the current capabilities and limitations of AI-assisted development.
+
+---
+
+A Go-based Model Context Protocol (MCP) server that provides seamless integration with Microsoft OneNote via the Microsoft Graph API. This server enables AI assistants and other MCP clients to read, create, update, and manage OneNote notebooks, sections, pages, and embedded content with AI safety features including notebook-scoped authorization, caching, and intelligent content processing.
 
 ## ⚠️ Important Safety Notice
 
