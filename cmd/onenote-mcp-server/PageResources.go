@@ -82,6 +82,17 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 			"section_id_or_name", sectionIdOrName,
 			"request_uri", request.Params.URI)
 
+		// For authorization, we need to verify the section belongs to an authorized notebook
+		// This is complex since we'd need to resolve section->notebook mapping
+		// For now, if authorization is enabled, direct users to use notebook-specific paths
+		if authConfig != nil && authConfig.Enabled {
+			logging.MainLogger.Info("Direct section page access blocked due to authorization",
+				"resource_uri", request.Params.URI,
+				"section_id_or_name", sectionIdOrName,
+				"reason", "cannot_verify_notebook_ownership")
+			return nil, fmt.Errorf("access denied: direct section page access is not available when authorization is enabled. Use notebook-specific sections and pages instead")
+		}
+
 		// Call the pages resource handler with progress support
 		jsonData, err := getPagesForSectionResource(ctx, s, graphClient, sectionIdOrName)
 		if err != nil {
@@ -137,6 +148,17 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 		logging.MainLogger.Debug("Extracted page ID from page content URI",
 			"page_id", pageID,
 			"request_uri", request.Params.URI)
+
+		// For authorization, we need to verify the page belongs to an authorized notebook
+		// This is complex since we'd need to resolve page->section->notebook mapping
+		// For now, if authorization is enabled, direct users to use notebook-specific paths
+		if authConfig != nil && authConfig.Enabled {
+			logging.MainLogger.Info("Direct page content access blocked due to authorization",
+				"resource_uri", request.Params.URI,
+				"page_id", pageID,
+				"reason", "cannot_verify_notebook_ownership")
+			return nil, fmt.Errorf("access denied: direct page content access is not available when authorization is enabled. Use notebook-specific sections and pages instead")
+		}
 
 		// Call the page content resource handler with progress support
 		htmlContent, err := getPageContentForResource(ctx, s, graphClient, pageID)

@@ -120,6 +120,21 @@ func (ac *AuthorizationConfig) SetCurrentNotebook(notebookName string) error {
 	return nil
 }
 
+
+// CheckNotebookPermission validates that a notebook has at least read permission
+func (ac *AuthorizationConfig) CheckNotebookPermission(notebookName string) error {
+	if !ac.Enabled {
+		return nil // Authorization disabled
+	}
+
+	permission := ac.GetNotebookPermission(notebookName)
+	if permission == PermissionNone {
+		return fmt.Errorf("access denied: notebook '%s' is not accessible", notebookName)
+	}
+
+	return nil
+}
+
 // GetCurrentNotebook returns the currently selected notebook name
 func (ac *AuthorizationConfig) GetCurrentNotebook() string {
 	return ac.currentNotebook

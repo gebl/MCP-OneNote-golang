@@ -80,6 +80,20 @@ func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cf
 			"notebook_name", notebookName,
 			"request_uri", request.Params.URI)
 
+		// Check authorization for this specific notebook
+		if authConfig != nil && authConfig.Enabled {
+			if err := authConfig.CheckNotebookPermission(notebookName); err != nil {
+				logging.MainLogger.Error("Authorization denied for notebook sections resource",
+					"notebook", notebookName,
+					"request_uri", request.Params.URI,
+					"error", err)
+				return nil, err
+			}
+			logging.MainLogger.Debug("Authorization granted for notebook sections resource",
+				"notebook", notebookName,
+				"request_uri", request.Params.URI)
+		}
+
 		// Call the same logic as getNotebookSections tool with progress support
 		jsonData, err := getNotebookSectionsForResource(ctx, s, graphClient, notebookName, cfg)
 		if err != nil {
@@ -123,8 +137,16 @@ func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cf
 			"request_uri", request.Params.URI,
 			"handler_type", "global_sections")
 
+		// Check if authorization is enabled - global sections can't be properly filtered by notebook
+		if authConfig != nil && authConfig.Enabled {
+			logging.MainLogger.Info("Global sections resource blocked due to authorization",
+				"resource_uri", "onenote://sections",
+				"reason", "cannot_filter_by_notebook")
+			return nil, fmt.Errorf("access denied: global sections resource is not available when authorization is enabled. Use notebook-specific sections instead: onenote://notebooks/{name}/sections")
+		}
+
 		// Call the global sections API with progress support
-		jsonData, err := getAllSectionsForResource(ctx, s, graphClient, cfg)
+		jsonData, err := getAllSectionsForResource(ctx, s, graphClient, cfg, authConfig)
 		if err != nil {
 			logging.MainLogger.Error("Failed to get all sections for resource",
 				"error", err)
@@ -319,7 +341,7 @@ func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, gr
 
 // getAllSectionsForResource fetches all sections across all notebooks using the global sections endpoint
 // This function calls the Microsoft Graph API equivalent of https://graph.microsoft.com/v1.0/me/onenote/sections?$select=displayName,id
-func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) ([]byte, error) {
+func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig) ([]byte, error) {
 	logging.MainLogger.Debug("getAllSectionsForResource called")
 
 	// Extract progress token from request metadata (MCP spec for resources)

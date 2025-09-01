@@ -84,6 +84,14 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 			"count", len(notebooks),
 			"resource_uri", "onenote://notebooks")
 
+		// Apply authorization filtering - only return notebooks with read/write permission
+		if authConfig != nil && authConfig.Enabled {
+			notebooks = authConfig.FilterNotebooks(notebooks)
+			logging.MainLogger.Debug("Applied authorization filtering to notebooks",
+				"final_count", len(notebooks),
+				"resource_uri", "onenote://notebooks")
+		}
+
 		// Convert to JSON
 		logging.MainLogger.Debug("Marshaling notebooks data to JSON")
 		jsonData, err := json.Marshal(notebooks)
@@ -109,7 +117,7 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 		}, nil
 	}
 	
-	s.AddResource(notebooksResource, server.ResourceHandlerFunc(authorization.AuthorizedResourceHandler("onenote://notebooks", notebooksHandler, authConfig, cache)))
+	s.AddResource(notebooksResource, notebooksHandler)
 	logging.MainLogger.Debug("Registered notebooks resource successfully",
 		"resource_uri", "onenote://notebooks")
 
@@ -142,6 +150,20 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 		logging.MainLogger.Debug("Extracted notebook name from URI",
 			"notebook_name", notebookName,
 			"request_uri", request.Params.URI)
+
+		// Check authorization for this specific notebook
+		if authConfig != nil && authConfig.Enabled {
+			if err := authConfig.CheckNotebookPermission(notebookName); err != nil {
+				logging.MainLogger.Error("Authorization denied for notebook resource",
+					"notebook", notebookName,
+					"request_uri", request.Params.URI,
+					"error", err)
+				return nil, err
+			}
+			logging.MainLogger.Debug("Authorization granted for notebook resource",
+				"notebook", notebookName,
+				"request_uri", request.Params.URI)
+		}
 
 		// Create specialized client for notebooks
 		notebookClient := notebooks.NewNotebookClient(graphClient)
@@ -191,7 +213,7 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 		}, nil
 	}
 	
-	s.AddResourceTemplate(notebookByNameTemplate, server.ResourceTemplateHandlerFunc(authorization.AuthorizedResourceHandler("onenote://notebooks/{name}", notebookByNameHandler, authConfig, cache)))
+	s.AddResourceTemplate(notebookByNameTemplate, notebookByNameHandler)
 	logging.MainLogger.Debug("Registered notebook by name resource template successfully",
 		"template_pattern", "onenote://notebooks/{name}")
 
