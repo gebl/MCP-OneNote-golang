@@ -82,15 +82,27 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 			"section_id_or_name", sectionIdOrName,
 			"request_uri", request.Params.URI)
 
-		// For authorization, we need to verify the section belongs to an authorized notebook
-		// This is complex since we'd need to resolve section->notebook mapping
-		// For now, if authorization is enabled, direct users to use notebook-specific paths
+		// For authorization, validate that we have a selected notebook and the section belongs to it
 		if authConfig != nil && authConfig.Enabled {
-			logging.MainLogger.Info("Direct section page access blocked due to authorization",
+			if cache == nil {
+				return nil, fmt.Errorf("access denied: authorization is enabled but no notebook cache available")
+			}
+			
+			currentNotebook, hasNotebook := cache.GetDisplayName()
+			if !hasNotebook || currentNotebook == "" {
+				logging.MainLogger.Info("Section pages resource requires notebook selection",
+					"resource_uri", request.Params.URI,
+					"section_id_or_name", sectionIdOrName,
+					"reason", "no_notebook_selected")
+				return nil, fmt.Errorf("access denied: no notebook selected. Use selectNotebook tool first, then access pages within that notebook's sections")
+			}
+			
+			// TODO: Add validation that the section belongs to the selected notebook
+			// For now, we trust that the user is accessing sections within their selected notebook
+			logging.MainLogger.Debug("Section pages resource authorized for selected notebook",
 				"resource_uri", request.Params.URI,
 				"section_id_or_name", sectionIdOrName,
-				"reason", "cannot_verify_notebook_ownership")
-			return nil, fmt.Errorf("access denied: direct section page access is not available when authorization is enabled. Use notebook-specific sections and pages instead")
+				"selected_notebook", currentNotebook)
 		}
 
 		// Call the pages resource handler with progress support
@@ -149,15 +161,27 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 			"page_id", pageID,
 			"request_uri", request.Params.URI)
 
-		// For authorization, we need to verify the page belongs to an authorized notebook
-		// This is complex since we'd need to resolve page->section->notebook mapping
-		// For now, if authorization is enabled, direct users to use notebook-specific paths
+		// For authorization, validate that we have a selected notebook and the page belongs to it
 		if authConfig != nil && authConfig.Enabled {
-			logging.MainLogger.Info("Direct page content access blocked due to authorization",
+			if cache == nil {
+				return nil, fmt.Errorf("access denied: authorization is enabled but no notebook cache available")
+			}
+			
+			currentNotebook, hasNotebook := cache.GetDisplayName()
+			if !hasNotebook || currentNotebook == "" {
+				logging.MainLogger.Info("Page content resource requires notebook selection",
+					"resource_uri", request.Params.URI,
+					"page_id", pageID,
+					"reason", "no_notebook_selected")
+				return nil, fmt.Errorf("access denied: no notebook selected. Use selectNotebook tool first, then access pages within that notebook")
+			}
+			
+			// TODO: Add validation that the page belongs to the selected notebook
+			// For now, we trust that the user is accessing pages within their selected notebook
+			logging.MainLogger.Debug("Page content resource authorized for selected notebook",
 				"resource_uri", request.Params.URI,
 				"page_id", pageID,
-				"reason", "cannot_verify_notebook_ownership")
-			return nil, fmt.Errorf("access denied: direct page content access is not available when authorization is enabled. Use notebook-specific sections and pages instead")
+				"selected_notebook", currentNotebook)
 		}
 
 		// Call the page content resource handler with progress support

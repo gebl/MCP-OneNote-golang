@@ -137,16 +137,37 @@ func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cf
 			"request_uri", request.Params.URI,
 			"handler_type", "global_sections")
 
-		// Check if authorization is enabled - global sections can't be properly filtered by notebook
+		// Check if authorization is enabled - global sections requires notebook selection
 		if authConfig != nil && authConfig.Enabled {
-			logging.MainLogger.Info("Global sections resource blocked due to authorization",
+			if cache == nil {
+				return nil, fmt.Errorf("access denied: authorization is enabled but no notebook cache available")
+			}
+			
+			currentNotebook, hasNotebook := cache.GetDisplayName()
+			if !hasNotebook || currentNotebook == "" {
+				logging.MainLogger.Info("Global sections resource requires notebook selection",
+					"resource_uri", "onenote://sections",
+					"reason", "no_notebook_selected")
+				return nil, fmt.Errorf("access denied: no notebook selected. Use selectNotebook tool first, then access sections within that notebook")
+			}
+			
+			logging.MainLogger.Debug("Global sections resource authorized for selected notebook",
 				"resource_uri", "onenote://sections",
-				"reason", "cannot_filter_by_notebook")
-			return nil, fmt.Errorf("access denied: global sections resource is not available when authorization is enabled. Use notebook-specific sections instead: onenote://notebooks/{name}/sections")
+				"selected_notebook", currentNotebook)
 		}
 
-		// Call the global sections API with progress support
-		jsonData, err := getAllSectionsForResource(ctx, s, graphClient, cfg, authConfig)
+		// If authorization is enabled, get sections from selected notebook instead of global
+		var jsonData []byte
+		var err error
+		if authConfig != nil && authConfig.Enabled && cache != nil {
+			currentNotebook, _ := cache.GetDisplayName()
+			logging.MainLogger.Debug("Getting sections for selected notebook instead of global",
+				"selected_notebook", currentNotebook)
+			jsonData, err = getNotebookSectionsForResource(ctx, s, graphClient, currentNotebook, cfg)
+		} else {
+			// Call the global sections API with progress support
+			jsonData, err = getAllSectionsForResource(ctx, s, graphClient, cfg, authConfig)
+		}
 		if err != nil {
 			logging.MainLogger.Error("Failed to get all sections for resource",
 				"error", err)
