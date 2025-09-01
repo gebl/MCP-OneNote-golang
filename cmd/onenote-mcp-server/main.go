@@ -72,6 +72,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
@@ -1142,7 +1143,13 @@ func main() {
 
 	// Register MCP Tools and Resources
 	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
-	registerResources(s, graphClient, cfg)
+	
+	// Create resource cache adapter for authorization
+	var resourceCacheAdapter authorization.NotebookCache
+	if cfg != nil && cfg.Authorization != nil && cfg.Authorization.Enabled {
+		resourceCacheAdapter = authorization.NewNotebookCacheAdapter(globalNotebookCache)
+	}
+	registerResources(s, graphClient, cfg, cfg.Authorization, resourceCacheAdapter)
 	
 	// Set API references in cache for authorization fallback
 	globalNotebookCache.SetAPIReferences(graphClient, s)

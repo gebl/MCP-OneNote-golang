@@ -16,6 +16,9 @@ import (
 // ToolHandler represents the signature of an MCP tool handler function
 type ToolHandler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
+// ResourceHandler represents the signature of an MCP resource handler function
+type ResourceHandler func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)
+
 // AuthorizedToolHandler wraps a tool handler with simplified authorization checks
 func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig) ToolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -63,6 +66,55 @@ func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *Aut
 			"resource_context", resourceContext.String())
 
 		// Authorization passed, execute the original handler
+		return handler(ctx, req)
+	}
+}
+
+// AuthorizedResourceHandler wraps a resource handler with simplified authorization checks
+func AuthorizedResourceHandler(resourceName string, handler ResourceHandler, authConfig *AuthorizationConfig, cache NotebookCache) ResourceHandler {
+	return func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		// Skip authorization if not enabled
+		if authConfig == nil || !authConfig.Enabled {
+			logging.AuthorizationLogger.Debug("Resource authorization wrapper bypassed",
+				"resource", resourceName,
+				"reason", "authorization_disabled")
+			return handler(ctx, req)
+		}
+
+		logging.AuthorizationLogger.Debug("Resource authorization wrapper invoked",
+			"resource", resourceName,
+			"resource_uri", req.Params.URI,
+			"authorization_enabled", authConfig.Enabled)
+
+		// For resources, we need to check if the current notebook allows read access
+		// Resources are inherently read-only operations
+		currentNotebook, hasNotebook := cache.GetDisplayName()
+		if !hasNotebook || currentNotebook == "" {
+			logging.AuthorizationLogger.Error("AUTHORIZATION DENIED: Resource access requires notebook selection",
+				"resource", resourceName,
+				"resource_uri", req.Params.URI,
+				"reason", "no_notebook_selected")
+			return nil, fmt.Errorf("access denied: no notebook selected. Use selectNotebook tool first")
+		}
+
+		// Check read permission for current notebook
+		permission := authConfig.GetNotebookPermission(currentNotebook)
+		if permission == PermissionNone {
+			logging.AuthorizationLogger.Error("AUTHORIZATION DENIED: Resource access blocked for notebook",
+				"resource", resourceName,
+				"resource_uri", req.Params.URI,
+				"notebook", currentNotebook,
+				"permission", permission)
+			return nil, fmt.Errorf("access denied: insufficient permissions for notebook '%s'", currentNotebook)
+		}
+
+		logging.AuthorizationLogger.Debug("Resource authorization passed",
+			"resource", resourceName,
+			"resource_uri", req.Params.URI,
+			"notebook", currentNotebook,
+			"permission", permission)
+
+		// Call the original handler
 		return handler(ctx, req)
 	}
 }

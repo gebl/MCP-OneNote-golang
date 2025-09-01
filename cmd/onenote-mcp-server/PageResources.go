@@ -40,6 +40,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
@@ -48,7 +49,7 @@ import (
 )
 
 // registerPageResources registers all page-related MCP resources
-func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) {
+func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting page resource registration process")
 
 	// Register pages by section ID or name resource template

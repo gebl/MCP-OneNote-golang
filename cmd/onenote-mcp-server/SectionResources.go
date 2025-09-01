@@ -38,6 +38,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
@@ -46,7 +47,7 @@ import (
 )
 
 // registerSectionResources registers all section-related MCP resources
-func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) {
+func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting section resource registration process")
 
 	// Register sections by notebook name resource template

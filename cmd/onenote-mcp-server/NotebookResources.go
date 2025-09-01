@@ -38,6 +38,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
@@ -45,7 +46,7 @@ import (
 )
 
 // registerNotebookResources registers all notebook-related MCP resources
-func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config) {
+func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting notebook resource registration process")
 
 	// Register notebooks resource - list all notebooks with full metadata
@@ -59,7 +60,7 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 		mcp.WithMIMEType("application/json"),
 	)
 
-	s.AddResource(notebooksResource, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	notebooksHandler := func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		logging.MainLogger.Debug("Resource handler invoked",
 			"resource_uri", "onenote://notebooks",
 			"request_uri", request.Params.URI,
@@ -106,7 +107,9 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 				Text:     string(jsonData),
 			},
 		}, nil
-	})
+	}
+	
+	s.AddResource(notebooksResource, server.ResourceHandlerFunc(authorization.AuthorizedResourceHandler("onenote://notebooks", notebooksHandler, authConfig, cache)))
 	logging.MainLogger.Debug("Registered notebooks resource successfully",
 		"resource_uri", "onenote://notebooks")
 
@@ -121,7 +124,7 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 		mcp.WithTemplateMIMEType("application/json"),
 	)
 
-	s.AddResourceTemplate(notebookByNameTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	notebookByNameHandler := func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		logging.MainLogger.Debug("Resource template handler invoked",
 			"template_pattern", "onenote://notebooks/{name}",
 			"request_uri", request.Params.URI,
@@ -186,7 +189,9 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 				Text:     string(jsonData),
 			},
 		}, nil
-	})
+	}
+	
+	s.AddResourceTemplate(notebookByNameTemplate, server.ResourceTemplateHandlerFunc(authorization.AuthorizedResourceHandler("onenote://notebooks/{name}", notebookByNameHandler, authConfig, cache)))
 	logging.MainLogger.Debug("Registered notebook by name resource template successfully",
 		"template_pattern", "onenote://notebooks/{name}")
 
