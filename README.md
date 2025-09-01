@@ -295,54 +295,85 @@ Each note automatically gets formatted with timestamp and proper HTML conversion
 
 ## 🔐 Authorization System
 
-The server includes a comprehensive authorization system providing fine-grained access control over all operations:
+The authorization system is designed as a **safety mechanism**, not a security feature. It prevents AI agents from accidentally accessing or modifying certain notebooks, acting as guardrails for autonomous AI operations.
 
-### Permission Modes
-- **`none`**: No access - operations are denied
-- **`read`**: Read-only access - view operations only  
-- **`write`**: Full read/write access - all operations allowed
-- **`full`**: Administrative access (for tool permissions only)
+### 🛡️ Safety vs Security Philosophy
 
-### Hierarchical Permission Structure
-1. **Tool-Level Permissions**: Control access to MCP tool categories (`auth_tools`, `notebook_management`, `page_write`, etc.)
-2. **Resource-Level Permissions**: Specific permissions for notebooks, sections, and pages by name
-3. **Default Permissions**: Fallback permissions for resource types
-4. **Global Default**: Ultimate fallback permission level
+**This is NOT a security feature** - it's a safety mechanism to prevent AI agents from going crazy and accessing the wrong notebooks. Real security comes from:
 
-### Security Features
-- **Default-Deny Model**: Secure defaults with explicit permission grants
-- **Principle of Least Privilege**: Minimum necessary permissions
-- **Audit Logging**: All authorization decisions logged with context
-- **OAuth Integration**: Works seamlessly with authentication flow
+- **Microsoft Graph API native security**: You're logged in as a specific user account with specific permissions
+- **OAuth 2.0 token scope**: API access limited to `Notes.ReadWrite` for your account
+- **Azure Active Directory**: Enterprise identity and access management
 
-### Example Configurations
+The authorization system simply provides **AI agent safety guardrails** to:
+- Prevent accidental access to sensitive notebooks when AI agents act autonomously
+- Allow you to designate "safe" notebooks for AI experimentation
+- Provide read-only access to reference materials while protecting active work
+- Give you peace of mind when letting AI agents operate independently
 
-**Restrictive Setup** (Default-deny):
+### 🎯 Design Evolution
+
+I tried several different versions of this authorization system:
+
+1. **Version 1**: Complex pattern matching with wildcards (`Work*`, `Archive/**`) and granular section/page permissions
+2. **Version 2**: Hierarchical permissions with tool-level, resource-level, and default permissions  
+3. **Version 3**: Simple notebook-scoped permissions (current)
+
+The earlier versions with granular section and page filtering had significant **performance impact** - every operation required multiple permission checks, pattern matching, and recursive filtering. The complexity wasn't worth it for a safety mechanism.
+
+**Current approach**: Focus security at the **notebook level** where it matters most. Once you trust an AI agent with a notebook, it has access to all sections and pages within it. This provides the right balance of safety and performance.
+
+### 📋 Permission Levels (Simplified)
+
+- **`none`**: Notebook not accessible/selectable by AI agents
+- **`read`**: Read-only access - prevents create/update/delete operations  
+- **`write`**: Full access including create/update/delete operations
+
+### 🔧 Configuration
+
+**Recommended Safety Setup**:
 ```json
 {
   "authorization": {
     "enabled": true,
-    "default_mode": "none",
-    "tool_permissions": {"auth_tools": "full", "page_read": "read"},
-    "notebook_permissions": {"Public Notes": "read"},
-    "page_permissions": {"Daily Journal": "write"}
+    "default_notebook_permissions": "read",
+    "notebook_permissions": {
+      "AI Sandbox": "write",           // Safe for AI experimentation  
+      "Personal Notes": "write",       // Trusted AI access
+      "Work Archive": "read",          // Reference only
+      "Private Thoughts": "none"       // Completely off-limits
+    }
   }
 }
 ```
 
-**QuickNote-Focused Setup**:
+**Conservative Setup** (Safest):
 ```json
 {
   "authorization": {
     "enabled": true,
-    "default_mode": "read",
-    "default_notebook_mode": "none",
-    "tool_permissions": {"auth_tools": "full", "page_write": "write"},
-    "notebook_permissions": {"Personal Notes": "write"},
-    "page_permissions": {"Daily Journal": "write"}
+    "default_notebook_permissions": "none",    // Block access to unlisted notebooks
+    "notebook_permissions": {
+      "AI Test Notebook": "write"              // Only one notebook allowed
+    }
   }
 }
 ```
+
+### 🚀 How It Works
+
+1. **`listNotebooks`** - Only shows notebooks with `read` or `write` permissions (filters out `none`)
+2. **`selectNotebook("Work Notebook")`** - Validates notebook has non-`none` permission  
+3. **All subsequent operations** inherit the selected notebook's permission level
+4. **Write operations blocked** on read-only notebooks (create/update/delete)
+5. **Cross-notebook access prevented** - all operations scoped to selected notebook
+
+### ⚠️ Important Notes
+
+- **Performance-focused**: No complex pattern matching or granular filtering  
+- **Notebook-scoped**: Once selected, AI has access to all content within that notebook
+- **Safety-first**: Designed to prevent accidents, not provide enterprise security
+- **Microsoft Graph dependency**: Real security comes from your Microsoft account permissions
 
 ## 🎯 Available MCP Tools & Resources
 
