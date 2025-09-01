@@ -710,3 +710,69 @@ func (c *SectionClient) GetSectionByID(sectionID string) (map[string]interface{}
 
 	return result, nil
 }
+
+// ResolveSectionNotebook resolves which notebook owns a section by its ID
+func (c *SectionClient) ResolveSectionNotebook(ctx context.Context, sectionID string) (notebookID string, notebookName string, err error) {
+	logging.SectionLogger.Debug("Resolving notebook ownership for section",
+		"section_id", sectionID)
+
+	// Sanitize and validate the sectionID to prevent injection attacks
+	sanitizedSectionID, err := c.Client.SanitizeOneNoteID(sectionID, "sectionID")
+	if err != nil {
+		return "", "", fmt.Errorf("invalid section ID: %v", err)
+	}
+
+	// Use Graph API to get section metadata including parent notebook
+	// We use $expand to get the parent notebook information in the same call
+	url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s?$expand=parentNotebook", sanitizedSectionID)
+	
+	response, err := c.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+	if err != nil {
+		logging.SectionLogger.Error("Failed to resolve section notebook via Graph API",
+			"section_id", sectionID,
+			"error", err.Error())
+		return "", "", fmt.Errorf("failed to resolve section notebook: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != 200 {
+		logging.SectionLogger.Error("Graph API returned error when resolving section notebook",
+			"section_id", sectionID,
+			"status_code", response.StatusCode)
+		return "", "", fmt.Errorf("Graph API error %d when resolving section notebook", response.StatusCode)
+	}
+
+	var sectionInfo struct {
+		ID             string `json:"id"`
+		DisplayName    string `json:"displayName"`
+		ParentNotebook *struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"displayName"`
+		} `json:"parentNotebook"`
+	}
+
+	if err := json.NewDecoder(response.Body).Decode(&sectionInfo); err != nil {
+		logging.SectionLogger.Error("Failed to decode section notebook resolution response",
+			"section_id", sectionID,
+			"error", err.Error())
+		return "", "", fmt.Errorf("failed to decode Graph API response: %w", err)
+	}
+
+	// Validate that we got the parent notebook information
+	if sectionInfo.ParentNotebook == nil {
+		logging.SectionLogger.Error("Section response missing parent notebook information",
+			"section_id", sectionID)
+		return "", "", fmt.Errorf("unable to determine parent notebook for section %s", sectionID)
+	}
+
+	notebookID = sectionInfo.ParentNotebook.ID
+	notebookName = sectionInfo.ParentNotebook.DisplayName
+
+	logging.SectionLogger.Debug("Successfully resolved section notebook ownership",
+		"section_id", sectionID,
+		"section_name", sectionInfo.DisplayName,
+		"notebook_id", notebookID,
+		"notebook_name", notebookName)
+
+	return notebookID, notebookName, nil
+}

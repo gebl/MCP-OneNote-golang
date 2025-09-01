@@ -549,7 +549,8 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 					}
 					
 					// Apply filtering
-					filteredSections := authConfig.FilterSections(sectionsForFiltering, notebookDisplayName)
+					// Note: Section filtering removed - all sections within selected notebook are now accessible
+					filteredSections := sectionsForFiltering
 					
 					// Convert back to SectionItem slice
 					var filteredCachedArray []SectionItem
@@ -653,7 +654,8 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			}
 			
 			// Apply filtering
-			filteredSections := authConfig.FilterSections(sectionsForFiltering, notebookDisplayName)
+			// Note: Section filtering removed - all sections within selected notebook are now accessible
+			filteredSections := sectionsForFiltering
 			
 			// Convert back to SectionItem slice
 			var filteredSectionItems []SectionItem

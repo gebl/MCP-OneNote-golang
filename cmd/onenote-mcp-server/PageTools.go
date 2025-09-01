@@ -27,6 +27,93 @@ import (
 )
 
 // registerPageTools registers all page-related MCP tools
+// verifySectionNotebookOwnership checks that a section belongs to the currently selected notebook
+func verifySectionNotebookOwnership(ctx context.Context, sectionID string, sectionClient *sections.SectionClient, notebookCache *NotebookCache, operationName string) error {
+	// SECURITY: Verify the section belongs to the currently selected notebook
+	currentNotebook, hasNotebook := notebookCache.GetDisplayName()
+	if !hasNotebook || currentNotebook == "" {
+		logging.ToolsLogger.Error("Operation requires notebook selection", 
+			"operation", operationName,
+			"section_id", sectionID)
+		return fmt.Errorf("no notebook selected. Use selectNotebook tool first")
+	}
+
+	// Resolve which notebook owns this section
+	resolvedNotebookID, resolvedNotebookName, err := sectionClient.ResolveSectionNotebook(ctx, sectionID)
+	if err != nil {
+		logging.ToolsLogger.Error("Operation failed to resolve section notebook ownership", 
+			"operation", operationName,
+			"section_id", sectionID, 
+			"error", err.Error(),
+			"security_action", "BLOCKING_UNVERIFIED_SECTION_ACCESS")
+		return fmt.Errorf("could not verify section ownership: %v", err)
+	}
+
+	// Check if the resolved notebook matches the currently selected notebook
+	if resolvedNotebookName != currentNotebook {
+		logging.ToolsLogger.Error("SECURITY VIOLATION: Section belongs to different notebook than selected",
+			"operation", operationName,
+			"section_id", sectionID,
+			"resolved_notebook", resolvedNotebookName,
+			"current_notebook", currentNotebook,
+			"security_action", "BLOCKING_CROSS_NOTEBOOK_SECTION_ACCESS")
+		return fmt.Errorf("access denied: section belongs to notebook '%s' but '%s' is selected", resolvedNotebookName, currentNotebook)
+	}
+
+	logging.ToolsLogger.Debug("Section notebook ownership verified",
+		"operation", operationName,
+		"section_id", sectionID,
+		"notebook", resolvedNotebookName,
+		"notebook_id", resolvedNotebookID)
+	
+	return nil
+}
+
+// verifyPageNotebookOwnership checks that a page belongs to the currently selected notebook
+func verifyPageNotebookOwnership(ctx context.Context, pageID string, pageClient *pages.PageClient, notebookCache *NotebookCache, operationName string) error {
+	// SECURITY: Verify the page belongs to the currently selected notebook
+	currentNotebook, hasNotebook := notebookCache.GetDisplayName()
+	if !hasNotebook || currentNotebook == "" {
+		logging.ToolsLogger.Error("Operation requires notebook selection", 
+			"operation", operationName,
+			"page_id", pageID)
+		return fmt.Errorf("no notebook selected. Use selectNotebook tool first")
+	}
+
+	// Resolve which notebook owns this page
+	resolvedNotebookID, resolvedNotebookName, resolvedSectionID, resolvedSectionName, err := pageClient.ResolvePageNotebook(ctx, pageID)
+	if err != nil {
+		logging.ToolsLogger.Error("Operation failed to resolve page notebook ownership", 
+			"operation", operationName,
+			"page_id", pageID, 
+			"error", err.Error(),
+			"security_action", "BLOCKING_UNVERIFIED_PAGE_ACCESS")
+		return fmt.Errorf("could not verify page ownership: %v", err)
+	}
+
+	// Check if the resolved notebook matches the currently selected notebook
+	if resolvedNotebookName != currentNotebook {
+		logging.ToolsLogger.Error("SECURITY VIOLATION: Page belongs to different notebook than selected",
+			"operation", operationName,
+			"page_id", pageID,
+			"resolved_notebook", resolvedNotebookName,
+			"current_notebook", currentNotebook,
+			"resolved_section", resolvedSectionName,
+			"security_action", "BLOCKING_CROSS_NOTEBOOK_PAGE_ACCESS")
+		return fmt.Errorf("access denied: page belongs to notebook '%s' but '%s' is selected", resolvedNotebookName, currentNotebook)
+	}
+
+	logging.ToolsLogger.Debug("Page notebook ownership verified",
+		"operation", operationName,
+		"page_id", pageID,
+		"notebook", resolvedNotebookName,
+		"section", resolvedSectionName,
+		"section_id", resolvedSectionID,
+		"notebook_id", resolvedNotebookID)
+	
+	return nil
+}
+
 func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// listPages: List all pages in a section
 	listPagesTool := mcp.NewTool(
@@ -44,6 +131,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			return mcp.NewToolResultError("sectionID is required"), nil
 		}
 		logging.ToolsLogger.Debug("listPages parameter", "sectionID", sectionID)
+
+		// SECURITY: Verify the section belongs to the currently selected notebook  
+		// We need to create a section client to resolve ownership
+		sectionClient := sections.NewSectionClient(graphClient)
+		if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "listPages"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		// Extract progress token early for use throughout the function
 		progressToken := utils.ExtractProgressToken(req)
@@ -85,11 +179,12 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 					if progressToken != "" {
 						sendProgressNotification(s, ctx, progressToken, 32, 100, "Resolving section name for authorization...")
 					}
-					sectionName, _ = cache.GetSectionNameWithProgress(ctx, sectionID, s, progressToken, graphClient)
+					// Note: Section name resolution simplified for authorization
+					sectionName, _ = cache.GetDisplayName()
 					notebookName, _ = cache.GetDisplayName()
 					}
 					
-					cachedPages = authConfig.FilterPages(cachedPages, sectionID, sectionName, notebookName)
+					// Note: Page filtering removed - all pages within selected notebook are now accessible
 					logging.ToolsLogger.Debug("Applied authorization filtering to cached pages",
 						"section_id", sectionID,
 						"section_name", sectionName,
@@ -180,11 +275,12 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			if progressToken != "" {
 				sendProgressNotification(s, ctx, progressToken, 82, 100, "Resolving section name for authorization...")
 			}
-			sectionName, _ = cache.GetSectionNameWithProgress(ctx, sectionID, s, progressToken, graphClient)
+			// Note: Section name resolution simplified for authorization  
+			sectionName, _ = cache.GetDisplayName()
 			notebookName, _ = cache.GetDisplayName()
 			}
 			
-			pages = authConfig.FilterPages(pages, sectionID, sectionName, notebookName)
+			// Note: Page filtering removed - all pages within selected notebook are now accessible
 			logging.ToolsLogger.Debug("Applied authorization filtering to fresh pages",
 				"section_id", sectionID,
 				"section_name", sectionName,
@@ -275,6 +371,12 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		logging.ToolsLogger.Debug("createPage parameters", "sectionID", sectionID, "title", title, "content_length", len(content))
 
+		// SECURITY: Verify the section belongs to the currently selected notebook
+		sectionClient := sections.NewSectionClient(graphClient)
+		if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "createPage"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
 		// Validate title for illegal characters
 		illegalChars := []string{"?", "*", "\\", "/", ":", "<", ">", "|", "&", "#", "'", "'", "%", "~"}
 		for _, char := range illegalChars {
@@ -355,6 +457,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		logging.ToolsLogger.Debug("updatePageContent parameters", "pageID", pageID, "content_length", len(content))
 
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "updatePageContent"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
 		// Detect format and convert content to HTML
 		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
 		logging.ToolsLogger.Debug("updatePageContent content format detection",
@@ -387,7 +494,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig)))
 
 	// updatePageContentAdvanced: Update page content with advanced commands
 	updatePageContentAdvancedTool := mcp.NewTool(
@@ -404,6 +511,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		if err != nil {
 			logging.ToolsLogger.Error("updatePageContentAdvanced missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
+		}
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "updatePageContentAdvanced"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		commandsJSON, err := req.RequireString("commands")
@@ -475,7 +587,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig)))
 
 	// deletePage: Delete a page by ID
 	deletePageTool := mcp.NewTool(
@@ -491,6 +603,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		if err != nil {
 			logging.ToolsLogger.Error("deletePage missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
+		}
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "deletePage"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		logging.ToolsLogger.Debug("deletePage parameter", "pageID", pageID)
@@ -509,7 +626,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("deletePage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText("Page deleted successfully"), nil
 	}
-	s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig)))
 
 	// getPageContent: Get the HTML content of a page by ID
 	getPageContentTool := mcp.NewTool(
@@ -556,6 +673,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		logging.ToolsLogger.Debug("getPageContent parameters", "pageID", pageID, "forUpdate", forUpdate, "format", format)
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "getPageContent"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		// Always get HTML content first
 		htmlContent, err := pageClient.GetPageContent(pageID, forUpdate)
@@ -616,7 +738,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig)))
 
 	// getPageItemContent: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type
 	getPageItemContentTool := mcp.NewTool(
@@ -636,6 +758,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		customFilename := req.GetString("filename", "")
 		fullSizeStr := req.GetString("fullSize", "false")
 		fullSize := fullSizeStr == "true"
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "getPageItemContent"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		logging.ToolsLogger.Debug("getPageItemContent parameters", "pageID", pageID, "pageItemID", pageItemID, "filename", customFilename, "fullSize", fullSize)
 
@@ -664,7 +791,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("getPageItemContent operation completed", "duration", elapsed, "scaled", !fullSize && strings.HasPrefix(pageItemData.ContentType, "image/"))
 		return mcp.NewToolResultImage(filename, encoded, pageItemData.ContentType), nil
 	}
-	s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig)))
 
 	// listPageItems: List all OneNote page items (images, files, etc.) for a specific page
 	listPageItemsTool := mcp.NewTool(
@@ -680,6 +807,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		if err != nil {
 			logging.ToolsLogger.Error("listPageItems missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
+		}
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "listPageItems"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		logging.ToolsLogger.Debug("listPageItems parameter", "pageID", pageID)
@@ -700,7 +832,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Info("listPageItems operation completed", "duration", elapsed, "items_count", len(pageItems), "success", true)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig)))
 
 	// copyPage: Copy a page from one section to another
 	copyPageTool := mcp.NewTool(
@@ -717,6 +849,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		if err != nil {
 			logging.ToolsLogger.Error("copyPage missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
+		}
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "copyPage"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		targetSectionID, err := req.RequireString("targetSectionID")
@@ -747,7 +884,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("copyPage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig)))
 
 	// movePage: Move a page from one section to another (copy then delete)
 	movePageTool := mcp.NewTool(
@@ -764,6 +901,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		if err != nil {
 			logging.ToolsLogger.Error("movePage missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
+		}
+
+		// SECURITY: Verify the page belongs to the currently selected notebook
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "movePage"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		targetSectionID, err := req.RequireString("targetSectionID")
@@ -795,7 +937,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("movePage operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("movePage", movePageHandler, authConfig, cache, quickNoteConfig, pageClient)))
+	s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("movePage", movePageHandler, authConfig, cache, quickNoteConfig)))
 
 	// quickNote: Add a timestamped note to a configured page
 	quickNoteTool := mcp.NewTool(

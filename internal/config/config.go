@@ -430,22 +430,6 @@ func Load() (*Config, error) {
 				}
 			}
 		}
-		if sectionPerms := os.Getenv("AUTHORIZATION_SECTION_PERMISSIONS"); sectionPerms != "" {
-			var perms map[string]string
-			if err := json.Unmarshal([]byte(sectionPerms), &perms); err == nil {
-				for pattern, perm := range perms {
-					cfg.Authorization.SectionPermissions[pattern] = authorization.PermissionLevel(perm)
-				}
-			}
-		}
-		if pagePerms := os.Getenv("AUTHORIZATION_PAGE_PERMISSIONS"); pagePerms != "" {
-			var perms map[string]string
-			if err := json.Unmarshal([]byte(pagePerms), &perms); err == nil {
-				for pattern, perm := range perms {
-					cfg.Authorization.PagePermissions[pattern] = authorization.PermissionLevel(perm)
-				}
-			}
-		}
 	}
 
 	// Apply defaults for empty fields
@@ -467,14 +451,14 @@ func Load() (*Config, error) {
 	}
 	logger.Debug("Configuration validation passed")
 
-	// Compile authorization matchers if authorization is configured
+	// Validate authorization configuration if present
 	if cfg.Authorization != nil {
-		logger.Debug("Compiling authorization matchers")
-		if err := cfg.Authorization.CompilePatterns(); err != nil {
-			logger.Error("Authorization matcher compilation failed", "error", err)
-			return nil, fmt.Errorf("failed to compile authorization matchers: %v", err)
+		logger.Debug("Validating authorization configuration")
+		if err := cfg.Authorization.ValidateConfig(); err != nil {
+			logger.Error("Authorization configuration validation failed", "error", err)
+			return nil, fmt.Errorf("failed to validate authorization configuration: %v", err)
 		}
-		logger.Debug("Authorization matchers compiled successfully")
+		logger.Debug("Authorization configuration validated successfully")
 	}
 
 	elapsed := time.Since(startTime)

@@ -120,13 +120,9 @@ CONTENT_LOG_LEVEL="INFO"             # Content logging: DEBUG, INFO, WARN, ERROR
     "enabled": true,
     "default_notebook_permissions": "read",
     "notebook_permissions": {
-      "Work*": "write",
       "Personal Notes": "write",
-      "Archive*": "read"
-    },
-    "page_permissions": {
-      "Daily Journal": "write",
-      "**confidential**": "none"
+      "Work Notebook": "write",
+      "Archive Notebook": "read"
     }
   },
   "mcp_auth": {
@@ -180,46 +176,43 @@ Rapid note-taking that appends timestamped entries to a configured OneNote page.
 ## Authorization System
 
 ### Overview
-Comprehensive permission-based access control with notebook-centric security model.
+Simplified notebook-scoped permission system with three permission levels.
 
 **Key Features:**
-- Current notebook scoping - all operations within selected notebook context
-- Pattern matching with wildcards (`*`) and recursive patterns (`**`)
-- Fail-closed security - unknown resources default to no access
-- Resource filtering - automatically filters lists based on permissions
+- Notebook selection required - all operations scoped to selected notebook
+- Simplified permissions: `none`, `read`, `write` 
+- Exact notebook name matching only (no patterns)
+- Read-only enforcement blocks create/update/delete on read-only notebooks
+- Section and page operations inherit notebook permissions
 
-**Permission Modes:** `none`, `read`, `write`, `full`
+**Permission Modes:** 
+- `none` - Notebook not accessible/selectable
+- `read` - Read-only access, blocks write operations
+- `write` - Full access including create/update/delete operations
 
-### Pattern Examples
+### Configuration Example
 ```json
 {
   "authorization": {
     "enabled": true,
     "default_notebook_permissions": "read",
     "notebook_permissions": {
-      "Work*": "write",                    // Prefix pattern
-      "Personal Notes": "write",           // Exact match
-      "Archive/**": "none"                 // Recursive pattern
-    },
-    "section_permissions": {
-      "Meeting Notes": "write",            // Section name
-      "Work*/Drafts": "read",             // Notebook + section
-      "**/Private": "none"                // Any private section
-    },
-    "page_permissions": {
-      "Daily Journal": "write",           // Exact page
-      "Draft*": "read",                   // Prefix pattern
-      "**confidential**": "none"          // Contains pattern
+      "Personal Notes": "write",           // Exact match only - full access
+      "Work Notebook": "write",            // Full access
+      "Archive Notebook": "read",          // Read-only
+      "Private Notebook": "none"           // No access - filtered from listings
     }
   }
 }
 ```
 
-### Security Workflow
-1. `selectNotebook("Work Notebook")` - validates notebook permission
-2. Sets current notebook context
-3. All operations validated within scope
-4. Cross-notebook access blocked and logged
+### Workflow
+1. `listNotebooks` - returns only notebooks with `read` or `write` permissions (`none` filtered out)
+2. `selectNotebook("Work Notebook")` - validates notebook has non-`none` permission
+3. Sets current notebook context with its permission level
+4. All subsequent operations inherit notebook permission
+5. Write operations (create/update/delete) blocked on read-only notebooks
+6. Cross-notebook access prevented by scoping
 
 ## OneNote Operations
 

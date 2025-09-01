@@ -62,6 +62,11 @@ func (m *MockSectionClient) CreateSection(containerID, displayName string) (*map
 	return args.Get(0).(*map[string]interface{}), args.Error(1)
 }
 
+func (m *MockSectionClient) ResolveSectionNotebook(ctx context.Context, sectionID string) (notebookID string, notebookName string, err error) {
+	args := m.Called(ctx, sectionID)
+	return args.String(0), args.String(1), args.Error(2)
+}
+
 // MockPageClient provides a mock implementation for page operations
 type MockPageClient struct {
 	mock.Mock
@@ -93,6 +98,31 @@ func (m *MockPageClient) UpdatePageContent(pageID string, commands []pages.Updat
 func (m *MockPageClient) DeletePage(pageID string) error {
 	args := m.Called(pageID)
 	return args.Error(0)
+}
+
+func (m *MockPageClient) ResolvePageNotebook(ctx context.Context, pageID string) (notebookID string, notebookName string, sectionID string, sectionName string, err error) {
+	args := m.Called(ctx, pageID)
+	return args.String(0), args.String(1), args.String(2), args.String(3), args.Error(4)
+}
+
+
+// MockNotebookCacheType provides a mock implementation for notebook cache operations
+type MockNotebookCacheType struct {
+	mock.Mock
+}
+
+func (m *MockNotebookCacheType) GetDisplayName() (string, bool) {
+	args := m.Called()
+	return args.String(0), args.Bool(1)
+}
+
+func (m *MockNotebookCacheType) GetNotebook() (map[string]interface{}, bool) {
+	args := m.Called()
+	result := args.Get(0)
+	if result == nil {
+		return nil, args.Bool(1)
+	}
+	return result.(map[string]interface{}), args.Bool(1)
 }
 
 // Test helper to create a test MCP server with mock clients

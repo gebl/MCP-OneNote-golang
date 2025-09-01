@@ -63,7 +63,7 @@
 				
 				<option value="file3">github.com/gebl/onenote-mcp-server/cmd/onenote-mcp-server/PageResources.go (0.0%)</option>
 				
-				<option value="file4">github.com/gebl/onenote-mcp-server/cmd/onenote-mcp-server/PageTools.go (5.8%)</option>
+				<option value="file4">github.com/gebl/onenote-mcp-server/cmd/onenote-mcp-server/PageTools.go (5.3%)</option>
 				
 				<option value="file5">github.com/gebl/onenote-mcp-server/cmd/onenote-mcp-server/SectionResources.go (0.0%)</option>
 				
@@ -83,43 +83,41 @@
 				
 				<option value="file13">github.com/gebl/onenote-mcp-server/internal/authorization/adapters.go (0.0%)</option>
 				
-				<option value="file14">github.com/gebl/onenote-mcp-server/internal/authorization/authorization.go (37.0%)</option>
+				<option value="file14">github.com/gebl/onenote-mcp-server/internal/authorization/authorization.go (85.1%)</option>
 				
 				<option value="file15">github.com/gebl/onenote-mcp-server/internal/authorization/context.go (0.0%)</option>
 				
-				<option value="file16">github.com/gebl/onenote-mcp-server/internal/authorization/patterns.go (92.9%)</option>
+				<option value="file16">github.com/gebl/onenote-mcp-server/internal/authorization/wrapper.go (0.0%)</option>
 				
-				<option value="file17">github.com/gebl/onenote-mcp-server/internal/authorization/wrapper.go (0.0%)</option>
+				<option value="file17">github.com/gebl/onenote-mcp-server/internal/config/config.go (77.2%)</option>
 				
-				<option value="file18">github.com/gebl/onenote-mcp-server/internal/config/config.go (74.7%)</option>
+				<option value="file18">github.com/gebl/onenote-mcp-server/internal/graph/client.go (51.4%)</option>
 				
-				<option value="file19">github.com/gebl/onenote-mcp-server/internal/graph/client.go (51.4%)</option>
+				<option value="file19">github.com/gebl/onenote-mcp-server/internal/graph/http.go (91.4%)</option>
 				
-				<option value="file20">github.com/gebl/onenote-mcp-server/internal/graph/http.go (91.4%)</option>
+				<option value="file20">github.com/gebl/onenote-mcp-server/internal/graph/utils.go (83.3%)</option>
 				
-				<option value="file21">github.com/gebl/onenote-mcp-server/internal/graph/utils.go (83.3%)</option>
+				<option value="file21">github.com/gebl/onenote-mcp-server/internal/http/helpers.go (93.4%)</option>
 				
-				<option value="file22">github.com/gebl/onenote-mcp-server/internal/http/helpers.go (93.4%)</option>
+				<option value="file22">github.com/gebl/onenote-mcp-server/internal/logging/logger.go (86.6%)</option>
 				
-				<option value="file23">github.com/gebl/onenote-mcp-server/internal/logging/logger.go (86.6%)</option>
+				<option value="file23">github.com/gebl/onenote-mcp-server/internal/notebooks/notebooks.go (1.0%)</option>
 				
-				<option value="file24">github.com/gebl/onenote-mcp-server/internal/notebooks/notebooks.go (1.0%)</option>
+				<option value="file24">github.com/gebl/onenote-mcp-server/internal/pages/pages.go (6.7%)</option>
 				
-				<option value="file25">github.com/gebl/onenote-mcp-server/internal/pages/pages.go (6.7%)</option>
+				<option value="file25">github.com/gebl/onenote-mcp-server/internal/resources/descriptions.go (100.0%)</option>
 				
-				<option value="file26">github.com/gebl/onenote-mcp-server/internal/resources/descriptions.go (0.0%)</option>
+				<option value="file26">github.com/gebl/onenote-mcp-server/internal/sections/groups.go (0.0%)</option>
 				
-				<option value="file27">github.com/gebl/onenote-mcp-server/internal/sections/groups.go (0.0%)</option>
+				<option value="file27">github.com/gebl/onenote-mcp-server/internal/sections/sections.go (0.3%)</option>
 				
-				<option value="file28">github.com/gebl/onenote-mcp-server/internal/sections/sections.go (0.3%)</option>
+				<option value="file28">github.com/gebl/onenote-mcp-server/internal/utils/image.go (88.9%)</option>
 				
-				<option value="file29">github.com/gebl/onenote-mcp-server/internal/utils/image.go (88.9%)</option>
+				<option value="file29">github.com/gebl/onenote-mcp-server/internal/utils/progress.go (95.7%)</option>
 				
-				<option value="file30">github.com/gebl/onenote-mcp-server/internal/utils/progress.go (95.7%)</option>
+				<option value="file30">github.com/gebl/onenote-mcp-server/internal/utils/tool_helpers.go (0.0%)</option>
 				
-				<option value="file31">github.com/gebl/onenote-mcp-server/internal/utils/tool_helpers.go (0.0%)</option>
-				
-				<option value="file32">github.com/gebl/onenote-mcp-server/internal/utils/validation.go (73.1%)</option>
+				<option value="file31">github.com/gebl/onenote-mcp-server/internal/utils/validation.go (73.1%)</option>
 				
 				</select>
 			</div>
@@ -1043,7 +1041,8 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
                                         }</span>
                                         
                                         // Apply filtering
-                                        <span class="cov0" title="0">filteredSections := authConfig.FilterSections(sectionsForFiltering, notebookDisplayName)
+                                        // Note: Section filtering removed - all sections within selected notebook are now accessible
+                                        <span class="cov0" title="0">filteredSections := sectionsForFiltering
                                         
                                         // Convert back to SectionItem slice
                                         var filteredCachedArray []SectionItem
@@ -1147,7 +1146,8 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
                         }</span>
                         
                         // Apply filtering
-                        <span class="cov0" title="0">filteredSections := authConfig.FilterSections(sectionsForFiltering, notebookDisplayName)
+                        // Note: Section filtering removed - all sections within selected notebook are now accessible
+                        <span class="cov0" title="0">filteredSections := sectionsForFiltering
                         
                         // Convert back to SectionItem slice
                         var filteredSectionItems []SectionItem
@@ -2176,6 +2176,93 @@ import (
 )
 
 // registerPageTools registers all page-related MCP tools
+// verifySectionNotebookOwnership checks that a section belongs to the currently selected notebook
+func verifySectionNotebookOwnership(ctx context.Context, sectionID string, sectionClient *sections.SectionClient, notebookCache *NotebookCache, operationName string) error <span class="cov0" title="0">{
+        // SECURITY: Verify the section belongs to the currently selected notebook
+        currentNotebook, hasNotebook := notebookCache.GetDisplayName()
+        if !hasNotebook || currentNotebook == "" </span><span class="cov0" title="0">{
+                logging.ToolsLogger.Error("Operation requires notebook selection", 
+                        "operation", operationName,
+                        "section_id", sectionID)
+                return fmt.Errorf("no notebook selected. Use selectNotebook tool first")
+        }</span>
+
+        // Resolve which notebook owns this section
+        <span class="cov0" title="0">resolvedNotebookID, resolvedNotebookName, err := sectionClient.ResolveSectionNotebook(ctx, sectionID)
+        if err != nil </span><span class="cov0" title="0">{
+                logging.ToolsLogger.Error("Operation failed to resolve section notebook ownership", 
+                        "operation", operationName,
+                        "section_id", sectionID, 
+                        "error", err.Error(),
+                        "security_action", "BLOCKING_UNVERIFIED_SECTION_ACCESS")
+                return fmt.Errorf("could not verify section ownership: %v", err)
+        }</span>
+
+        // Check if the resolved notebook matches the currently selected notebook
+        <span class="cov0" title="0">if resolvedNotebookName != currentNotebook </span><span class="cov0" title="0">{
+                logging.ToolsLogger.Error("SECURITY VIOLATION: Section belongs to different notebook than selected",
+                        "operation", operationName,
+                        "section_id", sectionID,
+                        "resolved_notebook", resolvedNotebookName,
+                        "current_notebook", currentNotebook,
+                        "security_action", "BLOCKING_CROSS_NOTEBOOK_SECTION_ACCESS")
+                return fmt.Errorf("access denied: section belongs to notebook '%s' but '%s' is selected", resolvedNotebookName, currentNotebook)
+        }</span>
+
+        <span class="cov0" title="0">logging.ToolsLogger.Debug("Section notebook ownership verified",
+                "operation", operationName,
+                "section_id", sectionID,
+                "notebook", resolvedNotebookName,
+                "notebook_id", resolvedNotebookID)
+        
+        return nil</span>
+}
+
+// verifyPageNotebookOwnership checks that a page belongs to the currently selected notebook
+func verifyPageNotebookOwnership(ctx context.Context, pageID string, pageClient *pages.PageClient, notebookCache *NotebookCache, operationName string) error <span class="cov0" title="0">{
+        // SECURITY: Verify the page belongs to the currently selected notebook
+        currentNotebook, hasNotebook := notebookCache.GetDisplayName()
+        if !hasNotebook || currentNotebook == "" </span><span class="cov0" title="0">{
+                logging.ToolsLogger.Error("Operation requires notebook selection", 
+                        "operation", operationName,
+                        "page_id", pageID)
+                return fmt.Errorf("no notebook selected. Use selectNotebook tool first")
+        }</span>
+
+        // Resolve which notebook owns this page
+        <span class="cov0" title="0">resolvedNotebookID, resolvedNotebookName, resolvedSectionID, resolvedSectionName, err := pageClient.ResolvePageNotebook(ctx, pageID)
+        if err != nil </span><span class="cov0" title="0">{
+                logging.ToolsLogger.Error("Operation failed to resolve page notebook ownership", 
+                        "operation", operationName,
+                        "page_id", pageID, 
+                        "error", err.Error(),
+                        "security_action", "BLOCKING_UNVERIFIED_PAGE_ACCESS")
+                return fmt.Errorf("could not verify page ownership: %v", err)
+        }</span>
+
+        // Check if the resolved notebook matches the currently selected notebook
+        <span class="cov0" title="0">if resolvedNotebookName != currentNotebook </span><span class="cov0" title="0">{
+                logging.ToolsLogger.Error("SECURITY VIOLATION: Page belongs to different notebook than selected",
+                        "operation", operationName,
+                        "page_id", pageID,
+                        "resolved_notebook", resolvedNotebookName,
+                        "current_notebook", currentNotebook,
+                        "resolved_section", resolvedSectionName,
+                        "security_action", "BLOCKING_CROSS_NOTEBOOK_PAGE_ACCESS")
+                return fmt.Errorf("access denied: page belongs to notebook '%s' but '%s' is selected", resolvedNotebookName, currentNotebook)
+        }</span>
+
+        <span class="cov0" title="0">logging.ToolsLogger.Debug("Page notebook ownership verified",
+                "operation", operationName,
+                "page_id", pageID,
+                "notebook", resolvedNotebookName,
+                "section", resolvedSectionName,
+                "section_id", resolvedSectionID,
+                "notebook_id", resolvedNotebookID)
+        
+        return nil</span>
+}
+
 func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) <span class="cov8" title="1">{
         // listPages: List all pages in a section
         listPagesTool := mcp.NewTool(
@@ -2194,8 +2281,15 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 }</span>
                 <span class="cov0" title="0">logging.ToolsLogger.Debug("listPages parameter", "sectionID", sectionID)
 
+                // SECURITY: Verify the section belongs to the currently selected notebook  
+                // We need to create a section client to resolve ownership
+                sectionClient := sections.NewSectionClient(graphClient)
+                if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "listPages"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
+                }</span>
+
                 // Extract progress token early for use throughout the function
-                progressToken := utils.ExtractProgressToken(req)
+                <span class="cov0" title="0">progressToken := utils.ExtractProgressToken(req)
                 
                 // Check cache first
                 if progressToken != "" </span><span class="cov0" title="0">{
@@ -2234,12 +2328,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                                         <span class="cov0" title="0">if progressToken != "" </span><span class="cov0" title="0">{
                                                 sendProgressNotification(s, ctx, progressToken, 32, 100, "Resolving section name for authorization...")
                                         }</span>
-                                        <span class="cov0" title="0">sectionName, _ = cache.GetSectionNameWithProgress(ctx, sectionID, s, progressToken, graphClient)
+                                        // Note: Section name resolution simplified for authorization
+                                        <span class="cov0" title="0">sectionName, _ = cache.GetDisplayName()
                                         notebookName, _ = cache.GetDisplayName()</span>
                                         }
                                         
-                                        <span class="cov0" title="0">cachedPages = authConfig.FilterPages(cachedPages, sectionID, sectionName, notebookName)
-                                        logging.ToolsLogger.Debug("Applied authorization filtering to cached pages",
+                                        // Note: Page filtering removed - all pages within selected notebook are now accessible
+                                        <span class="cov0" title="0">logging.ToolsLogger.Debug("Applied authorization filtering to cached pages",
                                                 "section_id", sectionID,
                                                 "section_name", sectionName,
                                                 "notebook", notebookName,
@@ -2329,12 +2424,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                         <span class="cov0" title="0">if progressToken != "" </span><span class="cov0" title="0">{
                                 sendProgressNotification(s, ctx, progressToken, 82, 100, "Resolving section name for authorization...")
                         }</span>
-                        <span class="cov0" title="0">sectionName, _ = cache.GetSectionNameWithProgress(ctx, sectionID, s, progressToken, graphClient)
+                        // Note: Section name resolution simplified for authorization  
+                        <span class="cov0" title="0">sectionName, _ = cache.GetDisplayName()
                         notebookName, _ = cache.GetDisplayName()</span>
                         }
                         
-                        <span class="cov0" title="0">pages = authConfig.FilterPages(pages, sectionID, sectionName, notebookName)
-                        logging.ToolsLogger.Debug("Applied authorization filtering to fresh pages",
+                        // Note: Page filtering removed - all pages within selected notebook are now accessible
+                        <span class="cov0" title="0">logging.ToolsLogger.Debug("Applied authorization filtering to fresh pages",
                                 "section_id", sectionID,
                                 "section_name", sectionName,
                                 "notebook", notebookName,
@@ -2424,8 +2520,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
                 <span class="cov0" title="0">logging.ToolsLogger.Debug("createPage parameters", "sectionID", sectionID, "title", title, "content_length", len(content))
 
+                // SECURITY: Verify the section belongs to the currently selected notebook
+                sectionClient := sections.NewSectionClient(graphClient)
+                if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "createPage"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
+                }</span>
+
                 // Validate title for illegal characters
-                illegalChars := []string{"?", "*", "\\", "/", ":", "&lt;", "&gt;", "|", "&amp;", "#", "'", "'", "%", "~"}
+                <span class="cov0" title="0">illegalChars := []string{"?", "*", "\\", "/", ":", "&lt;", "&gt;", "|", "&amp;", "#", "'", "'", "%", "~"}
                 for _, char := range illegalChars </span><span class="cov0" title="0">{
                         if strings.Contains(title, char) </span><span class="cov0" title="0">{
                                 logging.ToolsLogger.Error("createPage title contains illegal character", "character", char, "title", title)
@@ -2504,8 +2606,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
                 <span class="cov0" title="0">logging.ToolsLogger.Debug("updatePageContent parameters", "pageID", pageID, "content_length", len(content))
 
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "updatePageContent"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
+                }</span>
+
                 // Detect format and convert content to HTML
-                convertedHTML, detectedFormat := utils.ConvertToHTML(content)
+                <span class="cov0" title="0">convertedHTML, detectedFormat := utils.ConvertToHTML(content)
                 logging.ToolsLogger.Debug("updatePageContent content format detection",
                         "detected_format", detectedFormat.String(),
                         "original_length", len(content),
@@ -2536,7 +2643,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
                 <span class="cov0" title="0">return mcp.NewToolResultText(string(jsonBytes)), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig)))
 
         // updatePageContentAdvanced: Update page content with advanced commands
         updatePageContentAdvancedTool := mcp.NewTool(
@@ -2553,6 +2660,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 if err != nil </span><span class="cov0" title="0">{
                         logging.ToolsLogger.Error("updatePageContentAdvanced missing pageID", "error", err)
                         return mcp.NewToolResultError("pageID is required"), nil
+                }</span>
+
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                <span class="cov0" title="0">if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "updatePageContentAdvanced"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
                 }</span>
 
                 <span class="cov0" title="0">commandsJSON, err := req.RequireString("commands")
@@ -2624,7 +2736,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
                 <span class="cov0" title="0">return mcp.NewToolResultText(string(jsonBytes)), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig)))
 
         // deletePage: Delete a page by ID
         deletePageTool := mcp.NewTool(
@@ -2640,6 +2752,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 if err != nil </span><span class="cov0" title="0">{
                         logging.ToolsLogger.Error("deletePage missing pageID", "error", err)
                         return mcp.NewToolResultError("pageID is required"), nil
+                }</span>
+
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                <span class="cov0" title="0">if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "deletePage"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
                 }</span>
 
                 <span class="cov0" title="0">logging.ToolsLogger.Debug("deletePage parameter", "pageID", pageID)
@@ -2658,7 +2775,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 logging.ToolsLogger.Debug("deletePage operation completed", "duration", elapsed)
                 return mcp.NewToolResultText("Page deleted successfully"), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig)))
 
         // getPageContent: Get the HTML content of a page by ID
         getPageContentTool := mcp.NewTool(
@@ -2706,8 +2823,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
                 <span class="cov0" title="0">logging.ToolsLogger.Debug("getPageContent parameters", "pageID", pageID, "forUpdate", forUpdate, "format", format)
 
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "getPageContent"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
+                }</span>
+
                 // Always get HTML content first
-                htmlContent, err := pageClient.GetPageContent(pageID, forUpdate)
+                <span class="cov0" title="0">htmlContent, err := pageClient.GetPageContent(pageID, forUpdate)
                 if err != nil </span><span class="cov0" title="0">{
                         logging.ToolsLogger.Error("getPageContent operation failed", "page_id", pageID, "error", err, "operation", "getPageContent")
                         return mcp.NewToolResultError(fmt.Sprintf("Failed to get page content: %v", err)), nil
@@ -2765,7 +2887,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
                 <span class="cov0" title="0">return mcp.NewToolResultText(string(jsonBytes)), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig)))
 
         // getPageItemContent: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type
         getPageItemContentTool := mcp.NewTool(
@@ -2786,7 +2908,12 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 fullSizeStr := req.GetString("fullSize", "false")
                 fullSize := fullSizeStr == "true"
 
-                logging.ToolsLogger.Debug("getPageItemContent parameters", "pageID", pageID, "pageItemID", pageItemID, "filename", customFilename, "fullSize", fullSize)
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "getPageItemContent"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
+                }</span>
+
+                <span class="cov0" title="0">logging.ToolsLogger.Debug("getPageItemContent parameters", "pageID", pageID, "pageItemID", pageItemID, "filename", customFilename, "fullSize", fullSize)
 
                 // Use the enhanced GetPageItem with fullSize parameter
                 pageItemData, err := pageClient.GetPageItem(pageID, pageItemID, fullSize)
@@ -2813,7 +2940,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 logging.ToolsLogger.Debug("getPageItemContent operation completed", "duration", elapsed, "scaled", !fullSize &amp;&amp; strings.HasPrefix(pageItemData.ContentType, "image/"))
                 return mcp.NewToolResultImage(filename, encoded, pageItemData.ContentType), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig)))
 
         // listPageItems: List all OneNote page items (images, files, etc.) for a specific page
         listPageItemsTool := mcp.NewTool(
@@ -2829,6 +2956,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 if err != nil </span><span class="cov0" title="0">{
                         logging.ToolsLogger.Error("listPageItems missing pageID", "error", err)
                         return mcp.NewToolResultError("pageID is required"), nil
+                }</span>
+
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                <span class="cov0" title="0">if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "listPageItems"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
                 }</span>
 
                 <span class="cov0" title="0">logging.ToolsLogger.Debug("listPageItems parameter", "pageID", pageID)
@@ -2849,7 +2981,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 logging.ToolsLogger.Info("listPageItems operation completed", "duration", elapsed, "items_count", len(pageItems), "success", true)
                 return mcp.NewToolResultText(string(jsonBytes)), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig)))
 
         // copyPage: Copy a page from one section to another
         copyPageTool := mcp.NewTool(
@@ -2866,6 +2998,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 if err != nil </span><span class="cov0" title="0">{
                         logging.ToolsLogger.Error("copyPage missing pageID", "error", err)
                         return mcp.NewToolResultError("pageID is required"), nil
+                }</span>
+
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                <span class="cov0" title="0">if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "copyPage"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
                 }</span>
 
                 <span class="cov0" title="0">targetSectionID, err := req.RequireString("targetSectionID")
@@ -2896,7 +3033,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 logging.ToolsLogger.Debug("copyPage operation completed", "duration", elapsed)
                 return mcp.NewToolResultText(string(jsonBytes)), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig)))
 
         // movePage: Move a page from one section to another (copy then delete)
         movePageTool := mcp.NewTool(
@@ -2913,6 +3050,11 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 if err != nil </span><span class="cov0" title="0">{
                         logging.ToolsLogger.Error("movePage missing pageID", "error", err)
                         return mcp.NewToolResultError("pageID is required"), nil
+                }</span>
+
+                // SECURITY: Verify the page belongs to the currently selected notebook
+                <span class="cov0" title="0">if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "movePage"); err != nil </span><span class="cov0" title="0">{
+                        return mcp.NewToolResultError(err.Error()), nil
                 }</span>
 
                 <span class="cov0" title="0">targetSectionID, err := req.RequireString("targetSectionID")
@@ -2944,7 +3086,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
                 logging.ToolsLogger.Debug("movePage operation completed", "duration", elapsed)
                 return mcp.NewToolResultText(string(jsonBytes)), nil</span>
         }
-        <span class="cov8" title="1">s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandlerWithResolver("movePage", movePageHandler, authConfig, cache, quickNoteConfig, pageClient)))
+        <span class="cov8" title="1">s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("movePage", movePageHandler, authConfig, cache, quickNoteConfig)))
 
         // quickNote: Add a timestamped note to a configured page
         quickNoteTool := mcp.NewTool(
@@ -3778,7 +3920,8 @@ func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, gr
                 }</span>
                 
                 // Apply filtering
-                <span class="cov0" title="0">filteredSections := cfg.Authorization.FilterSections(sectionsForFiltering, notebookDisplayName)
+                // Note: Section filtering removed - all sections within selected notebook are now accessible
+                <span class="cov0" title="0">filteredSections := sectionsForFiltering
                 
                 // Convert back to SectionItem slice
                 var filteredSectionItems []SectionItem
@@ -3873,26 +4016,9 @@ func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphCl
                 
                 var filteredSections []map[string]interface{}
                 for _, section := range sectionsData </span><span class="cov0" title="0">{
-                        if sectionName, ok := section["displayName"].(string); ok </span><span class="cov0" title="0">{
-                                // For global sections, we can only check section name-based permissions
-                                // Check if there's an exact match in section permissions
-                                if sectionPermission, exists := cfg.Authorization.SectionPermissions[sectionName]; exists </span><span class="cov0" title="0">{
-                                        if sectionPermission != "none" &amp;&amp; sectionPermission != "" </span><span class="cov0" title="0">{
-                                                filteredSections = append(filteredSections, section)
-                                        }</span>
-                                } else<span class="cov0" title="0"> {
-                                        // Fall back to default permissions if no specific rule
-                                        if cfg.Authorization.DefaultNotebookPermissions != "none" &amp;&amp; cfg.Authorization.DefaultNotebookPermissions != "" </span><span class="cov0" title="0">{
-                                                filteredSections = append(filteredSections, section)
-                                        }</span>
-                                }
-                        } else<span class="cov0" title="0"> {
-                                // If section has no name, include it based on default mode
-                                if cfg.Authorization.DefaultNotebookPermissions != "none" &amp;&amp; cfg.Authorization.DefaultNotebookPermissions != "" </span><span class="cov0" title="0">{
-                                        filteredSections = append(filteredSections, section)
-                                }</span>
-                        }
-                }
+                        // Note: Section filtering removed - all sections are now accessible
+                        filteredSections = append(filteredSections, section)
+                }</span>
                 <span class="cov0" title="0">sectionsData = filteredSections
                 
                 logging.MainLogger.Debug("Authorization filtering completed for global sections resource",
@@ -5318,9 +5444,6 @@ func registerTools(s *server.MCPServer, graphClient *graph.Client, authManager *
                         "enabled", authInfo.Enabled,
                         "default_notebook_mode", authInfo.DefaultNotebookMode,
                         "notebook_rules", authInfo.NotebookRules,
-                        "section_rules", authInfo.SectionRules,
-                        "page_rules", authInfo.PageRules,
-                        "compiled_patterns", authInfo.CompiledPatterns,
                         "current_notebook", authInfo.CurrentNotebook,
                         "current_notebook_perm", authInfo.CurrentNotebookPerm)
         }</span> else<span class="cov8" title="1"> {
@@ -7066,18 +7189,11 @@ const (
         OperationWrite ToolOperation = "write"
 )
 
-// AuthorizationConfig represents the simplified authorization configuration
+// AuthorizationConfig represents the simplified notebook-scoped authorization configuration
 type AuthorizationConfig struct {
         Enabled                     bool                          `json:"enabled"`
         DefaultNotebookPermissions  PermissionLevel               `json:"default_notebook_permissions"`  // Default for any notebook
-        NotebookPermissions         map[string]PermissionLevel    `json:"notebook_permissions"`          // Specific notebook permissions
-        SectionPermissions          map[string]PermissionLevel    `json:"section_permissions"`           // Section permissions with pattern support
-        PagePermissions             map[string]PermissionLevel    `json:"page_permissions"`              // Page permissions with pattern support
-        
-        // Pattern engines for efficient matching (not serialized)
-        notebookEngine *PatternEngine `json:"-"`
-        sectionEngine  *PatternEngine `json:"-"`
-        pageEngine     *PatternEngine `json:"-"`
+        NotebookPermissions         map[string]PermissionLevel    `json:"notebook_permissions"`          // Specific notebook permissions (exact match only)
         
         // Current selected notebook for operation scoping
         currentNotebook     string          `json:"-"`
@@ -7085,14 +7201,9 @@ type AuthorizationConfig struct {
 }
 
 
-// ResourceContext contains information about the resource being accessed
+// ResourceContext contains information about the resource being accessed (simplified)
 type ResourceContext struct {
         NotebookName string
-        NotebookID   string
-        SectionName  string
-        SectionID    string
-        PageID       string
-        PageName     string
         Operation    ToolOperation
 }
 
@@ -7101,14 +7212,6 @@ func (rc ResourceContext) String() string <span class="cov8" title="1">{
         parts := []string{}
         if rc.NotebookName != "" </span><span class="cov8" title="1">{
                 parts = append(parts, fmt.Sprintf("notebook=%s", rc.NotebookName))
-        }</span>
-        <span class="cov8" title="1">if rc.SectionName != "" </span><span class="cov8" title="1">{
-                parts = append(parts, fmt.Sprintf("section=%s", rc.SectionName))
-        }</span>
-        <span class="cov8" title="1">if rc.PageName != "" </span><span class="cov8" title="1">{
-                parts = append(parts, fmt.Sprintf("page=%s", rc.PageName))
-        }</span> else<span class="cov8" title="1"> if rc.PageID != "" </span><span class="cov0" title="0">{
-                parts = append(parts, fmt.Sprintf("pageID=%s", rc.PageID))
         }</span>
         <span class="cov8" title="1">parts = append(parts, fmt.Sprintf("operation=%s", rc.Operation))
         return strings.Join(parts, ", ")</span>
@@ -7125,51 +7228,31 @@ var AuthToolNames = map[string]bool{
         "selectNotebook": true, // Always allow notebook selection (but selection itself is validated)
 }
 
-// NewAuthorizationConfig creates a new authorization configuration with pattern engines
+// NewAuthorizationConfig creates a new simplified authorization configuration
 func NewAuthorizationConfig() *AuthorizationConfig <span class="cov8" title="1">{
         return &amp;AuthorizationConfig{
                 Enabled:                     false,
                 DefaultNotebookPermissions:  PermissionRead,
                 NotebookPermissions:         make(map[string]PermissionLevel),
-                SectionPermissions:          make(map[string]PermissionLevel),
-                PagePermissions:             make(map[string]PermissionLevel),
-                notebookEngine:              NewPatternEngine(),
-                sectionEngine:               NewPatternEngine(),
-                pageEngine:                  NewPatternEngine(),
                 currentNotebook:             "",
                 currentNotebookPerm:         PermissionNone,
         }
 }</span>
 
-// CompilePatterns compiles the permission patterns for efficient matching
-func (ac *AuthorizationConfig) CompilePatterns() error <span class="cov8" title="1">{
-        // Compile notebook patterns
-        if err := ac.notebookEngine.CompilePatterns(ac.NotebookPermissions); err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("failed to compile notebook patterns: %v", err)
-        }</span>
+// ValidateConfig validates the authorization configuration (no pattern compilation needed)
+func (ac *AuthorizationConfig) ValidateConfig() error <span class="cov8" title="1">{
+        logging.AuthorizationLogger.Debug("Authorization configuration validated",
+                "enabled", ac.Enabled,
+                "notebook_permissions_count", len(ac.NotebookPermissions),
+                "default_permissions", ac.DefaultNotebookPermissions)
         
-        // Compile section patterns
-        <span class="cov8" title="1">if err := ac.sectionEngine.CompilePatterns(ac.SectionPermissions); err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("failed to compile section patterns: %v", err)
-        }</span>
-        
-        // Compile page patterns
-        <span class="cov8" title="1">if err := ac.pageEngine.CompilePatterns(ac.PagePermissions); err != nil </span><span class="cov0" title="0">{
-                return fmt.Errorf("failed to compile page patterns: %v", err)
-        }</span>
-        
-        <span class="cov8" title="1">logging.AuthorizationLogger.Debug("Authorization patterns compiled successfully",
-                "notebook_patterns", len(ac.NotebookPermissions),
-                "section_patterns", len(ac.SectionPermissions),
-                "page_patterns", len(ac.PagePermissions))
-        
-        return nil</span>
-}
+        return nil
+}</span>
 
 
 // SetCurrentNotebook sets the currently selected notebook and validates permission
 func (ac *AuthorizationConfig) SetCurrentNotebook(notebookName string) error <span class="cov8" title="1">{
-        if !ac.Enabled </span><span class="cov0" title="0">{
+        if !ac.Enabled </span><span class="cov8" title="1">{
                 ac.currentNotebook = notebookName
                 ac.currentNotebookPerm = PermissionWrite // Allow everything when disabled
                 logging.AuthorizationLogger.Debug("Authorization disabled, allowing notebook selection", "notebook", notebookName)
@@ -7178,16 +7261,7 @@ func (ac *AuthorizationConfig) SetCurrentNotebook(notebookName string) error <sp
         
         <span class="cov8" title="1">permission := ac.GetNotebookPermission(notebookName)
         
-        // Handle empty permission string by defaulting to read permission
-        // This can happen if authorization config isn't properly initialized
-        if permission == "" </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Warn("Empty permission returned, defaulting to read",
-                        "notebook", notebookName,
-                        "default_permissions", ac.DefaultNotebookPermissions)
-                permission = PermissionRead
-        }</span>
-        
-        <span class="cov8" title="1">if permission == PermissionNone </span><span class="cov8" title="1">{
+        if permission == PermissionNone </span><span class="cov8" title="1">{
                 logging.AuthorizationLogger.Info("Notebook selection denied",
                         "notebook", notebookName,
                         "permission", permission)
@@ -7207,9 +7281,9 @@ func (ac *AuthorizationConfig) GetCurrentNotebook() string <span class="cov8" ti
         return ac.currentNotebook
 }</span>
 
-// IsAuthorized checks if a tool call is authorized based on the simplified configuration
+// IsAuthorized checks if a tool call is authorized based on the simplified notebook-scoped configuration
 func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string, req mcp.CallToolRequest, resourceContext ResourceContext) error <span class="cov8" title="1">{
-        if !ac.Enabled </span><span class="cov0" title="0">{
+        if !ac.Enabled </span><span class="cov8" title="1">{
                 logging.AuthorizationLogger.Debug("Authorization disabled, allowing all operations", "tool", toolName)
                 return nil
         }</span>
@@ -7240,7 +7314,7 @@ func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string
                 return fmt.Errorf("access denied: current notebook '%s' has no permission", ac.currentNotebook)
         }</span>
         
-        // 3. SECURITY: All operations must be scoped to current notebook
+        // 3. SECURITY: All operations must be scoped to current notebook (if notebook context provided)
         <span class="cov8" title="1">if resourceContext.NotebookName != "" &amp;&amp; resourceContext.NotebookName != ac.currentNotebook </span><span class="cov8" title="1">{
                 logging.AuthorizationLogger.Error("SECURITY VIOLATION: Cross-notebook access attempt",
                         "tool", toolName,
@@ -7250,110 +7324,37 @@ func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string
                 return fmt.Errorf("access denied: cannot access notebook '%s' when '%s' is selected", resourceContext.NotebookName, ac.currentNotebook)
         }</span>
         
-        // 4. Check resource-level permissions using simplified hierarchy
-        <span class="cov8" title="1">resourcePermission := ac.getResourcePermission(resourceContext)
-        if !ac.permissionAllowsOperation(resourcePermission, resourceContext.Operation) </span><span class="cov8" title="1">{
-                logging.AuthorizationLogger.Info("Resource access denied",
+        // 4. Check if current notebook permission allows the requested operation
+        <span class="cov8" title="1">if !ac.permissionAllowsOperation(ac.currentNotebookPerm, resourceContext.Operation) </span><span class="cov8" title="1">{
+                logging.AuthorizationLogger.Info("Operation not allowed by current notebook permission",
                         "tool", toolName,
-                        "resource_context", resourceContext.String(),
+                        "current_notebook", ac.currentNotebook,
                         "required_operation", resourceContext.Operation,
-                        "allowed_permission", resourcePermission)
-                return fmt.Errorf("access denied: resource requires '%s' permission but only '%s' is granted for %s", 
-                        resourceContext.Operation, resourcePermission, resourceContext.String())
+                        "notebook_permission", ac.currentNotebookPerm)
+                return fmt.Errorf("access denied: operation '%s' requires '%s' permission but current notebook has '%s'", 
+                        resourceContext.Operation, resourceContext.Operation, ac.currentNotebookPerm)
         }</span>
         
         <span class="cov8" title="1">logging.AuthorizationLogger.Debug("Authorization granted",
                 "tool", toolName,
                 "operation", resourceContext.Operation,
-                "resource_context", resourceContext.String(),
-                "resource_permission", resourcePermission)
+                "current_notebook", ac.currentNotebook,
+                "notebook_permission", ac.currentNotebookPerm)
         
         return nil</span>
 }
 
 
-// getResourcePermission returns the permission level using simplified hierarchical resolution
-func (ac *AuthorizationConfig) getResourcePermission(resourceContext ResourceContext) PermissionLevel <span class="cov8" title="1">{
-        // SECURITY: For page operations, if we have a page ID but no notebook context,
-        // this indicates we couldn't resolve which notebook the page belongs to.
-        // This is a security risk, so we deny access (fail-closed security model).
-        if resourceContext.PageID != "" &amp;&amp; resourceContext.NotebookName == "" </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Error("SECURITY: Denying page access - notebook ownership could not be determined",
-                        "page_id", resourceContext.PageID,
-                        "page_name", resourceContext.PageName,
-                        "security_action", "FAIL_CLOSED_ON_UNRESOLVED_OWNERSHIP")
-                return PermissionNone
-        }</span>
-        
-        // Use current notebook as fallback if no specific notebook in context
-        // (but only for non-page operations or when page notebook was successfully resolved)
-        <span class="cov8" title="1">notebookName := resourceContext.NotebookName
-        if notebookName == "" </span><span class="cov0" title="0">{
-                notebookName = ac.currentNotebook
-        }</span>
-        
-        // For pages: check page permission -&gt; section permission -&gt; notebook permission
-        <span class="cov8" title="1">if resourceContext.PageName != "" </span><span class="cov8" title="1">{
-                // 1. Check page-specific permission
-                if pagePermission, _, found := ac.pageEngine.Match(resourceContext.PageName); found </span><span class="cov8" title="1">{
-                        return pagePermission
-                }</span>
-                
-                // 2. Check parent section permission
-                <span class="cov0" title="0">if resourceContext.SectionName != "" </span><span class="cov0" title="0">{
-                        return ac.getSectionPermissionWithFallback(resourceContext.SectionName, notebookName)
-                }</span>
-                
-                // 3. Fall back to notebook permission
-                <span class="cov0" title="0">return ac.currentNotebookPerm</span>
-        }
-        
-        // For sections: check section permission -&gt; notebook permission
-        <span class="cov8" title="1">if resourceContext.SectionName != "" </span><span class="cov8" title="1">{
-                return ac.getSectionPermissionWithFallback(resourceContext.SectionName, notebookName)
-        }</span>
-        
-        // SECURITY: For section operations, if we have a section ID but no section name,
-        // this indicates we couldn't resolve the section name for proper authorization.
-        // This is a security risk, so we deny access (fail-closed security model).
-        <span class="cov8" title="1">if resourceContext.SectionID != "" &amp;&amp; resourceContext.SectionName == "" </span><span class="cov8" title="1">{
-                logging.AuthorizationLogger.Error("SECURITY: Denying section access - section name could not be resolved for authorization",
-                        "section_id", resourceContext.SectionID,
-                        "notebook_name", notebookName,
-                        "security_action", "FAIL_CLOSED_ON_UNRESOLVED_SECTION_NAME")
-                return PermissionNone
-        }</span>
-        
-        // For notebook-level operations: use current notebook permission
-        <span class="cov8" title="1">return ac.currentNotebookPerm</span>
-}
-
-// getSectionPermissionWithFallback gets section permission or falls back to notebook permission
-func (ac *AuthorizationConfig) getSectionPermissionWithFallback(sectionName, notebookName string) PermissionLevel <span class="cov8" title="1">{
-        // Try direct section name match
-        if sectionPermission, _, found := ac.sectionEngine.Match(sectionName); found </span><span class="cov8" title="1">{
-                return sectionPermission
-        }</span>
-        
-        // Try full path match (notebook/section)
-        <span class="cov8" title="1">fullPath := notebookName + "/" + sectionName
-        if sectionPermission, _, found := ac.sectionEngine.Match(fullPath); found </span><span class="cov8" title="1">{
-                return sectionPermission
-        }</span>
-        
-        // Fall back to notebook permission
-        <span class="cov0" title="0">return ac.currentNotebookPerm</span>
-}
 
 
 // permissionAllowsOperation checks if a permission level allows a specific operation
 func (ac *AuthorizationConfig) permissionAllowsOperation(permission PermissionLevel, operation ToolOperation) bool <span class="cov8" title="1">{
         switch permission </span>{
-        case PermissionNone:<span class="cov8" title="1">
+        case PermissionNone:<span class="cov0" title="0">
                 return false</span>
         case PermissionRead:<span class="cov8" title="1">
                 return operation == OperationRead</span>
-        case PermissionWrite, PermissionFull:<span class="cov8" title="1">
+        case PermissionWrite, PermissionFull:<span class="cov0" title="0">
                 return true</span> // Write permission allows both read and write
         default:<span class="cov0" title="0">
                 return false</span>
@@ -7362,14 +7363,14 @@ func (ac *AuthorizationConfig) permissionAllowsOperation(permission PermissionLe
 
 // FilterNotebooks filters a list of notebooks based on authorization permissions
 // Only notebooks with read, write, or full permissions are included
-func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{}) []map[string]interface{} <span class="cov0" title="0">{
-        if !ac.Enabled </span><span class="cov0" title="0">{
+func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{}) []map[string]interface{} <span class="cov8" title="1">{
+        if !ac.Enabled </span><span class="cov8" title="1">{
                 logging.AuthorizationLogger.Debug("Notebook filtering skipped - authorization disabled",
                         "notebook_count", len(notebooks))
                 return notebooks // No filtering when authorization disabled
         }</span>
 
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Starting notebook filtering",
+        <span class="cov8" title="1">logging.AuthorizationLogger.Debug("Starting notebook filtering",
                 "notebook_count", len(notebooks),
                 "default_permissions", ac.DefaultNotebookPermissions,
                 "notebook_permissions_configured", len(ac.NotebookPermissions) &gt; 0)
@@ -7377,20 +7378,20 @@ func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{
         var filtered []map[string]interface{}
         var filteredOut []string
 
-        for _, notebook := range notebooks </span><span class="cov0" title="0">{
-                if displayName, ok := notebook["displayName"].(string); ok </span><span class="cov0" title="0">{
+        for _, notebook := range notebooks </span><span class="cov8" title="1">{
+                if displayName, ok := notebook["displayName"].(string); ok </span><span class="cov8" title="1">{
                         notebookID, _ := notebook["id"].(string)
                         
-                        // Get permission using pattern engine
+                        // Get permission using exact match or default
                         permission := ac.GetNotebookPermission(displayName)
                         
-                        if permission != PermissionNone &amp;&amp; permission != "" </span><span class="cov0" title="0">{
+                        if permission != PermissionNone &amp;&amp; permission != "" </span><span class="cov8" title="1">{
                                 filtered = append(filtered, notebook)
                                 logging.AuthorizationLogger.Debug("Notebook allowed by filter",
                                         "notebook_name", displayName,
                                         "notebook_id", notebookID,
                                         "permission", permission)
-                        }</span> else<span class="cov0" title="0"> {
+                        }</span> else<span class="cov8" title="1"> {
                                 filteredOut = append(filteredOut, displayName)
                                 logging.AuthorizationLogger.Debug("Notebook blocked by filter",
                                         "notebook_name", displayName,
@@ -7405,14 +7406,14 @@ func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{
         }
 
         // Log comprehensive filtering summary
-        <span class="cov0" title="0">if len(filteredOut) &gt; 0 </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if len(filteredOut) &gt; 0 </span><span class="cov8" title="1">{
                 logging.AuthorizationLogger.Info("Filtered out notebooks due to authorization",
                         "filtered_count", len(filteredOut),
                         "filtered_notebooks", filteredOut,
                         "remaining_count", len(filtered))
         }</span>
 
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Notebook filtering completed",
+        <span class="cov8" title="1">logging.AuthorizationLogger.Debug("Notebook filtering completed",
                 "original_count", len(notebooks),
                 "filtered_count", len(filtered),
                 "removed_count", len(filteredOut))
@@ -7420,218 +7421,11 @@ func (ac *AuthorizationConfig) FilterNotebooks(notebooks []map[string]interface{
         return filtered</span>
 }
 
-// FilterSections filters a list of sections based on authorization permissions
-// Only sections with read, write, or full permissions are included
-// Note: Filtering is only performed when operating within the current notebook scope
-func (ac *AuthorizationConfig) FilterSections(sections []map[string]interface{}, notebookName string) []map[string]interface{} <span class="cov0" title="0">{
-        if !ac.Enabled </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Debug("Section filtering skipped - authorization disabled",
-                        "section_count", len(sections),
-                        "notebook", notebookName)
-                return sections // No filtering when authorization disabled
-        }</span>
 
-        // Only filter sections if we're operating within the current notebook
-        <span class="cov0" title="0">if notebookName != ac.currentNotebook </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Debug("Section filtering skipped - not current notebook",
-                        "section_count", len(sections),
-                        "notebook", notebookName,
-                        "current_notebook", ac.currentNotebook)
-                return sections
-        }</span>
-
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Starting section filtering",
-                "section_count", len(sections),
-                "notebook", notebookName,
-                "current_notebook_permission", ac.currentNotebookPerm,
-                "section_permissions_configured", len(ac.SectionPermissions) &gt; 0)
-
-        var filtered []map[string]interface{}
-        var filteredOut []string
-
-        for _, section := range sections </span><span class="cov0" title="0">{
-                if sectionName, ok := section["displayName"].(string); ok </span><span class="cov0" title="0">{
-                        sectionID, _ := section["id"].(string)
-                        sectionType, _ := section["type"].(string)
-                        
-                        // Get effective permission using simplified hierarchy
-                        effectivePermission := ac.getSectionPermissionWithFallback(sectionName, notebookName)
-
-                        if effectivePermission != PermissionNone &amp;&amp; effectivePermission != "" </span><span class="cov0" title="0">{
-                                filtered = append(filtered, section)
-                                logging.AuthorizationLogger.Debug("Section allowed by filter",
-                                        "section_name", sectionName,
-                                        "section_id", sectionID,
-                                        "section_type", sectionType,
-                                        "notebook", notebookName,
-                                        "effective_permission", effectivePermission)
-                        }</span> else<span class="cov0" title="0"> {
-                                filteredOut = append(filteredOut, sectionName)
-                                logging.AuthorizationLogger.Debug("Section blocked by filter",
-                                        "section_name", sectionName,
-                                        "section_id", sectionID,
-                                        "section_type", sectionType,
-                                        "notebook", notebookName,
-                                        "effective_permission", effectivePermission,
-                                        "why_blocked", "effective permission is 'none' or empty")
-                        }</span>
-                } else<span class="cov0" title="0"> {
-                        logging.AuthorizationLogger.Warn("Section missing displayName field, skipping",
-                                "section", section,
-                                "notebook", notebookName)
-                }</span>
-        }
-
-        // Log comprehensive filtering summary
-        <span class="cov0" title="0">if len(filteredOut) &gt; 0 </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Info("Filtered out sections due to authorization",
-                        "notebook", notebookName,
-                        "filtered_count", len(filteredOut),
-                        "filtered_sections", filteredOut,
-                        "remaining_count", len(filtered))
-        }</span>
-
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Section filtering completed",
-                "notebook", notebookName,
-                "original_count", len(sections),
-                "filtered_count", len(filtered),
-                "removed_count", len(filteredOut))
-
-        return filtered</span>
-}
-
-// FilterPages filters a list of pages based on authorization permissions
-// Only performed for pages within the current notebook scope
-func (ac *AuthorizationConfig) FilterPages(pages []map[string]interface{}, sectionID, sectionName, notebookName string) []map[string]interface{} <span class="cov0" title="0">{
-        if !ac.Enabled </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Debug("Page filtering skipped - authorization disabled",
-                        "page_count", len(pages),
-                        "section_id", sectionID,
-                        "section_name", sectionName,
-                        "notebook", notebookName)
-                return pages // No filtering when authorization disabled
-        }</span>
-
-        // Only filter pages if we're operating within the current notebook
-        <span class="cov0" title="0">if notebookName != ac.currentNotebook </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Debug("Page filtering skipped - not current notebook",
-                        "page_count", len(pages),
-                        "section_id", sectionID,
-                        "section_name", sectionName,
-                        "notebook", notebookName,
-                        "current_notebook", ac.currentNotebook)
-                return pages
-        }</span>
-
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Starting page filtering",
-                "page_count", len(pages),
-                "section_id", sectionID,
-                "section_name", sectionName,
-                "notebook", notebookName,
-                "page_permissions_configured", len(ac.PagePermissions) &gt; 0)
-
-        // Get section permission as baseline
-        sectionPermission := ac.getSectionPermissionWithFallback(sectionName, notebookName)
-        if sectionPermission == PermissionNone || sectionPermission == "" </span><span class="cov0" title="0">{
-                // If section is blocked, all pages are blocked
-                logging.AuthorizationLogger.Info("All pages blocked due to section permission",
-                        "section_id", sectionID,
-                        "section_name", sectionName,
-                        "notebook", notebookName,
-                        "section_permission", sectionPermission,
-                        "filtered_count", len(pages))
-                return []map[string]interface{}{}
-        }</span>
-
-        // If no page-specific permissions are configured, allow all pages
-        <span class="cov0" title="0">if len(ac.PagePermissions) == 0 </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Debug("Page filtering completed - all pages allowed (no page permissions defined)",
-                        "section_id", sectionID,
-                        "section_name", sectionName,
-                        "notebook", notebookName,
-                        "section_permission", sectionPermission,
-                        "page_count", len(pages))
-                return pages
-        }</span>
-
-        // Apply page-specific filtering
-        <span class="cov0" title="0">var filtered []map[string]interface{}
-        var filteredOut []string
-
-        for _, page := range pages </span><span class="cov0" title="0">{
-                pageTitle, hasTitle := page["title"].(string)
-                pageID := ""
-                // Check both possible field names for page ID
-                if id, ok := page["id"].(string); ok </span><span class="cov0" title="0">{
-                        pageID = id
-                }</span> else<span class="cov0" title="0"> if id, ok := page["pageId"].(string); ok </span><span class="cov0" title="0">{
-                        pageID = id
-                }</span>
-
-                <span class="cov0" title="0">if !hasTitle </span><span class="cov0" title="0">{
-                        // Skip pages without titles, but log for debugging
-                        logging.AuthorizationLogger.Warn("Page missing title field, allowing based on section permission",
-                                "page", page,
-                                "section_id", sectionID,
-                                "section_name", sectionName,
-                                "notebook", notebookName)
-                        filtered = append(filtered, page)
-                        continue</span>
-                }
-
-                // Check page-specific permission using pattern engine
-                <span class="cov0" title="0">if pagePermission, pattern, found := ac.pageEngine.Match(pageTitle); found </span><span class="cov0" title="0">{
-                        if pagePermission != PermissionNone </span><span class="cov0" title="0">{
-                                filtered = append(filtered, page)
-                                logging.AuthorizationLogger.Debug("Page allowed by page pattern",
-                                        "page_title", pageTitle,
-                                        "page_id", pageID,
-                                        "matched_pattern", pattern,
-                                        "page_permission", pagePermission)
-                        }</span> else<span class="cov0" title="0"> {
-                                filteredOut = append(filteredOut, pageTitle)
-                                logging.AuthorizationLogger.Debug("Page blocked by page pattern",
-                                        "page_title", pageTitle,
-                                        "page_id", pageID,
-                                        "matched_pattern", pattern,
-                                        "page_permission", pagePermission)
-                        }</span>
-                } else<span class="cov0" title="0"> {
-                        // No page-specific permission, use section permission
-                        filtered = append(filtered, page)
-                        logging.AuthorizationLogger.Debug("Page allowed by section fallback",
-                                "page_title", pageTitle,
-                                "page_id", pageID,
-                                "section_permission", sectionPermission)
-                }</span>
-        }
-
-        // Log comprehensive filtering summary
-        <span class="cov0" title="0">if len(filteredOut) &gt; 0 </span><span class="cov0" title="0">{
-                logging.AuthorizationLogger.Info("Filtered out pages by page-level authorization",
-                        "section_id", sectionID,
-                        "section_name", sectionName,
-                        "notebook", notebookName,
-                        "original_count", len(pages),
-                        "filtered_count", len(filtered),
-                        "filtered_out_pages", filteredOut)
-        }</span>
-
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Page filtering completed",
-                "section_id", sectionID,
-                "section_name", sectionName,
-                "notebook", notebookName,
-                "original_count", len(pages),
-                "filtered_count", len(filtered),
-                "removed_count", len(filteredOut))
-
-        return filtered</span>
-}
-
-// GetNotebookPermission gets the effective permission for a notebook
+// GetNotebookPermission gets the effective permission for a notebook using exact matching
 func (ac *AuthorizationConfig) GetNotebookPermission(notebookName string) PermissionLevel <span class="cov8" title="1">{
-        // Try pattern matching with the engine
-        if permission, _, found := ac.notebookEngine.Match(notebookName); found </span><span class="cov8" title="1">{
+        // Try exact match first
+        if permission, exists := ac.NotebookPermissions[notebookName]; exists </span><span class="cov8" title="1">{
                 return permission
         }</span>
 
@@ -7641,16 +7435,10 @@ func (ac *AuthorizationConfig) GetNotebookPermission(notebookName string) Permis
 
 // GetNotebookPermissionWithSource gets the permission and source information for a notebook
 func (ac *AuthorizationConfig) GetNotebookPermissionWithSource(notebookName string) (PermissionLevel, string, string) <span class="cov0" title="0">{
-        // Try pattern matching with the engine
-        if permission, pattern, found := ac.notebookEngine.Match(notebookName); found </span><span class="cov0" title="0">{
-                var source string
-                if pattern == notebookName </span><span class="cov0" title="0">{
-                        source = "exact"
-                }</span> else<span class="cov0" title="0"> {
-                        source = "pattern"
-                }</span>
-                <span class="cov0" title="0">return permission, pattern, source</span>
-        }
+        // Try exact match first
+        if permission, exists := ac.NotebookPermissions[notebookName]; exists </span><span class="cov0" title="0">{
+                return permission, notebookName, "exact"
+        }</span>
 
         // Fall back to default
         <span class="cov0" title="0">return ac.DefaultNotebookPermissions, "", "default"</span>
@@ -7667,801 +7455,65 @@ package authorization
 
 import (
         "context"
-        "strings"
 
         "github.com/mark3labs/mcp-go/mcp"
 
         "github.com/gebl/onenote-mcp-server/internal/logging"
-        "github.com/gebl/onenote-mcp-server/internal/utils"
 )
 
 // NotebookCache interface defines the methods needed from the notebook cache
 type NotebookCache interface {
         GetNotebook() (map[string]interface{}, bool)
         GetDisplayName() (string, bool)
-        GetNotebookID() (string, bool)
-        GetSectionName(sectionID string) (string, bool)
-        GetSectionNameWithProgress(ctx context.Context, sectionID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool)
-        GetPageName(pageID string) (string, bool)
-        GetPageNameWithProgress(ctx context.Context, pageID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool)
 }
 
-// PageNotebookResolver interface defines methods needed to resolve which notebook contains a page
-type PageNotebookResolver interface {
-        ResolvePageNotebook(ctx context.Context, pageID string) (notebookID string, notebookName string, sectionID string, sectionName string, err error)
-}
-
-// ExtractResourceContextEnhanced extracts resource context with API fallback for missing cache data
-// This function can make API calls to resolve missing section/page names when needed
-func ExtractResourceContextEnhanced(ctx context.Context, toolName string, req mcp.CallToolRequest, cache NotebookCache, mcpServer interface{}, graphClient interface{}) ResourceContext <span class="cov0" title="0">{
-        progressToken := extractProgressToken(req)
-        
+// ExtractResourceContext extracts simplified resource context from tool call
+func ExtractResourceContext(ctx context.Context, toolName string, req mcp.CallToolRequest, cache NotebookCache) ResourceContext <span class="cov0" title="0">{
         resourceContext := ResourceContext{
                 Operation: getToolOperation(toolName),
         }
 
-        logging.AuthorizationLogger.Debug("Extracting resource context with API fallback support",
+        logging.AuthorizationLogger.Debug("Extracting simplified resource context",
                 "tool", toolName,
-                "operation", resourceContext.Operation,
-                "has_progress_token", progressToken != "")
+                "operation", resourceContext.Operation)
 
-        // Get current notebook from cache if available
-        if notebook, isSet := cache.GetNotebook(); isSet </span><span class="cov0" title="0">{
-                if notebookID, ok := notebook["id"].(string); ok </span><span class="cov0" title="0">{
-                        resourceContext.NotebookID = notebookID
-                }</span>
-                <span class="cov0" title="0">if displayName, ok := notebook["displayName"].(string); ok </span><span class="cov0" title="0">{
-                        resourceContext.NotebookName = displayName
-                }</span>
+        // Get current notebook name from cache if available
+        if displayName, hasName := cache.GetDisplayName(); hasName </span><span class="cov0" title="0">{
+                resourceContext.NotebookName = displayName
+                logging.AuthorizationLogger.Debug("Got notebook from cache",
+                        "notebook_name", resourceContext.NotebookName)
+        }</span>
 
-                <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Got notebook from cache",
-                        "notebook_name", resourceContext.NotebookName,
-                        "notebook_id", resourceContext.NotebookID)</span>
-        } else<span class="cov0" title="0"> {
-                // Fallback to display name from cache
-                if displayName, ok := cache.GetDisplayName(); ok </span><span class="cov0" title="0">{
-                        resourceContext.NotebookName = displayName
-                }</span>
-                <span class="cov0" title="0">if notebookID, ok := cache.GetNotebookID(); ok </span><span class="cov0" title="0">{
-                        resourceContext.NotebookID = notebookID
-                }</span>
-        }
-
-        // Extract resource identifiers from tool parameters with API fallback
-        <span class="cov0" title="0">extractParameterContextEnhanced(&amp;resourceContext, ctx, req, cache, toolName, mcpServer, progressToken, graphClient)
-
-        logging.AuthorizationLogger.Debug("Resource context extracted with API fallback",
+        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Resource context extracted",
                 "tool", toolName,
                 "notebook_name", resourceContext.NotebookName,
-                "notebook_id", resourceContext.NotebookID,
-                "section_name", resourceContext.SectionName,
-                "section_id", resourceContext.SectionID,
-                "page_id", resourceContext.PageID,
-                "page_name", resourceContext.PageName,
                 "operation", resourceContext.Operation)
 
         return resourceContext</span>
 }
 
-// ExtractResourceContext extracts resource context from an MCP tool request
-// This function uses cached data whenever possible to avoid expensive API calls
-func ExtractResourceContext(toolName string, req mcp.CallToolRequest, cache NotebookCache) ResourceContext <span class="cov0" title="0">{
-        context := ResourceContext{
-                Operation: getToolOperation(toolName),
-        }
-
-        logging.AuthorizationLogger.Debug("Extracting resource context",
-                "tool", toolName,
-                "operation", context.Operation)
-
-        // Get current notebook from cache if available
-        if notebook, isSet := cache.GetNotebook(); isSet </span><span class="cov0" title="0">{
-                if notebookID, ok := notebook["id"].(string); ok </span><span class="cov0" title="0">{
-                        context.NotebookID = notebookID
-                }</span>
-                <span class="cov0" title="0">if displayName, ok := notebook["displayName"].(string); ok </span><span class="cov0" title="0">{
-                        context.NotebookName = displayName
-                }</span>
-
-                <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Got notebook from cache",
-                        "notebook_name", context.NotebookName,
-                        "notebook_id", context.NotebookID)</span>
-        } else<span class="cov0" title="0"> {
-                // Fallback to display name from cache
-                if displayName, ok := cache.GetDisplayName(); ok </span><span class="cov0" title="0">{
-                        context.NotebookName = displayName
-                }</span>
-                <span class="cov0" title="0">if notebookID, ok := cache.GetNotebookID(); ok </span><span class="cov0" title="0">{
-                        context.NotebookID = notebookID
-                }</span>
-        }
-
-        // Extract resource identifiers from tool parameters
-        <span class="cov0" title="0">extractParameterContext(&amp;context, req, cache, toolName)
-
-        logging.AuthorizationLogger.Debug("Resource context extracted",
-                "tool", toolName,
-                "notebook_name", context.NotebookName,
-                "notebook_id", context.NotebookID,
-                "section_name", context.SectionName,
-                "section_id", context.SectionID,
-                "page_id", context.PageID,
-                "page_name", context.PageName,
-                "operation", context.Operation)
-
-        return context</span>
-}
-
-// ExtractResourceContextWithResolver extracts resource context and resolves page notebook ownership when needed
-func ExtractResourceContextWithResolver(ctx context.Context, toolName string, req mcp.CallToolRequest, cache NotebookCache, resolver PageNotebookResolver) ResourceContext <span class="cov0" title="0">{
-        context := ExtractResourceContext(toolName, req, cache)
-        
-        // CRITICAL SECURITY: If we have a page ID, we must verify which notebook it actually belongs to
-        if context.PageID != "" &amp;&amp; resolver != nil </span><span class="cov0" title="0">{
-                actualNotebookID, actualNotebookName, actualSectionID, actualSectionName, err := resolver.ResolvePageNotebook(ctx, context.PageID)
-                if err != nil </span><span class="cov0" title="0">{
-                        logging.AuthorizationLogger.Error("Failed to resolve notebook for page ID - BLOCKING ACCESS",
-                                "page_id", context.PageID,
-                                "cached_notebook", context.NotebookName,
-                                "error", err.Error(),
-                                "security_action", "BLOCKING_POTENTIAL_UNAUTHORIZED_ACCESS")
-                        // Clear context to force authorization failure
-                        context.NotebookName = ""
-                        context.NotebookID = ""
-                }</span> else<span class="cov0" title="0"> {
-                        // Check if the page belongs to a different notebook than cached
-                        if actualNotebookID != context.NotebookID </span><span class="cov0" title="0">{
-                                logging.AuthorizationLogger.Info("Page belongs to different notebook than cached context",
-                                        "page_id", context.PageID,
-                                        "cached_notebook_id", context.NotebookID,
-                                        "cached_notebook_name", context.NotebookName,
-                                        "actual_notebook_id", actualNotebookID,
-                                        "actual_notebook_name", actualNotebookName,
-                                        "security_action", "updating_context_to_prevent_unauthorized_access")
-                                
-                                // Update context with actual notebook/section information
-                                context.NotebookID = actualNotebookID
-                                context.NotebookName = actualNotebookName
-                                context.SectionID = actualSectionID
-                                context.SectionName = actualSectionName
-                        }</span> else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Debug("Page belongs to cached notebook - context validated",
-                                        "page_id", context.PageID,
-                                        "notebook_id", actualNotebookID,
-                                        "notebook_name", actualNotebookName)
-                        }</span>
-                }
-        }
-        
-        <span class="cov0" title="0">return context</span>
-}
-
-// extractProgressToken extracts the progress token from the MCP request metadata
-func extractProgressToken(req mcp.CallToolRequest) string <span class="cov0" title="0">{
-        // Use the centralized utility function
-        return utils.ExtractProgressToken(req)
-}</span>
-
-// extractParameterContextEnhanced extracts context from tool parameters with API fallback
-func extractParameterContextEnhanced(context *ResourceContext, ctx context.Context, req mcp.CallToolRequest, cache NotebookCache, toolName string, mcpServer interface{}, progressToken string, graphClient interface{}) <span class="cov0" title="0">{
-        args := req.GetArguments()
-
-        // Handle different parameter types that can identify resources
-        if sectionID := getStringParam(args, "sectionID"); sectionID != "" </span><span class="cov0" title="0">{
-                context.SectionID = sectionID
-                
-                // Try to get section name from cache first
-                if sectionName, found := cache.GetSectionName(sectionID); found </span><span class="cov0" title="0">{
-                        context.SectionName = sectionName
-                        logging.AuthorizationLogger.Debug("Extracted section from sectionID parameter (cache hit)",
-                                "section_id", sectionID,
-                                "section_name", context.SectionName)
-                }</span> else<span class="cov0" title="0"> {
-                        // Cache miss - try API fallback if available
-                        logging.AuthorizationLogger.Debug("Section name cache miss, attempting API fallback",
-                                "section_id", sectionID)
-                        
-                        if sectionName, found := cache.GetSectionNameWithProgress(ctx, sectionID, mcpServer, progressToken, graphClient); found </span><span class="cov0" title="0">{
-                                context.SectionName = sectionName
-                                logging.AuthorizationLogger.Info("Section name resolved via API fallback",
-                                        "section_id", sectionID,
-                                        "section_name", context.SectionName)
-                        }</span> else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Warn("Section name could not be resolved via cache or API",
-                                        "section_id", sectionID)
-                        }</span>
-                }
-                
-                <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Extracted section from sectionID parameter",
-                        "section_id", sectionID,
-                        "section_name", context.SectionName)</span>
-        }
-
-        <span class="cov0" title="0">if containerID := getStringParam(args, "containerID"); containerID != "" </span><span class="cov0" title="0">{
-                // containerID could be a notebook ID or section group ID
-                // If we don't have a notebook context yet, assume it's a notebook
-                if context.NotebookID == "" </span><span class="cov0" title="0">{
-                        context.NotebookID = containerID
-                        // Try to resolve notebook name from containerID (as notebook ID)
-                        if displayName, ok := cache.GetDisplayName(); ok </span><span class="cov0" title="0">{
-                                // Check if the cached notebook ID matches
-                                if notebookID, idOk := cache.GetNotebookID(); idOk &amp;&amp; notebookID == containerID </span><span class="cov0" title="0">{
-                                        context.NotebookName = displayName
-                                        logging.AuthorizationLogger.Debug("Extracted notebook from containerID parameter and resolved name",
-                                                "container_id", containerID,
-                                                "notebook_name", displayName)
-                                }</span> else<span class="cov0" title="0"> {
-                                        logging.AuthorizationLogger.Debug("Extracted notebook from containerID parameter but could not resolve name",
-                                                "container_id", containerID)
-                                }</span>
-                        } else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Debug("Extracted notebook from containerID parameter but no cached name available",
-                                        "container_id", containerID)
-                        }</span>
-                } else<span class="cov0" title="0"> {
-                        // If we already have a notebook, this might be a section group
-                        context.SectionID = containerID
-                        // Try to resolve section name from containerID (as section ID) with API fallback
-                        if sectionName, found := cache.GetSectionName(containerID); found </span><span class="cov0" title="0">{
-                                context.SectionName = sectionName
-                                logging.AuthorizationLogger.Debug("Extracted section from containerID parameter and resolved name (cache hit)",
-                                        "container_id", containerID,
-                                        "section_name", sectionName)
-                        }</span> else<span class="cov0" title="0"> {
-                                // Cache miss - try API fallback
-                                logging.AuthorizationLogger.Debug("Section name cache miss for containerID, attempting API fallback",
-                                        "container_id", containerID)
-                                
-                                if sectionName, found := cache.GetSectionNameWithProgress(ctx, containerID, mcpServer, progressToken, graphClient); found </span><span class="cov0" title="0">{
-                                        context.SectionName = sectionName
-                                        logging.AuthorizationLogger.Info("Section name resolved via API fallback for containerID",
-                                                "container_id", containerID,
-                                                "section_name", context.SectionName)
-                                }</span> else<span class="cov0" title="0"> {
-                                        logging.AuthorizationLogger.Debug("Extracted section from containerID parameter but could not resolve name",
-                                                "container_id", containerID)
-                                }</span>
-                        }
-                }
-        }
-
-        <span class="cov0" title="0">if pageID := getStringParam(args, "pageID"); pageID != "" </span><span class="cov0" title="0">{
-                context.PageID = pageID
-                
-                // Try to get page name from cache first
-                if pageName, found := cache.GetPageName(pageID); found </span><span class="cov0" title="0">{
-                        context.PageName = pageName
-                        logging.AuthorizationLogger.Debug("Extracted page from pageID parameter (cache hit)",
-                                "page_id", pageID,
-                                "page_name", context.PageName)
-                }</span> else<span class="cov0" title="0"> {
-                        // Cache miss - try API fallback if available
-                        logging.AuthorizationLogger.Debug("Page name cache miss, attempting API fallback",
-                                "page_id", pageID)
-                        
-                        if pageName, found := cache.GetPageNameWithProgress(ctx, pageID, mcpServer, progressToken, graphClient); found </span><span class="cov0" title="0">{
-                                context.PageName = pageName
-                                logging.AuthorizationLogger.Info("Page name resolved via API fallback",
-                                        "page_id", pageID,
-                                        "page_name", context.PageName)
-                        }</span> else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Debug("Extracted page from pageID parameter but could not resolve name from cache",
-                                        "page_id", pageID)
-                        }</span>
-                }
-        }
-
-        // Handle other page identification parameters...
-        <span class="cov0" title="0">if title := getStringParam(args, "title"); title != "" &amp;&amp; context.PageName == "" </span><span class="cov0" title="0">{
-                context.PageName = title
-                logging.AuthorizationLogger.Debug("Extracted page name from title parameter",
-                        "title", title)
-        }</span>
-}
-
-// extractParameterContext extracts context from tool parameters
-func extractParameterContext(context *ResourceContext, req mcp.CallToolRequest, cache NotebookCache, toolName string) <span class="cov0" title="0">{
-        args := req.GetArguments()
-
-        // Handle different parameter types that can identify resources
-        if sectionID := getStringParam(args, "sectionID"); sectionID != "" </span><span class="cov0" title="0">{
-                context.SectionID = sectionID
-                // Try to get section name from cache
-                if sectionName, found := cache.GetSectionName(sectionID); found </span><span class="cov0" title="0">{
-                        context.SectionName = sectionName
-                }</span>
-                <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Extracted section from sectionID parameter",
-                        "section_id", sectionID,
-                        "section_name", context.SectionName)</span>
-        }
-
-        <span class="cov0" title="0">if containerID := getStringParam(args, "containerID"); containerID != "" </span><span class="cov0" title="0">{
-                // containerID could be a notebook ID or section group ID
-                // If we don't have a notebook context yet, assume it's a notebook
-                if context.NotebookID == "" </span><span class="cov0" title="0">{
-                        context.NotebookID = containerID
-                        // Try to resolve notebook name from containerID (as notebook ID)
-                        if displayName, ok := cache.GetDisplayName(); ok </span><span class="cov0" title="0">{
-                                // Check if the cached notebook ID matches
-                                if notebookID, idOk := cache.GetNotebookID(); idOk &amp;&amp; notebookID == containerID </span><span class="cov0" title="0">{
-                                        context.NotebookName = displayName
-                                        logging.AuthorizationLogger.Debug("Extracted notebook from containerID parameter and resolved name",
-                                                "container_id", containerID,
-                                                "notebook_name", displayName)
-                                }</span> else<span class="cov0" title="0"> {
-                                        logging.AuthorizationLogger.Debug("Extracted notebook from containerID parameter but could not resolve name",
-                                                "container_id", containerID)
-                                }</span>
-                        } else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Debug("Extracted notebook from containerID parameter but no cached name available",
-                                        "container_id", containerID)
-                        }</span>
-                } else<span class="cov0" title="0"> {
-                        // If we already have a notebook, this might be a section group
-                        context.SectionID = containerID
-                        // Try to resolve section name from containerID (as section ID)
-                        if sectionName, found := cache.GetSectionName(containerID); found </span><span class="cov0" title="0">{
-                                context.SectionName = sectionName
-                                logging.AuthorizationLogger.Debug("Extracted section from containerID parameter and resolved name",
-                                        "container_id", containerID,
-                                        "section_name", sectionName)
-                        }</span> else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Debug("Extracted section from containerID parameter but could not resolve name",
-                                        "container_id", containerID)
-                        }</span>
-                }
-        }
-
-        <span class="cov0" title="0">if pageID := getStringParam(args, "pageID"); pageID != "" </span><span class="cov0" title="0">{
-                context.PageID = pageID
-                // Try to get page name from cache for authorization checking
-                if pageName, found := cache.GetPageName(pageID); found </span><span class="cov0" title="0">{
-                        context.PageName = pageName
-                        logging.AuthorizationLogger.Debug("Extracted page from pageID parameter and resolved name from cache",
-                                "page_id", pageID,
-                                "page_name", pageName)
-                }</span> else<span class="cov0" title="0"> {
-                        logging.AuthorizationLogger.Debug("Extracted page from pageID parameter but could not resolve name from cache",
-                                "page_id", pageID)
-                }</span>
-        }
-
-        <span class="cov0" title="0">if targetSectionID := getStringParam(args, "targetSectionID"); targetSectionID != "" </span><span class="cov0" title="0">{
-                // For operations like copyPage, movePage
-                context.SectionID = targetSectionID
-                if sectionName, found := cache.GetSectionName(targetSectionID); found </span><span class="cov0" title="0">{
-                        context.SectionName = sectionName
-                }</span>
-                <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Extracted target section from targetSectionID parameter",
-                        "target_section_id", targetSectionID,
-                        "section_name", context.SectionName)</span>
-        }
-
-        // Handle notebook selection tools
-        <span class="cov0" title="0">if identifier := getStringParam(args, "identifier"); identifier != "" &amp;&amp; 
-                (strings.Contains(toolName, "selectNotebook") || strings.Contains(toolName, "getNotebook")) </span><span class="cov0" title="0">{
-                // This could be a notebook name or ID
-                // First assume it's a name
-                context.NotebookName = identifier
-                
-                // But also check if it might be an ID by checking if the current cached notebook ID matches
-                if notebookID, ok := cache.GetNotebookID(); ok &amp;&amp; notebookID == identifier </span><span class="cov0" title="0">{
-                        // The identifier is actually the notebook ID of the currently cached notebook
-                        if displayName, nameOk := cache.GetDisplayName(); nameOk </span><span class="cov0" title="0">{
-                                context.NotebookName = displayName
-                                context.NotebookID = identifier
-                                logging.AuthorizationLogger.Debug("Extracted notebook from identifier parameter (detected as ID) and resolved name",
-                                        "identifier", identifier,
-                                        "notebook_name", displayName)
-                        }</span> else<span class="cov0" title="0"> {
-                                // Keep the identifier as both name and ID
-                                context.NotebookID = identifier
-                                logging.AuthorizationLogger.Debug("Extracted notebook from identifier parameter (detected as ID) but could not resolve name",
-                                        "identifier", identifier)
-                        }</span>
-                } else<span class="cov0" title="0"> {
-                        // Assume it's a name, but warn that it could be an ID
-                        logging.AuthorizationLogger.Debug("Extracted notebook from identifier parameter (assumed as name)",
-                                "identifier", identifier)
-                }</span>
-        }
-
-        // Handle quickNote configuration
-        <span class="cov0" title="0">if toolName == "quickNote" </span><span class="cov0" title="0">{
-                // quickNote uses configured notebook and page names
-                // These will be resolved during the actual operation
-                logging.AuthorizationLogger.Debug("QuickNote tool detected, context will be resolved from configuration")
-        }</span>
-}
-
-// getStringParam safely extracts a string parameter from arguments
-func getStringParam(args map[string]interface{}, key string) string <span class="cov0" title="0">{
-        if value, exists := args[key]; exists </span><span class="cov0" title="0">{
-                if strValue, ok := value.(string); ok </span><span class="cov0" title="0">{
-                        return strValue
-                }</span>
-        }
-        <span class="cov0" title="0">return ""</span>
-}
-
-// getToolOperation returns the operation type for a given tool
+// getToolOperation determines if a tool performs read or write operations
 func getToolOperation(toolName string) ToolOperation <span class="cov0" title="0">{
-        // Auth tools are always read operations
-        if AuthToolNames[toolName] </span><span class="cov0" title="0">{
-                return OperationRead
-        }</span>
-        // For non-auth tools, determine operation type based on tool name patterns
-        <span class="cov0" title="0">writeToolPatterns := []string{
-                "create", "update", "delete", "move", "copy", "select", "clear",
-        }
-        for _, pattern := range writeToolPatterns </span><span class="cov0" title="0">{
-                if strings.Contains(strings.ToLower(toolName), pattern) </span><span class="cov0" title="0">{
-                        return OperationWrite
-                }</span>
-        }
-        <span class="cov0" title="0">return OperationRead</span> // Default to read operation
-}
-
-// ResolveNotebookContext tries to resolve notebook context when only ID is available
-// This is a helper function that could be extended to make API calls if needed
-func ResolveNotebookContext(context *ResourceContext, cache NotebookCache) <span class="cov0" title="0">{
-        if context.NotebookName == "" &amp;&amp; context.NotebookID != "" </span><span class="cov0" title="0">{
-                // Try to get notebook name from cache
-                if displayName, ok := cache.GetDisplayName(); ok </span><span class="cov0" title="0">{
-                        // Check if the cached notebook ID matches
-                        if notebookID, idOk := cache.GetNotebookID(); idOk &amp;&amp; notebookID == context.NotebookID </span><span class="cov0" title="0">{
-                                context.NotebookName = displayName
-                                logging.AuthorizationLogger.Debug("Resolved notebook name from cache",
-                                        "notebook_id", context.NotebookID,
-                                        "notebook_name", context.NotebookName)
-                        }</span>
-                }
-        }
-}
-
-// ResolveSectionContext tries to resolve section context when only ID is available
-// This function attempts to resolve section IDs to section names for proper authorization
-// It uses API fallback if the cache lookup fails
-func ResolveSectionContext(ctx context.Context, context *ResourceContext, cache NotebookCache) <span class="cov0" title="0">{
-        if context.SectionName == "" &amp;&amp; context.SectionID != "" </span><span class="cov0" title="0">{
-                // Try to get section name from cache first
-                if sectionName, found := cache.GetSectionName(context.SectionID); found </span><span class="cov0" title="0">{
-                        context.SectionName = sectionName
-                        logging.AuthorizationLogger.Debug("Resolved section name from cache",
-                                "section_id", context.SectionID,
-                                "section_name", context.SectionName)
-                }</span> else<span class="cov0" title="0"> {
-                        // Cache miss - try API fallback if references are available
-                        logging.AuthorizationLogger.Debug("Section name not found in cache, attempting API fallback for authorization",
-                                "section_id", context.SectionID)
-                        
-                        // Try to get API references from cache if available
-                        if cacheWithRefs, ok := cache.(interface {
-                                GetAPIReferences() (interface{}, interface{})
-                        }); ok </span><span class="cov0" title="0">{
-                                graphClient, mcpServer := cacheWithRefs.GetAPIReferences()
-                                if graphClient != nil </span><span class="cov0" title="0">{
-                                        progressToken := "" // No progress token in authorization context resolution
-                                        if sectionName, found := cache.GetSectionNameWithProgress(ctx, context.SectionID, mcpServer, progressToken, graphClient); found </span><span class="cov0" title="0">{
-                                                context.SectionName = sectionName
-                                                logging.AuthorizationLogger.Info("Section name resolved via API fallback for authorization",
-                                                        "section_id", context.SectionID,
-                                                        "section_name", context.SectionName)
-                                        }</span> else<span class="cov0" title="0"> {
-                                                logging.AuthorizationLogger.Warn("Section name could not be resolved via API for authorization",
-                                                        "section_id", context.SectionID,
-                                                        "authorization_impact", "will fall back to notebook-level permissions")
-                                        }</span>
-                                } else<span class="cov0" title="0"> {
-                                        logging.AuthorizationLogger.Debug("No graph client available for API fallback in authorization",
-                                                "section_id", context.SectionID)
-                                }</span>
-                        } else<span class="cov0" title="0"> {
-                                logging.AuthorizationLogger.Debug("Cache does not support API references for authorization fallback",
-                                        "section_id", context.SectionID)
-                        }</span>
-                }
-        }
-}
-
-// ResolvePageContext tries to resolve page context when only ID is available
-// This function attempts to resolve page IDs to page names for proper authorization
-func ResolvePageContext(context *ResourceContext, cache NotebookCache) <span class="cov0" title="0">{
-        if context.PageName == "" &amp;&amp; context.PageID != "" </span><span class="cov0" title="0">{
-                // Try to get page name from cache
-                if pageName, found := cache.GetPageName(context.PageID); found </span><span class="cov0" title="0">{
-                        context.PageName = pageName
-                        logging.AuthorizationLogger.Debug("Resolved page name from cache",
-                                "page_id", context.PageID,
-                                "page_name", context.PageName)
-                }</span> else<span class="cov0" title="0"> {
-                        logging.AuthorizationLogger.Debug("Page name not found in cache for authorization context",
-                                "page_id", context.PageID)
-                }</span>
-        }
-}
-
-// EnrichQuickNoteContext enriches the context for quickNote operations
-// This should be called with the actual configuration values during authorization
-func EnrichQuickNoteContext(context *ResourceContext, notebookName, pageName string) <span class="cov0" title="0">{
-        if context.NotebookName == "" </span><span class="cov0" title="0">{
-                context.NotebookName = notebookName
-        }</span>
-        // Set the configured page name for authorization checking
-        // Note: We don't set PageID here since quickNote resolves it at runtime
-        // But we can set PageName for authorization purposes
-        <span class="cov0" title="0">if pageName != "" </span><span class="cov0" title="0">{
-                context.PageName = pageName
-        }</span>
+        switch toolName </span>{
+        // Read-only operations
+        case "getAuthStatus", "listNotebooks", "listSections", "listPages", 
+                 "getPageContent", "getPageMetadata", "searchPages":<span class="cov0" title="0">
+                return OperationRead</span>
         
-        <span class="cov0" title="0">logging.AuthorizationLogger.Debug("Enriched quickNote context",
-                "configured_notebook", notebookName,
-                "configured_page", pageName,
-                "context_notebook", context.NotebookName,
-                "context_page", context.PageName)</span>
+        // Write operations
+        case "selectNotebook", "createSection", "updateSection", "deleteSection",
+                 "createPage", "updatePageContent", "updatePageContentAdvanced", 
+                 "deletePage", "quickNote":<span class="cov0" title="0">
+                return OperationWrite</span>
+        
+        // Default to read for unknown tools (safe default)
+        default:<span class="cov0" title="0">
+                logging.AuthorizationLogger.Debug("Unknown tool, defaulting to read operation", "tool", toolName)
+                return OperationRead</span>
+        }
 }</pre>
 		
 		<pre class="file" id="file16" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
-//
-// Licensed under the MIT License. See LICENSE file in the project root for full license information.
-
-package authorization
-
-import (
-        "fmt"
-        "regexp"
-        "sort"
-        "strings"
-
-        "github.com/gebl/onenote-mcp-server/internal/logging"
-)
-
-// CompiledPattern represents a compiled permission pattern with precedence
-type CompiledPattern struct {
-        Original     string          // Original pattern string
-        Permission   PermissionLevel // Permission level for this pattern
-        Regex        *regexp.Regexp  // Compiled regex (nil for exact/prefix patterns)
-        Precedence   int             // Lower = higher precedence (0 = highest)
-        IsExact      bool            // True for exact matches (no wildcards)
-        IsPrefix     bool            // True for simple prefix patterns (ends with *)
-        IsSuffix     bool            // True for simple suffix patterns (starts with *)
-        IsRecursive  bool            // True for /** patterns
-        IsSingleLevel bool           // True for single-level wildcards like /Archive/* (doesn't cross path separators)
-        PathSegments int             // Number of path segments (for /a/b/c counting)
-        LiteralChars int             // Number of literal characters (more = higher precedence)
-}
-
-// PatternEngine handles pattern compilation and matching with precedence
-type PatternEngine struct {
-        compiledPatterns []CompiledPattern
-}
-
-// NewPatternEngine creates a new pattern engine
-func NewPatternEngine() *PatternEngine <span class="cov8" title="1">{
-        return &amp;PatternEngine{
-                compiledPatterns: make([]CompiledPattern, 0),
-        }
-}</span>
-
-// CompilePatterns compiles a map of patterns to a sorted list by precedence
-func (pe *PatternEngine) CompilePatterns(patterns map[string]PermissionLevel) error <span class="cov8" title="1">{
-        pe.compiledPatterns = make([]CompiledPattern, 0, len(patterns))
-        
-        for pattern, permission := range patterns </span><span class="cov8" title="1">{
-                compiled, err := pe.compilePattern(pattern, permission)
-                if err != nil </span><span class="cov0" title="0">{
-                        return fmt.Errorf("failed to compile pattern '%s': %v", pattern, err)
-                }</span>
-                <span class="cov8" title="1">pe.compiledPatterns = append(pe.compiledPatterns, compiled)</span>
-        }
-        
-        // Sort by precedence (lower number = higher precedence)
-        <span class="cov8" title="1">sort.Slice(pe.compiledPatterns, func(i, j int) bool </span><span class="cov8" title="1">{
-                return pe.compiledPatterns[i].Precedence &lt; pe.compiledPatterns[j].Precedence
-        }</span>)
-        
-        <span class="cov8" title="1">logging.AuthorizationLogger.Debug("Compiled and sorted patterns by precedence",
-                "pattern_count", len(pe.compiledPatterns),
-                "patterns", pe.getPatternSummary())
-        
-        return nil</span>
-}
-
-// compilePattern compiles a single pattern with precedence calculation
-func (pe *PatternEngine) compilePattern(pattern string, permission PermissionLevel) (CompiledPattern, error) <span class="cov8" title="1">{
-        compiled := CompiledPattern{
-                Original:   pattern,
-                Permission: permission,
-        }
-        
-        // Normalize pattern (trim leading/trailing slashes for consistency)
-        normalizedPattern := strings.Trim(pattern, "/")
-        
-        // Calculate base metrics
-        compiled.PathSegments = strings.Count(normalizedPattern, "/") + 1
-        if normalizedPattern == "" </span><span class="cov0" title="0">{
-                compiled.PathSegments = 0
-        }</span>
-        
-        // Check for wildcards
-        <span class="cov8" title="1">hasSingleWildcard := strings.Contains(pattern, "*") &amp;&amp; !strings.Contains(pattern, "**")
-        hasRecursiveWildcard := strings.Contains(pattern, "**")
-        
-        // Count literal characters (excluding wildcards)
-        literalPattern := strings.ReplaceAll(pattern, "**", "")
-        literalPattern = strings.ReplaceAll(literalPattern, "*", "")
-        compiled.LiteralChars = len(literalPattern)
-        
-        if !hasSingleWildcard &amp;&amp; !hasRecursiveWildcard </span><span class="cov8" title="1">{
-                // Exact match - highest precedence
-                compiled.IsExact = true
-                compiled.Precedence = 0 + compiled.PathSegments // Exact matches sorted by path depth
-                
-        }</span> else<span class="cov8" title="1"> if hasRecursiveWildcard </span><span class="cov8" title="1">{
-                // Recursive patterns (**) - lower precedence
-                compiled.IsRecursive = true
-                compiled.Precedence = 1000 + (20 - compiled.LiteralChars) + (10 - compiled.PathSegments)
-                
-                // Convert /** patterns to regex
-                regexPattern := strings.ReplaceAll(regexp.QuoteMeta(pattern), "\\*\\*", ".*")
-                regex, err := regexp.Compile("^" + regexPattern + "$")
-                if err != nil </span><span class="cov0" title="0">{
-                        return compiled, fmt.Errorf("invalid recursive pattern regex: %v", err)
-                }</span>
-                <span class="cov8" title="1">compiled.Regex = regex</span>
-                
-        } else<span class="cov8" title="1"> if hasSingleWildcard </span><span class="cov8" title="1">{
-                // Single wildcard patterns - medium precedence
-                if strings.HasSuffix(pattern, "*") &amp;&amp; !strings.Contains(strings.TrimSuffix(pattern, "*"), "*") </span><span class="cov8" title="1">{
-                        // Check if this is a path-based single-level wildcard or simple prefix
-                        prefix := strings.TrimSuffix(pattern, "*")
-                        if strings.Contains(prefix, "/") </span><span class="cov8" title="1">{
-                                // Single-level wildcard like "/Archive/*" - should not cross path boundaries
-                                compiled.IsSingleLevel = true
-                                compiled.Precedence = 110 + (20 - compiled.LiteralChars) + compiled.PathSegments
-                                
-                                // Create regex that prevents crossing path separators: /Archive/[^/]*$
-                                regexPattern := regexp.QuoteMeta(prefix) + "[^/]*$"
-                                regex, err := regexp.Compile("^" + regexPattern)
-                                if err != nil </span><span class="cov0" title="0">{
-                                        return compiled, fmt.Errorf("invalid single-level pattern regex: %v", err)
-                                }</span>
-                                <span class="cov8" title="1">compiled.Regex = regex</span>
-                        } else<span class="cov8" title="1"> {
-                                // Simple prefix pattern like "public_*" - no path restrictions
-                                compiled.IsPrefix = true
-                                compiled.Precedence = 100 + (20 - compiled.LiteralChars) + compiled.PathSegments
-                        }</span>
-                        
-                } else<span class="cov8" title="1"> if strings.HasPrefix(pattern, "*") &amp;&amp; !strings.Contains(strings.TrimPrefix(pattern, "*"), "*") </span><span class="cov8" title="1">{
-                        // Simple suffix pattern like "*_notes"
-                        compiled.IsSuffix = true
-                        compiled.Precedence = 150 + (20 - compiled.LiteralChars) + compiled.PathSegments
-                        
-                }</span> else<span class="cov8" title="1"> {
-                        // Complex single wildcard patterns - need regex
-                        compiled.Precedence = 200 + (20 - compiled.LiteralChars) + compiled.PathSegments
-                        
-                        regexPattern := strings.ReplaceAll(regexp.QuoteMeta(pattern), "\\*", "[^/]*") // * matches anything except /
-                        regex, err := regexp.Compile("^" + regexPattern + "$")
-                        if err != nil </span><span class="cov0" title="0">{
-                                return compiled, fmt.Errorf("invalid wildcard pattern regex: %v", err)
-                        }</span>
-                        <span class="cov8" title="1">compiled.Regex = regex</span>
-                }
-        }
-        
-        <span class="cov8" title="1">logging.AuthorizationLogger.Debug("Compiled pattern",
-                "pattern", pattern,
-                "permission", permission,
-                "precedence", compiled.Precedence,
-                "is_exact", compiled.IsExact,
-                "is_prefix", compiled.IsPrefix,
-                "is_suffix", compiled.IsSuffix,
-                "is_recursive", compiled.IsRecursive,
-                "is_single_level", compiled.IsSingleLevel,
-                "path_segments", compiled.PathSegments,
-                "literal_chars", compiled.LiteralChars)
-        
-        return compiled, nil</span>
-}
-
-// Match finds the best matching pattern for a given value
-func (pe *PatternEngine) Match(value string) (PermissionLevel, string, bool) <span class="cov8" title="1">{
-        if len(pe.compiledPatterns) == 0 </span><span class="cov8" title="1">{
-                return "", "", false
-        }</span>
-        
-        // Normalize value for comparison
-        <span class="cov8" title="1">normalizedValue := strings.Trim(value, "/")
-        
-        // Try each pattern in precedence order (already sorted)
-        for _, pattern := range pe.compiledPatterns </span><span class="cov8" title="1">{
-                if pe.matchesPattern(normalizedValue, pattern) </span><span class="cov8" title="1">{
-                        logging.AuthorizationLogger.Debug("Pattern matched",
-                                "value", value,
-                                "normalized_value", normalizedValue,
-                                "pattern", pattern.Original,
-                                "permission", pattern.Permission,
-                                "precedence", pattern.Precedence,
-                                "match_type", pe.getMatchType(pattern))
-                        return pattern.Permission, pattern.Original, true
-                }</span>
-        }
-        
-        <span class="cov8" title="1">logging.AuthorizationLogger.Debug("No pattern matched", "value", value, "normalized_value", normalizedValue)
-        return "", "", false</span>
-}
-
-// matchesPattern checks if a value matches a specific compiled pattern
-func (pe *PatternEngine) matchesPattern(value string, pattern CompiledPattern) bool <span class="cov8" title="1">{
-        normalizedPattern := strings.Trim(pattern.Original, "/")
-        
-        if pattern.IsExact </span><span class="cov8" title="1">{
-                return value == normalizedPattern
-                
-        }</span> else<span class="cov8" title="1"> if pattern.IsPrefix </span><span class="cov8" title="1">{
-                prefix := strings.TrimSuffix(normalizedPattern, "*")
-                return strings.HasPrefix(value, prefix)
-                
-        }</span> else<span class="cov8" title="1"> if pattern.IsSuffix </span><span class="cov8" title="1">{
-                suffix := strings.TrimPrefix(normalizedPattern, "*")
-                return strings.HasSuffix(value, suffix)
-                
-        }</span> else<span class="cov8" title="1"> if pattern.Regex != nil </span><span class="cov8" title="1">{
-                // For path patterns, test both with and without leading slash
-                testValues := []string{value, "/" + value}
-                if strings.HasPrefix(value, "/") </span><span class="cov0" title="0">{
-                        testValues = append(testValues, strings.TrimPrefix(value, "/"))
-                }</span>
-                
-                <span class="cov8" title="1">for _, testValue := range testValues </span><span class="cov8" title="1">{
-                        if pattern.Regex.MatchString(testValue) </span><span class="cov8" title="1">{
-                                return true
-                        }</span>
-                }
-                <span class="cov8" title="1">return false</span>
-        }
-        
-        <span class="cov0" title="0">return false</span>
-}
-
-// getMatchType returns a string describing the match type for logging
-func (pe *PatternEngine) getMatchType(pattern CompiledPattern) string <span class="cov8" title="1">{
-        if pattern.IsExact </span><span class="cov8" title="1">{
-                return "exact"
-        }</span> else<span class="cov8" title="1"> if pattern.IsPrefix </span><span class="cov8" title="1">{
-                return "prefix"
-        }</span> else<span class="cov8" title="1"> if pattern.IsSuffix </span><span class="cov8" title="1">{
-                return "suffix"
-        }</span> else<span class="cov8" title="1"> if pattern.IsRecursive </span><span class="cov8" title="1">{
-                return "recursive"
-        }</span> else<span class="cov8" title="1"> if pattern.IsSingleLevel </span><span class="cov8" title="1">{
-                return "single_level"
-        }</span>
-        <span class="cov8" title="1">return "regex"</span>
-}
-
-// getPatternSummary returns a summary of compiled patterns for logging
-func (pe *PatternEngine) getPatternSummary() []map[string]interface{} <span class="cov8" title="1">{
-        summary := make([]map[string]interface{}, len(pe.compiledPatterns))
-        for i, pattern := range pe.compiledPatterns </span><span class="cov8" title="1">{
-                summary[i] = map[string]interface{}{
-                        "pattern":     pattern.Original,
-                        "permission":  pattern.Permission,
-                        "precedence":  pattern.Precedence,
-                        "type":        pe.getMatchType(pattern),
-                }
-        }</span>
-        <span class="cov8" title="1">return summary</span>
-}
-
-// GetAllPatterns returns all compiled patterns (for testing/debugging)
-func (pe *PatternEngine) GetAllPatterns() []CompiledPattern <span class="cov8" title="1">{
-        return pe.compiledPatterns
-}</pre>
-		
-		<pre class="file" id="file17" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -8479,13 +7531,8 @@ import (
 // ToolHandler represents the signature of an MCP tool handler function
 type ToolHandler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
-// AuthorizedToolHandler wraps a tool handler with authorization checks
+// AuthorizedToolHandler wraps a tool handler with simplified authorization checks
 func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig) ToolHandler <span class="cov0" title="0">{
-        return AuthorizedToolHandlerWithResolver(toolName, handler, authConfig, cache, quickNoteConfig, nil)
-}</span>
-
-// AuthorizedToolHandlerWithResolver wraps a tool handler with authorization checks including page notebook resolution
-func AuthorizedToolHandlerWithResolver(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig, resolver PageNotebookResolver) ToolHandler <span class="cov0" title="0">{
         return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) </span><span class="cov0" title="0">{
                 // Skip authorization if not enabled
                 if authConfig == nil || !authConfig.Enabled </span><span class="cov0" title="0">{
@@ -8499,43 +7546,22 @@ func AuthorizedToolHandlerWithResolver(toolName string, handler ToolHandler, aut
                         "tool", toolName,
                         "authorization_enabled", authConfig.Enabled)
 
-                // Extract resource context from the request with proper page notebook resolution
-                var resourceContext ResourceContext
-                if resolver != nil </span><span class="cov0" title="0">{
-                        resourceContext = ExtractResourceContextWithResolver(ctx, toolName, req, cache, resolver)
-                }</span> else<span class="cov0" title="0"> {
-                        resourceContext = ExtractResourceContext(toolName, req, cache)
-                }</span>
+                // Extract simplified resource context
+                resourceContext := ExtractResourceContext(ctx, toolName, req, cache)
 
-                // Special handling for quickNote tool
-                <span class="cov0" title="0">if toolName == "quickNote" &amp;&amp; quickNoteConfig != nil </span><span class="cov0" title="0">{
+                // Special handling for quickNote tool - use quicknote notebook if specified
+                if toolName == "quickNote" &amp;&amp; quickNoteConfig != nil </span><span class="cov0" title="0">{
                         targetNotebook := quickNoteConfig.GetNotebookName()
                         if targetNotebook == "" </span><span class="cov0" title="0">{
                                 targetNotebook = quickNoteConfig.GetDefaultNotebook()
                         }</span>
-                        <span class="cov0" title="0">targetPage := quickNoteConfig.GetPageName()
                         
-                        EnrichQuickNoteContext(&amp;resourceContext, targetNotebook, targetPage)
-                        
-                        logging.AuthorizationLogger.Debug("Enhanced quickNote context",
-                                "target_notebook", targetNotebook,
-                                "target_page", targetPage,
-                                "final_context", resourceContext.String())</span>
+                        <span class="cov0" title="0">if targetNotebook != "" </span><span class="cov0" title="0">{
+                                resourceContext.NotebookName = targetNotebook
+                                logging.AuthorizationLogger.Debug("Using quickNote target notebook",
+                                        "target_notebook", targetNotebook)
+                        }</span>
                 }
-
-                // Resolve additional context if needed
-                <span class="cov0" title="0">ResolveNotebookContext(&amp;resourceContext, cache)
-                ResolveSectionContext(ctx, &amp;resourceContext, cache)
-                ResolvePageContext(&amp;resourceContext, cache)
-
-                // Enhanced security check: If we have a page ID but still no page name after context resolution,
-                // we will rely on the simplified authorization model to handle it securely
-                if resourceContext.PageID != "" &amp;&amp; resourceContext.PageName == "" </span><span class="cov0" title="0">{
-                        logging.AuthorizationLogger.Warn("Page ID provided but page name could not be resolved",
-                                "tool", toolName,
-                                "page_id", resourceContext.PageID,
-                                "security_implications", "Will use current notebook permission as fallback")
-                }</span>
 
                 // Perform authorization check
                 <span class="cov0" title="0">err := authConfig.IsAuthorized(ctx, toolName, req, resourceContext)
@@ -8575,14 +7601,11 @@ func CreateAuthorizedTool(toolName string, handler ToolHandler, authConfig *Auth
         return tool
 }</span>
 
-// AuthorizationInfo provides information about the authorization system status
+// AuthorizationInfo provides information about the simplified authorization system status
 type AuthorizationInfo struct {
         Enabled                  bool   `json:"enabled"`
         DefaultNotebookMode      string `json:"default_notebook_mode"`
         NotebookRules           int    `json:"notebook_rules_configured"`
-        SectionRules            int    `json:"section_rules_configured"`
-        PageRules               int    `json:"page_rules_configured"`
-        CompiledPatterns        bool   `json:"compiled_patterns"`
         CurrentNotebook         string `json:"current_notebook"`
         CurrentNotebookPerm     string `json:"current_notebook_permission"`
 }
@@ -8599,15 +7622,12 @@ func GetAuthorizationInfo(authConfig *AuthorizationConfig) AuthorizationInfo <sp
                 Enabled:                  authConfig.Enabled,
                 DefaultNotebookMode:      string(authConfig.DefaultNotebookPermissions),
                 NotebookRules:           len(authConfig.NotebookPermissions),
-                SectionRules:            len(authConfig.SectionPermissions),
-                PageRules:               len(authConfig.PagePermissions),
-                CompiledPatterns:        len(authConfig.NotebookPermissions) &gt; 0 || len(authConfig.SectionPermissions) &gt; 0 || len(authConfig.PagePermissions) &gt; 0,
                 CurrentNotebook:         authConfig.GetCurrentNotebook(),
                 CurrentNotebookPerm:     string(authConfig.currentNotebookPerm),
         }</span>
 }
 
-// ValidateAuthorizationConfig validates an authorization configuration
+// ValidateAuthorizationConfig validates the simplified authorization configuration
 func ValidateAuthorizationConfig(authConfig *AuthorizationConfig) error <span class="cov0" title="0">{
         if authConfig == nil </span><span class="cov0" title="0">{
                 return nil // nil config is valid (authorization disabled)
@@ -8630,31 +7650,11 @@ func ValidateAuthorizationConfig(authConfig *AuthorizationConfig) error <span cl
                         return fmt.Errorf("invalid notebook permission for '%s': %s (must be one of: none, read, write, full)", name, mode)</span>
                 }
         }
-        
-        // Validate section permissions
-        <span class="cov0" title="0">for name, mode := range authConfig.SectionPermissions </span><span class="cov0" title="0">{
-                switch mode </span>{
-                case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:<span class="cov0" title="0"></span>
-                        // Valid
-                default:<span class="cov0" title="0">
-                        return fmt.Errorf("invalid section permission for '%s': %s (must be one of: none, read, write, full)", name, mode)</span>
-                }
-        }
-        
-        // Validate page permissions  
-        <span class="cov0" title="0">for name, mode := range authConfig.PagePermissions </span><span class="cov0" title="0">{
-                switch mode </span>{
-                case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:<span class="cov0" title="0"></span>
-                        // Valid
-                default:<span class="cov0" title="0">
-                        return fmt.Errorf("invalid page permission for '%s': %s (must be one of: none, read, write, full)", name, mode)</span>
-                }
-        }
 
         <span class="cov0" title="0">return nil</span>
 }</pre>
 		
-		<pre class="file" id="file18" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file17" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -9086,22 +8086,6 @@ func Load() (*Config, error) <span class="cov8" title="1">{
                                 }</span>
                         }
                 }
-                <span class="cov8" title="1">if sectionPerms := os.Getenv("AUTHORIZATION_SECTION_PERMISSIONS"); sectionPerms != "" </span><span class="cov0" title="0">{
-                        var perms map[string]string
-                        if err := json.Unmarshal([]byte(sectionPerms), &amp;perms); err == nil </span><span class="cov0" title="0">{
-                                for pattern, perm := range perms </span><span class="cov0" title="0">{
-                                        cfg.Authorization.SectionPermissions[pattern] = authorization.PermissionLevel(perm)
-                                }</span>
-                        }
-                }
-                <span class="cov8" title="1">if pagePerms := os.Getenv("AUTHORIZATION_PAGE_PERMISSIONS"); pagePerms != "" </span><span class="cov0" title="0">{
-                        var perms map[string]string
-                        if err := json.Unmarshal([]byte(pagePerms), &amp;perms); err == nil </span><span class="cov0" title="0">{
-                                for pattern, perm := range perms </span><span class="cov0" title="0">{
-                                        cfg.Authorization.PagePermissions[pattern] = authorization.PermissionLevel(perm)
-                                }</span>
-                        }
-                }
         }
 
         // Apply defaults for empty fields
@@ -9123,14 +8107,14 @@ func Load() (*Config, error) <span class="cov8" title="1">{
         }</span>
         <span class="cov8" title="1">logger.Debug("Configuration validation passed")
 
-        // Compile authorization matchers if authorization is configured
+        // Validate authorization configuration if present
         if cfg.Authorization != nil </span><span class="cov8" title="1">{
-                logger.Debug("Compiling authorization matchers")
-                if err := cfg.Authorization.CompilePatterns(); err != nil </span><span class="cov0" title="0">{
-                        logger.Error("Authorization matcher compilation failed", "error", err)
-                        return nil, fmt.Errorf("failed to compile authorization matchers: %v", err)
+                logger.Debug("Validating authorization configuration")
+                if err := cfg.Authorization.ValidateConfig(); err != nil </span><span class="cov0" title="0">{
+                        logger.Error("Authorization configuration validation failed", "error", err)
+                        return nil, fmt.Errorf("failed to validate authorization configuration: %v", err)
                 }</span>
-                <span class="cov8" title="1">logger.Debug("Authorization matchers compiled successfully")</span>
+                <span class="cov8" title="1">logger.Debug("Authorization configuration validated successfully")</span>
         }
 
         <span class="cov8" title="1">elapsed := time.Since(startTime)
@@ -9361,7 +8345,7 @@ func getConfigSource() string <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file19" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file18" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -9612,7 +8596,7 @@ func (c *Client) RefreshTokenIfNeeded() error <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file20" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file19" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -9721,7 +8705,7 @@ func (c *Client) GetContentTypeFromResponse(resp *http.Response) string <span cl
 }
 </pre>
 		
-		<pre class="file" id="file21" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file20" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -9853,7 +8837,7 @@ func (c *Client) GetOnenoteOperation(operationID string) (map[string]interface{}
 }
 </pre>
 		
-		<pre class="file" id="file22" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file21" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -10209,7 +9193,7 @@ func TryMultipleEndpoints(
         <span class="cov8" title="1">return nil, fmt.Errorf("no endpoints provided")</span>
 }</pre>
 		
-		<pre class="file" id="file23" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file22" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -10497,7 +9481,7 @@ var (
 )
 </pre>
 		
-		<pre class="file" id="file24" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file23" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -11114,7 +10098,7 @@ func GetDefaultNotebookID(client *graph.Client, config *graph.Config) (string, e
 }
 </pre>
 		
-		<pre class="file" id="file25" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file24" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -12767,7 +11751,7 @@ func extractPageItemID(url string) string <span class="cov8" title="1">{
 }
 </pre>
 		
-		<pre class="file" id="file26" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file25" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -12823,36 +11807,36 @@ var toolDescriptions = map[string]string{
 }
 
 // GetToolDescription returns the description for a specific tool
-func GetToolDescription(toolName string) (string, error) <span class="cov0" title="0">{
+func GetToolDescription(toolName string) (string, error) <span class="cov8" title="1">{
         desc, exists := toolDescriptions[toolName]
-        if !exists </span><span class="cov0" title="0">{
+        if !exists </span><span class="cov8" title="1">{
                 return "", fmt.Errorf("description not found for tool: %s", toolName)
         }</span>
-        <span class="cov0" title="0">return desc, nil</span>
+        <span class="cov8" title="1">return desc, nil</span>
 }
 
 // MustGetToolDescription returns the description for a tool or panics if not found
 // This should only be used during server initialization where we want to fail fast
-func MustGetToolDescription(toolName string) string <span class="cov0" title="0">{
+func MustGetToolDescription(toolName string) string <span class="cov8" title="1">{
         desc, exists := toolDescriptions[toolName]
-        if !exists </span><span class="cov0" title="0">{
+        if !exists </span><span class="cov8" title="1">{
                 panic(fmt.Sprintf("Tool description not found: %s", toolName))</span>
         }
-        <span class="cov0" title="0">return desc</span>
+        <span class="cov8" title="1">return desc</span>
 }
 
 // GetAllDescriptions returns all available tool descriptions
-func GetAllDescriptions() map[string]string <span class="cov0" title="0">{
+func GetAllDescriptions() map[string]string <span class="cov8" title="1">{
         // Return a copy to prevent modification of the original map
         result := make(map[string]string, len(toolDescriptions))
-        for k, v := range toolDescriptions </span><span class="cov0" title="0">{
+        for k, v := range toolDescriptions </span><span class="cov8" title="1">{
                 result[k] = v
         }</span>
-        <span class="cov0" title="0">return result</span>
+        <span class="cov8" title="1">return result</span>
 }
 </pre>
 		
-		<pre class="file" id="file27" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file26" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -13351,7 +12335,7 @@ func (c *SectionClient) processCreateSectionGroupResponse(resp *http.Response, o
 }
 </pre>
 		
-		<pre class="file" id="file28" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file27" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -14063,9 +13047,75 @@ func (c *SectionClient) GetSectionByID(sectionID string) (map[string]interface{}
 
         <span class="cov0" title="0">return result, nil</span>
 }
+
+// ResolveSectionNotebook resolves which notebook owns a section by its ID
+func (c *SectionClient) ResolveSectionNotebook(ctx context.Context, sectionID string) (notebookID string, notebookName string, err error) <span class="cov0" title="0">{
+        logging.SectionLogger.Debug("Resolving notebook ownership for section",
+                "section_id", sectionID)
+
+        // Sanitize and validate the sectionID to prevent injection attacks
+        sanitizedSectionID, err := c.Client.SanitizeOneNoteID(sectionID, "sectionID")
+        if err != nil </span><span class="cov0" title="0">{
+                return "", "", fmt.Errorf("invalid section ID: %v", err)
+        }</span>
+
+        // Use Graph API to get section metadata including parent notebook
+        // We use $expand to get the parent notebook information in the same call
+        <span class="cov0" title="0">url := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/sections/%s?$expand=parentNotebook", sanitizedSectionID)
+        
+        response, err := c.Client.MakeAuthenticatedRequest("GET", url, nil, nil)
+        if err != nil </span><span class="cov0" title="0">{
+                logging.SectionLogger.Error("Failed to resolve section notebook via Graph API",
+                        "section_id", sectionID,
+                        "error", err.Error())
+                return "", "", fmt.Errorf("failed to resolve section notebook: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer response.Body.Close()
+
+        if response.StatusCode != 200 </span><span class="cov0" title="0">{
+                logging.SectionLogger.Error("Graph API returned error when resolving section notebook",
+                        "section_id", sectionID,
+                        "status_code", response.StatusCode)
+                return "", "", fmt.Errorf("Graph API error %d when resolving section notebook", response.StatusCode)
+        }</span>
+
+        <span class="cov0" title="0">var sectionInfo struct {
+                ID             string `json:"id"`
+                DisplayName    string `json:"displayName"`
+                ParentNotebook *struct {
+                        ID          string `json:"id"`
+                        DisplayName string `json:"displayName"`
+                } `json:"parentNotebook"`
+        }
+
+        if err := json.NewDecoder(response.Body).Decode(&amp;sectionInfo); err != nil </span><span class="cov0" title="0">{
+                logging.SectionLogger.Error("Failed to decode section notebook resolution response",
+                        "section_id", sectionID,
+                        "error", err.Error())
+                return "", "", fmt.Errorf("failed to decode Graph API response: %w", err)
+        }</span>
+
+        // Validate that we got the parent notebook information
+        <span class="cov0" title="0">if sectionInfo.ParentNotebook == nil </span><span class="cov0" title="0">{
+                logging.SectionLogger.Error("Section response missing parent notebook information",
+                        "section_id", sectionID)
+                return "", "", fmt.Errorf("unable to determine parent notebook for section %s", sectionID)
+        }</span>
+
+        <span class="cov0" title="0">notebookID = sectionInfo.ParentNotebook.ID
+        notebookName = sectionInfo.ParentNotebook.DisplayName
+
+        logging.SectionLogger.Debug("Successfully resolved section notebook ownership",
+                "section_id", sectionID,
+                "section_name", sectionInfo.DisplayName,
+                "notebook_id", notebookID,
+                "notebook_name", notebookName)
+
+        return notebookID, notebookName, nil</span>
+}
 </pre>
 		
-		<pre class="file" id="file29" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file28" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -14183,7 +13233,7 @@ func EncodeToBase64(data []byte) string <span class="cov8" title="1">{
 }</span>
 </pre>
 		
-		<pre class="file" id="file30" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file29" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -14383,7 +13433,7 @@ func SendContextualMessage(ctx context.Context, message string, logger interface
         }
 }</pre>
 		
-		<pre class="file" id="file31" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file30" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 
@@ -14647,7 +13697,7 @@ func (ph *ProgressHandler) SendProgressMessage(ctx context.Context, s interface{
         }
 }</pre>
 		
-		<pre class="file" id="file32" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
+		<pre class="file" id="file31" style="display: none">// Copyright (c) 2025 Gabriel Lawrence
 //
 // Licensed under the MIT License. See LICENSE file in the project root for full license information.
 

@@ -16,13 +16,8 @@ import (
 // ToolHandler represents the signature of an MCP tool handler function
 type ToolHandler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
-// AuthorizedToolHandler wraps a tool handler with authorization checks
+// AuthorizedToolHandler wraps a tool handler with simplified authorization checks
 func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig) ToolHandler {
-	return AuthorizedToolHandlerWithResolver(toolName, handler, authConfig, cache, quickNoteConfig, nil)
-}
-
-// AuthorizedToolHandlerWithResolver wraps a tool handler with authorization checks including page notebook resolution
-func AuthorizedToolHandlerWithResolver(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig, resolver PageNotebookResolver) ToolHandler {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Skip authorization if not enabled
 		if authConfig == nil || !authConfig.Enabled {
@@ -36,42 +31,21 @@ func AuthorizedToolHandlerWithResolver(toolName string, handler ToolHandler, aut
 			"tool", toolName,
 			"authorization_enabled", authConfig.Enabled)
 
-		// Extract resource context from the request with proper page notebook resolution
-		var resourceContext ResourceContext
-		if resolver != nil {
-			resourceContext = ExtractResourceContextWithResolver(ctx, toolName, req, cache, resolver)
-		} else {
-			resourceContext = ExtractResourceContext(toolName, req, cache)
-		}
+		// Extract simplified resource context
+		resourceContext := ExtractResourceContext(ctx, toolName, req, cache)
 
-		// Special handling for quickNote tool
+		// Special handling for quickNote tool - use quicknote notebook if specified
 		if toolName == "quickNote" && quickNoteConfig != nil {
 			targetNotebook := quickNoteConfig.GetNotebookName()
 			if targetNotebook == "" {
 				targetNotebook = quickNoteConfig.GetDefaultNotebook()
 			}
-			targetPage := quickNoteConfig.GetPageName()
 			
-			EnrichQuickNoteContext(&resourceContext, targetNotebook, targetPage)
-			
-			logging.AuthorizationLogger.Debug("Enhanced quickNote context",
-				"target_notebook", targetNotebook,
-				"target_page", targetPage,
-				"final_context", resourceContext.String())
-		}
-
-		// Resolve additional context if needed
-		ResolveNotebookContext(&resourceContext, cache)
-		ResolveSectionContext(ctx, &resourceContext, cache)
-		ResolvePageContext(&resourceContext, cache)
-
-		// Enhanced security check: If we have a page ID but still no page name after context resolution,
-		// we will rely on the simplified authorization model to handle it securely
-		if resourceContext.PageID != "" && resourceContext.PageName == "" {
-			logging.AuthorizationLogger.Warn("Page ID provided but page name could not be resolved",
-				"tool", toolName,
-				"page_id", resourceContext.PageID,
-				"security_implications", "Will use current notebook permission as fallback")
+			if targetNotebook != "" {
+				resourceContext.NotebookName = targetNotebook
+				logging.AuthorizationLogger.Debug("Using quickNote target notebook",
+					"target_notebook", targetNotebook)
+			}
 		}
 
 		// Perform authorization check
@@ -112,14 +86,11 @@ func CreateAuthorizedTool(toolName string, handler ToolHandler, authConfig *Auth
 	return tool
 }
 
-// AuthorizationInfo provides information about the authorization system status
+// AuthorizationInfo provides information about the simplified authorization system status
 type AuthorizationInfo struct {
 	Enabled                  bool   `json:"enabled"`
 	DefaultNotebookMode      string `json:"default_notebook_mode"`
 	NotebookRules           int    `json:"notebook_rules_configured"`
-	SectionRules            int    `json:"section_rules_configured"`
-	PageRules               int    `json:"page_rules_configured"`
-	CompiledPatterns        bool   `json:"compiled_patterns"`
 	CurrentNotebook         string `json:"current_notebook"`
 	CurrentNotebookPerm     string `json:"current_notebook_permission"`
 }
@@ -136,15 +107,12 @@ func GetAuthorizationInfo(authConfig *AuthorizationConfig) AuthorizationInfo {
 		Enabled:                  authConfig.Enabled,
 		DefaultNotebookMode:      string(authConfig.DefaultNotebookPermissions),
 		NotebookRules:           len(authConfig.NotebookPermissions),
-		SectionRules:            len(authConfig.SectionPermissions),
-		PageRules:               len(authConfig.PagePermissions),
-		CompiledPatterns:        len(authConfig.NotebookPermissions) > 0 || len(authConfig.SectionPermissions) > 0 || len(authConfig.PagePermissions) > 0,
 		CurrentNotebook:         authConfig.GetCurrentNotebook(),
 		CurrentNotebookPerm:     string(authConfig.currentNotebookPerm),
 	}
 }
 
-// ValidateAuthorizationConfig validates an authorization configuration
+// ValidateAuthorizationConfig validates the simplified authorization configuration
 func ValidateAuthorizationConfig(authConfig *AuthorizationConfig) error {
 	if authConfig == nil {
 		return nil // nil config is valid (authorization disabled)
@@ -165,26 +133,6 @@ func ValidateAuthorizationConfig(authConfig *AuthorizationConfig) error {
 			// Valid
 		default:
 			return fmt.Errorf("invalid notebook permission for '%s': %s (must be one of: none, read, write, full)", name, mode)
-		}
-	}
-	
-	// Validate section permissions
-	for name, mode := range authConfig.SectionPermissions {
-		switch mode {
-		case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
-			// Valid
-		default:
-			return fmt.Errorf("invalid section permission for '%s': %s (must be one of: none, read, write, full)", name, mode)
-		}
-	}
-	
-	// Validate page permissions  
-	for name, mode := range authConfig.PagePermissions {
-		switch mode {
-		case PermissionNone, PermissionRead, PermissionWrite, PermissionFull:
-			// Valid
-		default:
-			return fmt.Errorf("invalid page permission for '%s': %s (must be one of: none, read, write, full)", name, mode)
 		}
 	}
 

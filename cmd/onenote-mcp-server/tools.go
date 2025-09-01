@@ -36,9 +36,6 @@ func registerTools(s *server.MCPServer, graphClient *graph.Client, authManager *
 			"enabled", authInfo.Enabled,
 			"default_notebook_mode", authInfo.DefaultNotebookMode,
 			"notebook_rules", authInfo.NotebookRules,
-			"section_rules", authInfo.SectionRules,
-			"page_rules", authInfo.PageRules,
-			"compiled_patterns", authInfo.CompiledPatterns,
 			"current_notebook", authInfo.CurrentNotebook,
 			"current_notebook_perm", authInfo.CurrentNotebookPerm)
 	} else {

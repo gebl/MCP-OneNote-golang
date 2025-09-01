@@ -269,7 +269,8 @@ func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, gr
 		}
 		
 		// Apply filtering
-		filteredSections := cfg.Authorization.FilterSections(sectionsForFiltering, notebookDisplayName)
+		// Note: Section filtering removed - all sections within selected notebook are now accessible
+		filteredSections := sectionsForFiltering
 		
 		// Convert back to SectionItem slice
 		var filteredSectionItems []SectionItem
@@ -364,25 +365,8 @@ func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphCl
 		
 		var filteredSections []map[string]interface{}
 		for _, section := range sectionsData {
-			if sectionName, ok := section["displayName"].(string); ok {
-				// For global sections, we can only check section name-based permissions
-				// Check if there's an exact match in section permissions
-				if sectionPermission, exists := cfg.Authorization.SectionPermissions[sectionName]; exists {
-					if sectionPermission != "none" && sectionPermission != "" {
-						filteredSections = append(filteredSections, section)
-					}
-				} else {
-					// Fall back to default permissions if no specific rule
-					if cfg.Authorization.DefaultNotebookPermissions != "none" && cfg.Authorization.DefaultNotebookPermissions != "" {
-						filteredSections = append(filteredSections, section)
-					}
-				}
-			} else {
-				// If section has no name, include it based on default mode
-				if cfg.Authorization.DefaultNotebookPermissions != "none" && cfg.Authorization.DefaultNotebookPermissions != "" {
-					filteredSections = append(filteredSections, section)
-				}
-			}
+			// Note: Section filtering removed - all sections are now accessible
+			filteredSections = append(filteredSections, section)
 		}
 		sectionsData = filteredSections
 		

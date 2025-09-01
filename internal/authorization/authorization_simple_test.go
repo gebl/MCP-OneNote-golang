@@ -13,26 +13,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSimplifiedAuthorizationConfig_CompilePatterns(t *testing.T) {
+func TestSimplifiedAuthorizationConfig_ValidateConfig(t *testing.T) {
 	config := NewAuthorizationConfig()
 	config.NotebookPermissions = map[string]PermissionLevel{
-		"Work Notes": PermissionWrite,
-		"temp_*":     PermissionRead,
-	}
-	config.SectionPermissions = map[string]PermissionLevel{
-		"/Projects/**": PermissionRead,
-		"public_*":     PermissionWrite,
-	}
-	config.PagePermissions = map[string]PermissionLevel{
-		"draft_*":     PermissionWrite,
-		"*_archive":   PermissionNone,
+		"Work Notes":     PermissionWrite,
+		"Archive Notes":  PermissionRead,
+		"Private Notes":  PermissionNone,
 	}
 
-	err := config.CompilePatterns()
+	err := config.ValidateConfig()
 	require.NoError(t, err)
-	assert.NotNil(t, config.notebookEngine)
-	assert.NotNil(t, config.sectionEngine)
-	assert.NotNil(t, config.pageEngine)
 }
 
 func TestSimplifiedAuthorizationConfig_SetCurrentNotebook(t *testing.T) {
@@ -44,20 +34,20 @@ func TestSimplifiedAuthorizationConfig_SetCurrentNotebook(t *testing.T) {
 		"Archive":    PermissionNone,
 	}
 	
-	err := config.CompilePatterns()
+	err := config.ValidateConfig()
 	require.NoError(t, err)
 
-	// Test allowed notebook
+	// Test allowed notebook with write permission
 	err = config.SetCurrentNotebook("Work Notes")
 	assert.NoError(t, err)
 	assert.Equal(t, "Work Notes", config.GetCurrentNotebook())
 
-	// Test blocked notebook
+	// Test blocked notebook with none permission
 	err = config.SetCurrentNotebook("Archive")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "access denied")
 
-	// Test default fallback
+	// Test default fallback (read permission)
 	err = config.SetCurrentNotebook("Other Notebook")
 	assert.NoError(t, err)
 	assert.Equal(t, "Other Notebook", config.GetCurrentNotebook())
@@ -68,7 +58,7 @@ func TestSimplifiedAuthorizationConfig_IsAuthorized(t *testing.T) {
 	config.Enabled = true
 	config.DefaultNotebookPermissions = PermissionRead
 	
-	err := config.CompilePatterns()
+	err := config.ValidateConfig()
 	require.NoError(t, err)
 	
 	err = config.SetCurrentNotebook("Test Notebook")
@@ -84,7 +74,7 @@ func TestSimplifiedAuthorizationConfig_IsAuthorized(t *testing.T) {
 	err = config.IsAuthorized(ctx, "getAuthStatus", req, resourceContext)
 	assert.NoError(t, err)
 
-	// Test non-auth tool with read permission
+	// Test non-auth tool with read permission on read-only notebook
 	resourceContext = ResourceContext{
 		NotebookName: "Test Notebook",
 		Operation:    OperationRead,
@@ -99,7 +89,75 @@ func TestSimplifiedAuthorizationConfig_IsAuthorized(t *testing.T) {
 	}
 	err = config.IsAuthorized(ctx, "createPage", req, resourceContext)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "write")
+	assert.Contains(t, err.Error(), "access denied")
+}
+
+func TestSimplifiedAuthorizationConfig_GetNotebookPermission(t *testing.T) {
+	config := NewAuthorizationConfig()
+	config.DefaultNotebookPermissions = PermissionRead
+	config.NotebookPermissions = map[string]PermissionLevel{
+		"Work Notes":    PermissionWrite,
+		"Archive Notes": PermissionRead,
+		"Private Notes": PermissionNone,
+	}
+
+	// Test exact match
+	assert.Equal(t, PermissionWrite, config.GetNotebookPermission("Work Notes"))
+	assert.Equal(t, PermissionRead, config.GetNotebookPermission("Archive Notes"))
+	assert.Equal(t, PermissionNone, config.GetNotebookPermission("Private Notes"))
+
+	// Test default fallback
+	assert.Equal(t, PermissionRead, config.GetNotebookPermission("Unknown Notebook"))
+}
+
+func TestSimplifiedAuthorizationConfig_FilterNotebooks(t *testing.T) {
+	config := NewAuthorizationConfig()
+	config.Enabled = true
+	config.DefaultNotebookPermissions = PermissionRead
+	config.NotebookPermissions = map[string]PermissionLevel{
+		"Work Notes":    PermissionWrite,
+		"Private Notes": PermissionNone,
+	}
+
+	notebooks := []map[string]interface{}{
+		{"displayName": "Work Notes", "id": "1"},
+		{"displayName": "Personal Notes", "id": "2"}, // Uses default (read)
+		{"displayName": "Private Notes", "id": "3"},  // Should be filtered out
+	}
+
+	filtered := config.FilterNotebooks(notebooks)
+	
+	assert.Len(t, filtered, 2)
+	assert.Equal(t, "Work Notes", filtered[0]["displayName"])
+	assert.Equal(t, "Personal Notes", filtered[1]["displayName"])
+}
+
+func TestSimplifiedAuthorizationConfig_DisabledAuthorization(t *testing.T) {
+	config := NewAuthorizationConfig()
+	config.Enabled = false // Disabled authorization
+
+	ctx := context.Background()
+	req := mcp.CallToolRequest{}
+	resourceContext := ResourceContext{
+		NotebookName: "Any Notebook",
+		Operation:    OperationWrite,
+	}
+
+	// Should allow all operations when disabled
+	err := config.IsAuthorized(ctx, "createPage", req, resourceContext)
+	assert.NoError(t, err)
+
+	// Should allow any notebook selection when disabled
+	err = config.SetCurrentNotebook("Any Notebook")
+	assert.NoError(t, err)
+
+	// Should not filter notebooks when disabled
+	notebooks := []map[string]interface{}{
+		{"displayName": "Work Notes", "id": "1"},
+		{"displayName": "Private Notes", "id": "2"},
+	}
+	filtered := config.FilterNotebooks(notebooks)
+	assert.Len(t, filtered, 2) // No filtering when disabled
 }
 
 func TestSimplifiedAuthorizationConfig_CrossNotebookAccess(t *testing.T) {
@@ -107,124 +165,18 @@ func TestSimplifiedAuthorizationConfig_CrossNotebookAccess(t *testing.T) {
 	config.Enabled = true
 	config.DefaultNotebookPermissions = PermissionWrite
 	
-	err := config.CompilePatterns()
-	require.NoError(t, err)
-	
-	err = config.SetCurrentNotebook("Current Notebook")
+	err := config.SetCurrentNotebook("Current Notebook")
 	require.NoError(t, err)
 
 	ctx := context.Background()
 	req := mcp.CallToolRequest{}
 
-	// Test cross-notebook access (should be blocked)
+	// Test cross-notebook access attempt (should be blocked)
 	resourceContext := ResourceContext{
 		NotebookName: "Different Notebook",
 		Operation:    OperationRead,
 	}
 	err = config.IsAuthorized(ctx, "listPages", req, resourceContext)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot access notebook")
-}
-
-func TestSimplifiedAuthorizationConfig_PatternMatching(t *testing.T) {
-	config := NewAuthorizationConfig()
-	config.Enabled = true
-	config.DefaultNotebookPermissions = PermissionRead
-	config.SectionPermissions = map[string]PermissionLevel{
-		"public_*":      PermissionWrite,
-		"/Projects/**":  PermissionRead,
-		"*_archive":     PermissionNone,
-	}
-	config.PagePermissions = map[string]PermissionLevel{
-		"draft_*":       PermissionWrite,
-		"temp_*":        PermissionWrite,
-	}
-	
-	err := config.CompilePatterns()
-	require.NoError(t, err)
-	
-	err = config.SetCurrentNotebook("Test Notebook")
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	req := mcp.CallToolRequest{}
-
-	// Test section pattern matching
-	resourceContext := ResourceContext{
-		NotebookName: "Test Notebook",
-		SectionName:  "public_docs",
-		Operation:    OperationWrite,
-	}
-	err = config.IsAuthorized(ctx, "createPage", req, resourceContext)
-	assert.NoError(t, err)
-
-	// Test blocked section pattern
-	resourceContext = ResourceContext{
-		NotebookName: "Test Notebook",
-		SectionName:  "old_archive",
-		Operation:    OperationRead,
-	}
-	err = config.IsAuthorized(ctx, "listPages", req, resourceContext)
-	assert.Error(t, err)
-
-	// Test page pattern matching
-	resourceContext = ResourceContext{
-		NotebookName: "Test Notebook",
-		SectionName:  "Documents",
-		PageName:     "draft_document",
-		Operation:    OperationWrite,
-	}
-	err = config.IsAuthorized(ctx, "updatePage", req, resourceContext)
-	assert.NoError(t, err)
-}
-
-func TestSimplifiedAuthorizationConfig_SectionIDWithoutName_Security(t *testing.T) {
-	config := NewAuthorizationConfig()
-	config.Enabled = true
-	config.DefaultNotebookPermissions = PermissionRead
-	config.NotebookPermissions = map[string]PermissionLevel{
-		"Clippings.io": PermissionWrite,
-	}
-	config.SectionPermissions = map[string]PermissionLevel{
-		"Clippings.io/Books": PermissionRead, // Read-only section
-	}
-	
-	err := config.CompilePatterns()
-	require.NoError(t, err)
-	
-	err = config.SetCurrentNotebook("Clippings.io")
-	require.NoError(t, err)
-
-	ctx := context.Background()
-	req := mcp.CallToolRequest{}
-
-	// Test case 1: When section name is properly resolved, section permission should apply
-	resourceContext := ResourceContext{
-		NotebookName: "Clippings.io",
-		SectionName:  "Books",  // Section name resolved correctly
-		Operation:    OperationWrite,
-	}
-	err = config.IsAuthorized(ctx, "createPage", req, resourceContext)
-	assert.Error(t, err) // Should be denied due to read-only section permission
-	assert.Contains(t, err.Error(), "write")
-
-	// Test case 2: SECURITY BUG - When section ID exists but section name is empty (resolution failed)
-	// This simulates the exact scenario from the bug report
-	resourceContext = ResourceContext{
-		NotebookName: "Clippings.io",
-		SectionID:    "0-4D24C77F19546939!s4073fa30fe08431cb33cc50a7af3fec3", // Section ID present
-		SectionName:  "",  // Section name resolution failed (empty)
-		Operation:    OperationWrite,
-	}
-	err = config.IsAuthorized(ctx, "createPage", req, resourceContext)
-	assert.Error(t, err) // Should be denied due to fail-closed security model
-	assert.Contains(t, err.Error(), "permission but only 'none' is granted") // Security model blocks access
-
-	// Test case 3: Verify that notebook-level operations still work normally
-	resourceContext = ResourceContext{
-		NotebookName: "Clippings.io",
-		Operation:    OperationWrite,
-	}
-	err = config.IsAuthorized(ctx, "createSection", req, resourceContext)
-	assert.NoError(t, err) // Should be allowed (notebook has write permission)
+	assert.Contains(t, err.Error(), "cannot access notebook 'Different Notebook'")
 }
