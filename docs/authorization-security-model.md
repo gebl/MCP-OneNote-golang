@@ -128,7 +128,7 @@ The system passes 15 comprehensive security tests:
 4. Apply default permissions (with parent constraints)
 
 ### Filter Tool Bypass Protection
-- Filter tools (like `listNotebooks`, `listPages`) bypass resource checks but filter results
+- Filter tools (like `notebooks`, `listPages`) bypass resource checks but filter results
 - Non-filter tools enforce full resource-level authorization
 - Prevents enumeration of restricted resources
 

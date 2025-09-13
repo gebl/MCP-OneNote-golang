@@ -18,18 +18,18 @@ func TestGetToolDescription(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "existing tool - getAuthStatus",
-			toolName: "getAuthStatus",
+			name:     "existing tool - auth_status",
+			toolName: "auth_status",
 			wantErr:  false,
 		},
 		{
-			name:     "existing tool - listNotebooks",
-			toolName: "listNotebooks",
+			name:     "existing tool - notebooks",
+			toolName: "notebooks",
 			wantErr:  false,
 		},
 		{
-			name:     "existing tool - createPage",
-			toolName: "createPage",
+			name:     "existing tool - page_create",
+			toolName: "page_create",
 			wantErr:  false,
 		},
 		{
@@ -63,7 +63,7 @@ func TestGetToolDescription(t *testing.T) {
 
 func TestMustGetToolDescription(t *testing.T) {
 	t.Run("existing tool", func(t *testing.T) {
-		desc := MustGetToolDescription("getAuthStatus")
+		desc := MustGetToolDescription("auth_status")
 		assert.NotEmpty(t, desc)
 		assert.Contains(t, desc, "authentication")
 	})
@@ -80,12 +80,12 @@ func TestGetAllDescriptions(t *testing.T) {
 	
 	// Verify we have all expected tools
 	expectedTools := []string{
-		"getAuthStatus", "refreshToken", "initiateAuth", "clearAuth",
-		"listNotebooks", "createSection", "createSectionGroup", 
-		"getSelectedNotebook", "selectNotebook", "getNotebookSections",
-		"clearCache", "listPages", "getPageContent", "createPage",
-		"updatePageContentAdvanced", "deletePage", "getPageItemContent",
-		"listPageItems", "copyPage", "movePage", "updatePageContent",
+		"auth_status", "auth_refresh", "auth_initiate", "auth_clear",
+		"notebooks", "section_create", "section_group_create",
+		"notebook_current", "notebook_select", "sections",
+		"cache_clear", "pages", "page_content", "page_create",
+		"page_update_advanced", "page_delete", "page_item_content",
+		"page_items", "page_copy", "page_move", "page_update", "quick_note",
 	}
 	
 	for _, tool := range expectedTools {
@@ -111,19 +111,19 @@ func TestToolDescriptionsContent(t *testing.T) {
 		shouldNotContain []string
 	}{
 		{
-			tool:          "listNotebooks",
+			tool:          "notebooks",
 			shouldContain: []string{"JSON array", "notebook ID", "name", "isAPIDefault"},
 		},
 		{
-			tool:          "createPage",
-			shouldContain: []string{"DO NOT CONVERT CONTENT", "PASS AS-IS", "Markdown", "HTML"},
+			tool:          "page_create",
+			shouldContain: []string{"DO NOT CONVERT CONTENT", "pass exactly as provided", "Markdown", "HTML"},
 		},
 		{
-			tool:          "updatePageContentAdvanced", 
+			tool:          "page_update_advanced",
 			shouldContain: []string{"command-based targeting", "data-id", "append", "replace"},
 		},
 		{
-			tool:          "getPageContent",
+			tool:          "page_content",
 			shouldContain: []string{"HTML", "Markdown", "Text", "forUpdate"},
 		},
 	}

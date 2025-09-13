@@ -100,9 +100,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **OneNote Hierarchy Enforcement**: Strict validation ensures operations follow OneNote's container hierarchy rules
   - **Enhanced Debug Logging**: Detailed logging for troubleshooting container type detection and API responses
 - **Streamable HTTP Support**: Added new server mode for HTTP-based communication
-  - **New Mode**: `-mode=streamable` for streamable HTTP protocol support
+  - **New Mode**: `-mode=http` for HTTP protocol support
   - **Port Configuration**: Added `-port` flag for custom port configuration
-  - **Flexible Deployment**: Support for stdio, SSE, and streamable HTTP modes
+  - **Flexible Deployment**: Support for stdio, SSE, and HTTP modes
   - **Documentation**: Comprehensive documentation for all server modes
 - **Enhanced Tool Descriptions**: Added failure handling guidance to key tool descriptions
   - **Error Prevention**: Clear instructions to not create new pages as fallbacks when operations fail

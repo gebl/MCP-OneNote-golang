@@ -86,7 +86,7 @@ docker run -d -p 8080:8080 \
   -e ONENOTE_REDIRECT_URI=http://localhost:8080/callback \
   -e MCP_AUTH_ENABLED=true \
   -e MCP_BEARER_TOKEN=your-secret-token \
-  onenote-mcp-server -mode=streamable
+  onenote-mcp-server -mode=http
 ```
 
 ### With Authorization Config
@@ -95,7 +95,7 @@ docker run -d -p 8080:8080 \
   -v /path/to/config.json:/app/config.json \
   -v tokens_volume:/app \
   -e ONENOTE_MCP_CONFIG=/app/config.json \
-  onenote-mcp-server -mode=streamable
+  onenote-mcp-server -mode=http
 ```
 
 ### Docker Compose

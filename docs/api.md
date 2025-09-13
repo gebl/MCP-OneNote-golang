@@ -168,7 +168,7 @@ Prompts are accessed through the MCP protocol's prompt system. Each prompt provi
 
 ## Tool Reference
 
-### 1. listNotebooks
+### 1. notebooks
 
 Lists all OneNote notebooks for the authenticated user. **Note:** This function automatically handles pagination and will return all notebooks, even if the data is paginated by the Microsoft Graph API.
 
@@ -188,7 +188,7 @@ Lists all OneNote notebooks for the authenticated user. **Note:** This function 
 ```bash
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listNotebooks", "arguments": {}}'
+  -d '{"name": "notebooks", "arguments": {}}'
 ```
 
 **Response:**

@@ -47,14 +47,14 @@ func ExtractResourceContext(ctx context.Context, toolName string, req mcp.CallTo
 func getToolOperation(toolName string) ToolOperation {
 	switch toolName {
 	// Read-only operations
-	case "getAuthStatus", "listNotebooks", "listSections", "listPages", 
-		 "getPageContent", "getPageMetadata", "searchPages":
+	case "auth_status", "notebooks", "listSections", "section_pages",
+		 "page_content", "getPageMetadata", "searchPages":
 		return OperationRead
 	
 	// Write operations
-	case "selectNotebook", "createSection", "updateSection", "deleteSection",
-		 "createPage", "updatePageContent", "updatePageContentAdvanced", 
-		 "deletePage", "quickNote":
+	case "notebook_select", "section_create", "section_group_create", "updateSection", "deleteSection",
+		 "section_page_create", "page_update", "page_updateAdvanced",
+		 "page_delete", "page_quickNote":
 		return OperationWrite
 	
 	// Default to read for unknown tools (safe default)

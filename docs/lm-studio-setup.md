@@ -73,8 +73,8 @@ The server will start and be available with these endpoints:
 Before using the MCP tools, you'll need to authenticate with Microsoft:
 
 1. Start a chat in LM Studio
-2. Use the `getAuthStatus` tool to check authentication status
-3. If not authenticated, use the `initiateAuth` tool to start OAuth flow
+2. Use the `auth_status` tool to check authentication status
+3. If not authenticated, use the `auth_initiate` tool to start OAuth flow
 4. Visit the provided URL in your browser to complete authentication
 5. The server will automatically receive the OAuth callback and store tokens
 
@@ -83,7 +83,7 @@ Before using the MCP tools, you'll need to authenticate with Microsoft:
 Once configured and authenticated, you'll have access to these OneNote tools:
 
 **Notebook Management:**
-- `listNotebooks` - List all your OneNote notebooks with default status flags (API default and config default)
+- `notebooks` - List all your OneNote notebooks with default status flags (API default and config default)
 - `searchPages` - Search for pages by title across notebooks
 
 **Section Management:**
@@ -105,10 +105,10 @@ Once configured and authenticated, you'll have access to these OneNote tools:
 - `getPageItem` - Get page item data with binary content
 
 **Authentication Management:**
-- `getAuthStatus` - Check authentication status
-- `initiateAuth` - Start OAuth authentication
-- `refreshToken` - Refresh authentication tokens
-- `clearAuth` - Clear stored tokens
+- `auth_status` - Check authentication status
+- `auth_initiate` - Start OAuth authentication
+- `auth_refresh` - Refresh authentication tokens
+- `auth_clear` - Clear stored tokens
 
 ### 6. Security Considerations
 
@@ -125,8 +125,8 @@ Once configured and authenticated, you'll have access to these OneNote tools:
 - Ensure no firewall is blocking the connection
 
 **Authentication Issues:**
-- Use `getAuthStatus` to check current authentication state
-- Use `initiateAuth` to re-authenticate if tokens are expired
+- Use `auth_status` to check current authentication state
+- Use `auth_initiate` to re-authenticate if tokens are expired
 - Check the server logs for detailed authentication information
 
 **Logging:**

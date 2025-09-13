@@ -162,9 +162,9 @@ func TestServerModeValidation(t *testing.T) {
 			expectedMode: "sse",
 		},
 		{
-			name:         "streamable mode",
-			mode:         "streamable",
-			expectedMode: "streamable",
+			name:         "http mode",
+			mode:         "http",
+			expectedMode: "http",
 		},
 	}
 

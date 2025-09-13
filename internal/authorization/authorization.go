@@ -64,12 +64,12 @@ func (rc ResourceContext) String() string {
 // ToolRegistry maps tool names to their categories and operations
 // AuthToolNames defines which tools are always allowed (authentication tools + discovery tools)
 var AuthToolNames = map[string]bool{
-	"getAuthStatus":  true,
-	"refreshToken":   true,
-	"initiateAuth":   true,
-	"clearAuth":      true,
-	"listNotebooks":  true, // Always allow notebook discovery (results are filtered)
-	"selectNotebook": true, // Always allow notebook selection (but selection itself is validated)
+	"auth_status":   true,
+	"auth_refresh":  true,
+	"auth_initiate": true,
+	"auth_clear":     true,
+	"notebooks":        true, // Always allow notebook discovery (results are filtered)
+	"notebook_select": true, // Always allow notebook selection (but selection itself is validated)
 }
 
 // NewAuthorizationConfig creates a new simplified authorization configuration
@@ -162,7 +162,7 @@ func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string
 	if ac.currentNotebook == "" {
 		logging.AuthorizationLogger.Info("No notebook selected for non-auth tool",
 			"tool", toolName)
-		return fmt.Errorf("access denied: no notebook selected - use selectNotebook tool first")
+		return fmt.Errorf("access denied: no notebook selected - use notebook_select tool first")
 	}
 	
 	if ac.currentNotebookPerm == PermissionNone {

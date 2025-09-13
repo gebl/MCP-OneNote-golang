@@ -117,25 +117,25 @@ func verifyPageNotebookOwnership(ctx context.Context, pageID string, pageClient 
 func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// listPages: List all pages in a section
 	listPagesTool := mcp.NewTool(
-		"listPages",
-		mcp.WithDescription(resources.MustGetToolDescription("listPages")),
+		"pages",
+		mcp.WithDescription(resources.MustGetToolDescription("pages")),
 		mcp.WithString("sectionID", mcp.Required(), mcp.Description("Section ID - MUST be actual ID, NOT a section name. You must obtain the section ID through other means.")),
 	)
 	listPagesHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Starting page enumeration", "operation", "listPages", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Starting page enumeration", "operation", "pages", "type", "tool_invocation")
 
 		sectionID, err := req.RequireString("sectionID")
 		if err != nil {
-			logging.ToolsLogger.Error("listPages missing sectionID", "error", err)
+			logging.ToolsLogger.Error("pages missing sectionID", "error", err)
 			return mcp.NewToolResultError("sectionID is required"), nil
 		}
-		logging.ToolsLogger.Debug("listPages parameter", "sectionID", sectionID)
+		logging.ToolsLogger.Debug("pages parameter", "sectionID", sectionID)
 
 		// SECURITY: Verify the section belongs to the currently selected notebook  
 		// We need to create a section client to resolve ownership
 		sectionClient := sections.NewSectionClient(graphClient)
-		if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "listPages"); err != nil {
+		if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "pages"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -194,7 +194,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 				}
 
 				elapsed := time.Since(startTime)
-				logging.ToolsLogger.Debug("listPages using cached data",
+				logging.ToolsLogger.Debug("pages using cached data",
 					"section_id", sectionID,
 					"duration", elapsed,
 					"original_cached_count", originalCachedCount,
@@ -230,7 +230,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 
 		// Cache miss or expired - fetch from API
-		logging.ToolsLogger.Debug("listPages cache miss or expired, fetching from API", "section_id", sectionID)
+		logging.ToolsLogger.Debug("pages cache miss or expired, fetching from API", "section_id", sectionID)
 		
 		if progressToken != "" {
 			sendProgressNotification(s, ctx, progressToken, 40, 100, "Fetching pages from OneNote API...")
@@ -242,7 +242,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			sendProgressNotification(s, ctx, progressToken, 55, 100, "Pages retrieved, processing authorization...")
 		}
 		if err != nil {
-			logging.ToolsLogger.Error("listPages operation failed", "section_id", sectionID, "error", err, "operation", "listPages")
+			logging.ToolsLogger.Error("pages operation failed", "section_id", sectionID, "error", err, "operation", "pages")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to list pages: %v", err)), nil
 		}
 
@@ -299,13 +299,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		if progressToken != "" {
 			sendProgressNotification(s, ctx, progressToken, 90, 100, "Caching completed, preparing response...")
 		}
-		logging.ToolsLogger.Debug("listPages cached fresh filtered data", 
+		logging.ToolsLogger.Debug("pages cached fresh filtered data",
 			"section_id", sectionID, 
 			"original_count", originalApiCount,
 			"filtered_count", len(pages))
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Info("listPages operation completed", "duration", elapsed, "pages_count", len(pages), "success", true)
+		logging.ToolsLogger.Info("pages operation completed", "duration", elapsed, "pages_count", len(pages), "success", true)
 
 		// Handle empty results gracefully
 		if len(pages) == 0 {
@@ -337,43 +337,43 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 		return mcp.NewToolResultText(string(jsonResult)), nil
 	}
-	s.AddTool(listPagesTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPages", listPagesHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(listPagesTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("pages", listPagesHandler, authConfig, cache, quickNoteConfig)))
 
 	// createPage: Create a new page in a section
 	createPageTool := mcp.NewTool(
-		"createPage",
-		mcp.WithDescription(resources.MustGetToolDescription("createPage")),
+		"page_create",
+		mcp.WithDescription(resources.MustGetToolDescription("page_create")),
 		mcp.WithString("sectionID", mcp.Required(), mcp.Description("Section ID to create page in")),
 		mcp.WithString("title", mcp.Required(), mcp.Description("Page title (cannot contain: ?*\\/:<>|&#''%%~)")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
 	)
 	createPageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Creating new OneNote page", "operation", "createPage", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Creating new OneNote page", "operation", "page_create", "type", "tool_invocation")
 
 		sectionID, err := req.RequireString("sectionID")
 		if err != nil {
-			logging.ToolsLogger.Error("createPage missing sectionID", "error", err)
+			logging.ToolsLogger.Error("page_create missing sectionID", "error", err)
 			return mcp.NewToolResultError("sectionID is required"), nil
 		}
 
 		title, err := req.RequireString("title")
 		if err != nil {
-			logging.ToolsLogger.Error("createPage missing title", "error", err)
+			logging.ToolsLogger.Error("page_create missing title", "error", err)
 			return mcp.NewToolResultError("title is required"), nil
 		}
 
 		content, err := req.RequireString("content")
 		if err != nil {
-			logging.ToolsLogger.Error("createPage missing content", "error", err)
+			logging.ToolsLogger.Error("page_create missing content", "error", err)
 			return mcp.NewToolResultError("content is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("createPage parameters", "sectionID", sectionID, "title", title, "content_length", len(content))
+		logging.ToolsLogger.Debug("page_create parameters", "sectionID", sectionID, "title", title, "content_length", len(content))
 
 		// SECURITY: Verify the section belongs to the currently selected notebook
 		sectionClient := sections.NewSectionClient(graphClient)
-		if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "createPage"); err != nil {
+		if err := verifySectionNotebookOwnership(ctx, sectionID, sectionClient, notebookCache, "page_create"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
@@ -381,34 +381,34 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		illegalChars := []string{"?", "*", "\\", "/", ":", "<", ">", "|", "&", "#", "'", "'", "%", "~"}
 		for _, char := range illegalChars {
 			if strings.Contains(title, char) {
-				logging.ToolsLogger.Error("createPage title contains illegal character", "character", char, "title", title)
+				logging.ToolsLogger.Error("page_create title contains illegal character", "character", char, "title", title)
 				suggestedName := utils.SuggestValidName(title, char)
 				return mcp.NewToolResultError(fmt.Sprintf("title contains illegal character '%s'. Illegal characters are: ?*\\/:<>|&#''%%%%~\n\nSuggestion: Try using '%s' instead of '%s'.\n\nSuggested valid title: '%s'", char, utils.GetReplacementChar(char), char, suggestedName)), nil
 			}
 		}
-		logging.ToolsLogger.Debug("createPage title validation passed")
+		logging.ToolsLogger.Debug("page_create title validation passed")
 
 		// Detect format and convert content to HTML
 		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
-		logging.ToolsLogger.Debug("createPage content format detection",
+		logging.ToolsLogger.Debug("page_create content format detection",
 			"detected_format", detectedFormat.String(),
 			"original_length", len(content),
 			"converted_length", len(convertedHTML))
 
 		result, err := pageClient.CreatePage(sectionID, title, convertedHTML)
 		if err != nil {
-			logging.ToolsLogger.Error("createPage operation failed", "section_id", sectionID, "error", err, "operation", "createPage")
+			logging.ToolsLogger.Error("page_create operation failed", "section_id", sectionID, "error", err, "operation", "page_create")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create page: %v", err)), nil
 		}
 
 		// Clear pages cache for this section since we added a new page
 		notebookCache.ClearPagesCache(sectionID)
-		logging.ToolsLogger.Debug("createPage cleared pages cache", "section_id", sectionID)
+		logging.ToolsLogger.Debug("page_create cleared pages cache", "section_id", sectionID)
 
 		// Extract only the essential information: success status and page ID
 		pageID, exists := result["id"].(string)
 		if !exists {
-			logging.ToolsLogger.Error("createPage result missing ID field", "result", result)
+			logging.ToolsLogger.Error("page_create result missing ID field", "result", result)
 			return mcp.NewToolResultError("Page creation succeeded but no ID was returned"), nil
 		}
 
@@ -422,61 +422,61 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("createPage failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("page_create failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("createPage operation completed", "duration", elapsed, "page_id", pageID)
+		logging.ToolsLogger.Debug("page_create operation completed", "duration", elapsed, "page_id", pageID)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(createPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("createPage", createPageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(createPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_create", createPageHandler, authConfig, cache, quickNoteConfig)))
 
-	// updatePageContent: Update the HTML content of a page
-	updatePageContentTool := mcp.NewTool(
-		"updatePageContent",
-		mcp.WithDescription(resources.MustGetToolDescription("updatePageContent")),
+	// page_update: Update the HTML content of a page
+	page_updateTool := mcp.NewTool(
+		"page_update",
+		mcp.WithDescription(resources.MustGetToolDescription("page_update")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("New content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
 	)
-	updatePageContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	page_updateHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Updating OneNote page content", "operation", "updatePageContent", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Updating OneNote page content", "operation", "page_update", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContent missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_update missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
 		content, err := req.RequireString("content")
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContent missing content", "error", err)
+			logging.ToolsLogger.Error("page_update missing content", "error", err)
 			return mcp.NewToolResultError("content is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("updatePageContent parameters", "pageID", pageID, "content_length", len(content))
+		logging.ToolsLogger.Debug("page_update parameters", "pageID", pageID, "content_length", len(content))
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "updatePageContent"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_update"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Detect format and convert content to HTML
 		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
-		logging.ToolsLogger.Debug("updatePageContent content format detection",
+		logging.ToolsLogger.Debug("page_update content format detection",
 			"detected_format", detectedFormat.String(),
 			"original_length", len(content),
 			"converted_length", len(convertedHTML))
 
 		err = pageClient.UpdatePageContentSimple(pageID, convertedHTML)
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContent operation failed", "page_id", pageID, "error", err, "operation", "updatePageContent")
+			logging.ToolsLogger.Error("page_update operation failed", "page_id", pageID, "error", err, "operation", "page_update")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to update page content: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("updatePageContent operation completed", "duration", elapsed)
+		logging.ToolsLogger.Debug("page_update operation completed", "duration", elapsed)
 		
 		response := map[string]interface{}{
 			"success":         true,
@@ -488,52 +488,52 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContent failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("page_update failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(updatePageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContent", updatePageContentHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(page_updateTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_update", page_updateHandler, authConfig, cache, quickNoteConfig)))
 
-	// updatePageContentAdvanced: Update page content with advanced commands
-	updatePageContentAdvancedTool := mcp.NewTool(
-		"updatePageContentAdvanced",
-		mcp.WithDescription(resources.MustGetToolDescription("updatePageContentAdvanced")),
+	// page_update_advanced: Update page content with advanced commands
+	page_update_advancedTool := mcp.NewTool(
+		"page_update_advanced",
+		mcp.WithDescription(resources.MustGetToolDescription("page_update_advanced")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
 		mcp.WithString("commands", mcp.Required(), mcp.Description("JSON STRING containing an array of command objects. MUST be a string, not an array. Content in commands supports HTML, Markdown, or plain text (automatically detected and converted). Example: \"[{\\\"target\\\": \\\"body\\\", \\\"action\\\": \\\"append\\\", \\\"content\\\": \\\"# Header\\n- Item 1\\\"}]\"")),
 	)
-	updatePageContentAdvancedHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	page_update_advancedHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("MCP Tool: updatePageContentAdvanced", "operation", "updatePageContentAdvanced", "type", "tool_invocation")
+		logging.ToolsLogger.Info("MCP Tool: page_update_advanced", "operation", "page_update_advanced", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContentAdvanced missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_update_advanced missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "updatePageContentAdvanced"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_update_advanced"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		commandsJSON, err := req.RequireString("commands")
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContentAdvanced missing commands", "error", err)
+			logging.ToolsLogger.Error("page_update_advanced missing commands", "error", err)
 			return mcp.NewToolResultError("commands is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("updatePageContentAdvanced parameters", "pageID", pageID, "commands_length", len(commandsJSON))
+		logging.ToolsLogger.Debug("page_update_advanced parameters", "pageID", pageID, "commands_length", len(commandsJSON))
 
 		// Parse the commands JSON
 		var commands []pages.UpdateCommand
 		if errUnmarshal := json.Unmarshal([]byte(commandsJSON), &commands); errUnmarshal != nil {
-			logging.ToolsLogger.Error("updatePageContentAdvanced failed to parse commands JSON", "error", errUnmarshal)
+			logging.ToolsLogger.Error("page_update_advanced failed to parse commands JSON", "error", errUnmarshal)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to parse commands JSON: %v", errUnmarshal)), nil
 		}
 
-		logging.ToolsLogger.Debug("updatePageContentAdvanced commands parsed", "command_count", len(commands))
+		logging.ToolsLogger.Debug("page_update_advanced commands parsed", "command_count", len(commands))
 
 		// Apply format detection and conversion to each command's content
 		var formatDetectionResults []map[string]interface{}
@@ -553,7 +553,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 					"html_length":     len(convertedHTML),
 				})
 
-				logging.ToolsLogger.Debug("updatePageContentAdvanced command content format detection",
+				logging.ToolsLogger.Debug("page_update_advanced command content format detection",
 					"command_index", i,
 					"target", command.Target,
 					"action", command.Action,
@@ -565,12 +565,12 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		err = pageClient.UpdatePageContent(pageID, commands)
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContentAdvanced operation failed", "page_id", pageID, "error", err, "operation", "updatePageContentAdvanced")
+			logging.ToolsLogger.Error("page_update_advanced operation failed", "page_id", pageID, "error", err, "operation", "page_update_advanced")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to update page content: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("updatePageContentAdvanced operation completed", "duration", elapsed)
+		logging.ToolsLogger.Debug("page_update_advanced operation completed", "duration", elapsed)
 		
 		response := map[string]interface{}{
 			"success":                true,
@@ -581,68 +581,68 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("updatePageContentAdvanced failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("page_update_advanced failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(updatePageContentAdvancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("updatePageContentAdvanced", updatePageContentAdvancedHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(page_update_advancedTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_update_advanced", page_update_advancedHandler, authConfig, cache, quickNoteConfig)))
 
-	// deletePage: Delete a page by ID
-	deletePageTool := mcp.NewTool(
-		"deletePage",
-		mcp.WithDescription(resources.MustGetToolDescription("deletePage")),
+	// page_delete: Delete a page by ID
+	page_deleteTool := mcp.NewTool(
+		"page_delete",
+		mcp.WithDescription(resources.MustGetToolDescription("page_delete")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to delete")),
 	)
-	deletePageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	page_deleteHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Deleting OneNote page", "operation", "deletePage", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Deleting OneNote page", "operation", "page_delete", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("deletePage missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_delete missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "deletePage"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_delete"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		logging.ToolsLogger.Debug("deletePage parameter", "pageID", pageID)
+		logging.ToolsLogger.Debug("page_delete parameter", "pageID", pageID)
 
 		err = pageClient.DeletePage(pageID)
 		if err != nil {
-			logging.ToolsLogger.Error("deletePage operation failed", "page_id", pageID, "error", err, "operation", "deletePage")
+			logging.ToolsLogger.Error("page_delete operation failed", "page_id", pageID, "error", err, "operation", "page_delete")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to delete page: %v", err)), nil
 		}
 
 		// Clear all pages cache since we don't know which section the deleted page was in
 		notebookCache.ClearAllPagesCache()
-		logging.ToolsLogger.Debug("deletePage cleared all pages cache", "page_id", pageID)
+		logging.ToolsLogger.Debug("page_delete cleared all pages cache", "page_id", pageID)
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("deletePage operation completed", "duration", elapsed)
+		logging.ToolsLogger.Debug("page_delete operation completed", "duration", elapsed)
 		return mcp.NewToolResultText("Page deleted successfully"), nil
 	}
-	s.AddTool(deletePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("deletePage", deletePageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(page_deleteTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_delete", page_deleteHandler, authConfig, cache, quickNoteConfig)))
 
-	// getPageContent: Get the HTML content of a page by ID
-	getPageContentTool := mcp.NewTool(
-		"getPageContent",
-		mcp.WithDescription(resources.MustGetToolDescription("getPageContent")),
+	// page_content: Get the HTML content of a page by ID
+	pageContentTool := mcp.NewTool(
+		"page_content",
+		mcp.WithDescription(resources.MustGetToolDescription("page_content")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to fetch content for")),
 		mcp.WithString("forUpdate", mcp.Description("Optional: set to 'true' to include includeIDs=true parameter for update operations")),
 		mcp.WithString("format", mcp.Description("Optional: output format - 'HTML' (default), 'Markdown', or 'Text'. Note: forUpdate only works with HTML format.")),
 	)
-	getPageContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	pageContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Retrieving OneNote page content", "operation", "getPageContent", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Retrieving OneNote page content", "operation", "page_content", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("getPageContent missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_content missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
@@ -662,27 +662,27 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			}
 		}
 		if !isValidFormat {
-			logging.ToolsLogger.Error("getPageContent invalid format", "format", format, "valid_formats", validFormats)
+			logging.ToolsLogger.Error("page_content invalid format", "format", format, "valid_formats", validFormats)
 			return mcp.NewToolResultError(fmt.Sprintf("Invalid format '%s'. Valid formats are: HTML, Markdown, Text", formatStr)), nil
 		}
 		
 		// Check for incompatible parameter combinations
 		if forUpdate && format != "HTML" {
-			logging.ToolsLogger.Error("getPageContent forUpdate incompatible with non-HTML format", "forUpdate", forUpdate, "format", format)
+			logging.ToolsLogger.Error("page_content forUpdate incompatible with non-HTML format", "forUpdate", forUpdate, "format", format)
 			return mcp.NewToolResultError("forUpdate parameter can only be used with HTML format (for page updates)"), nil
 		}
 
-		logging.ToolsLogger.Debug("getPageContent parameters", "pageID", pageID, "forUpdate", forUpdate, "format", format)
+		logging.ToolsLogger.Debug("page_content parameters", "pageID", pageID, "forUpdate", forUpdate, "format", format)
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "getPageContent"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_content"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		// Always get HTML content first
 		htmlContent, err := pageClient.GetPageContent(pageID, forUpdate)
 		if err != nil {
-			logging.ToolsLogger.Error("getPageContent operation failed", "page_id", pageID, "error", err, "operation", "getPageContent")
+			logging.ToolsLogger.Error("page_content operation failed", "page_id", pageID, "error", err, "operation", "page_content")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to get page content: %v", err)), nil
 		}
 
@@ -693,25 +693,25 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		switch format {
 		case "HTML":
 			finalContent = htmlContent
-			logging.ToolsLogger.Debug("getPageContent returning HTML content as-is")
+			logging.ToolsLogger.Debug("page_content returning HTML content as-is")
 		case "MARKDOWN":
-			logging.ToolsLogger.Debug("getPageContent converting HTML to Markdown")
+			logging.ToolsLogger.Debug("page_content converting HTML to Markdown")
 			finalContent, conversionError = utils.ConvertHTMLToMarkdown(htmlContent)
 			if conversionError != nil {
-				logging.ToolsLogger.Error("getPageContent HTML to Markdown conversion failed", "error", conversionError)
+				logging.ToolsLogger.Error("page_content HTML to Markdown conversion failed", "error", conversionError)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert content to Markdown: %v", conversionError)), nil
 			}
 		case "TEXT":
-			logging.ToolsLogger.Debug("getPageContent converting HTML to plain text")
+			logging.ToolsLogger.Debug("page_content converting HTML to plain text")
 			finalContent, conversionError = utils.ConvertHTMLToText(htmlContent)
 			if conversionError != nil {
-				logging.ToolsLogger.Error("getPageContent HTML to plain text conversion failed", "error", conversionError)
+				logging.ToolsLogger.Error("page_content HTML to plain text conversion failed", "error", conversionError)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to convert content to plain text: %v", conversionError)), nil
 			}
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("getPageContent operation completed", 
+		logging.ToolsLogger.Debug("page_content operation completed", 
 			"duration", elapsed, 
 			"original_html_length", len(htmlContent), 
 			"final_content_length", len(finalContent),
@@ -732,26 +732,26 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("getPageContent failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("page_content failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(getPageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageContent", getPageContentHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(pageContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_content", pageContentHandler, authConfig, cache, quickNoteConfig)))
 
-	// getPageItemContent: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type
-	getPageItemContentTool := mcp.NewTool(
-		"getPageItemContent",
-		mcp.WithDescription(resources.MustGetToolDescription("getPageItemContent")),
+	// page_item_content: Get a OneNote page item (e.g., image) by page item ID, returns binary data with proper MIME type
+	pageItemContentTool := mcp.NewTool(
+		"page_item_content",
+		mcp.WithDescription(resources.MustGetToolDescription("page_item_content")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to fetch item from")),
 		mcp.WithString("pageItemID", mcp.Required(), mcp.Description("Page resource item ID to fetch")),
 		mcp.WithString("filename", mcp.Description("Custom filename for binary download")),
 		mcp.WithBoolean("fullSize", mcp.Description("Skip image scaling and return original size (default: false = scale images to 1024x768 max)")),
 	)
-	getPageItemContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	pageItemContentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("MCP Tool: getPageItemContent", "operation", "getPageItemContent", "type", "tool_invocation")
+		logging.ToolsLogger.Info("MCP Tool: page_item_content", "operation", "page_item_content", "type", "tool_invocation")
 
 		pageID := req.GetString("pageID", "")
 		pageItemID := req.GetString("pageItemID", "")
@@ -760,20 +760,20 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		fullSize := fullSizeStr == "true"
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "getPageItemContent"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_item_content"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		logging.ToolsLogger.Debug("getPageItemContent parameters", "pageID", pageID, "pageItemID", pageItemID, "filename", customFilename, "fullSize", fullSize)
+		logging.ToolsLogger.Debug("page_item_content parameters", "pageID", pageID, "pageItemID", pageItemID, "filename", customFilename, "fullSize", fullSize)
 
 		// Use the enhanced GetPageItem with fullSize parameter
 		pageItemData, err := pageClient.GetPageItem(pageID, pageItemID, fullSize)
 		if err != nil {
-			logging.ToolsLogger.Error("getPageItemContent operation failed", "page_id", pageID, "page_item_id", pageItemID, "error", err)
+			logging.ToolsLogger.Error("page_item_content operation failed", "page_id", pageID, "page_item_id", pageItemID, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to get page item: %v", err)), nil
 		}
 
-		logging.ToolsLogger.Debug("getPageItemContent retrieved page item", "filename", pageItemData.Filename, "content_type", pageItemData.ContentType, "size_bytes", pageItemData.Size, "tag_name", pageItemData.TagName, "full_size", fullSize)
+		logging.ToolsLogger.Debug("page_item_content retrieved page item", "filename", pageItemData.Filename, "content_type", pageItemData.ContentType, "size_bytes", pageItemData.Size, "tag_name", pageItemData.TagName, "full_size", fullSize)
 
 		// Use custom filename if provided, otherwise use the one from page item data
 		filename := pageItemData.Filename
@@ -788,166 +788,166 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		logging.ToolsLogger.Debug("Prepared content for return", "encoded_length", len(encoded), "content_type", pageItemData.ContentType, "filename", filename)
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("getPageItemContent operation completed", "duration", elapsed, "scaled", !fullSize && strings.HasPrefix(pageItemData.ContentType, "image/"))
+		logging.ToolsLogger.Debug("page_item_content operation completed", "duration", elapsed, "scaled", !fullSize && strings.HasPrefix(pageItemData.ContentType, "image/"))
 		return mcp.NewToolResultImage(filename, encoded, pageItemData.ContentType), nil
 	}
-	s.AddTool(getPageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("getPageItemContent", getPageItemContentHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(pageItemContentTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_item_content", pageItemContentHandler, authConfig, cache, quickNoteConfig)))
 
-	// listPageItems: List all OneNote page items (images, files, etc.) for a specific page
-	listPageItemsTool := mcp.NewTool(
-		"listPageItems",
-		mcp.WithDescription(resources.MustGetToolDescription("listPageItems")),
+	// page_items: List all OneNote page items (images, files, etc.) for a specific page
+	pageItemsTool := mcp.NewTool(
+		"page_items",
+		mcp.WithDescription(resources.MustGetToolDescription("page_items")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to list items for")),
 	)
-	listPageItemsHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	pageItemsHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("MCP Tool: listPageItems", "operation", "listPageItems", "type", "tool_invocation")
+		logging.ToolsLogger.Info("MCP Tool: page_items", "operation", "page_items", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("listPageItems missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_items missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "listPageItems"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_items"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		logging.ToolsLogger.Debug("listPageItems parameter", "pageID", pageID)
+		logging.ToolsLogger.Debug("page_items parameter", "pageID", pageID)
 
 		pageItems, err := pageClient.ListPageItems(pageID)
 		if err != nil {
-			logging.ToolsLogger.Error("listPageItems operation failed", "page_id", pageID, "error", err, "operation", "listPageItems")
+			logging.ToolsLogger.Error("page_items operation failed", "page_id", pageID, "error", err, "operation", "page_items")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to list page items: %v", err)), nil
 		}
 
 		jsonBytes, err := json.Marshal(pageItems)
 		if err != nil {
-			logging.ToolsLogger.Error("listPageItems failed to marshal page items", "error", err)
+			logging.ToolsLogger.Error("page_items failed to marshal page items", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal page items: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Info("listPageItems operation completed", "duration", elapsed, "items_count", len(pageItems), "success", true)
+		logging.ToolsLogger.Info("page_items operation completed", "duration", elapsed, "items_count", len(pageItems), "success", true)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(listPageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("listPageItems", listPageItemsHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(pageItemsTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_items", pageItemsHandler, authConfig, cache, quickNoteConfig)))
 
-	// copyPage: Copy a page from one section to another
-	copyPageTool := mcp.NewTool(
-		"copyPage",
-		mcp.WithDescription(resources.MustGetToolDescription("copyPage")),
+	// page_copy: Copy a page from one section to another
+	page_copyTool := mcp.NewTool(
+		"page_copy",
+		mcp.WithDescription(resources.MustGetToolDescription("page_copy")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to copy")),
 		mcp.WithString("targetSectionID", mcp.Required(), mcp.Description("Target section ID to copy the page to")),
 	)
-	copyPageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	page_copyHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Copying OneNote page", "operation", "copyPage", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Copying OneNote page", "operation", "page_copy", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("copyPage missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_copy missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "copyPage"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_copy"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		targetSectionID, err := req.RequireString("targetSectionID")
 		if err != nil {
-			logging.ToolsLogger.Error("copyPage missing targetSectionID", "error", err)
+			logging.ToolsLogger.Error("page_copy missing targetSectionID", "error", err)
 			return mcp.NewToolResultError("targetSectionID is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("copyPage parameters", "pageID", pageID, "targetSectionID", targetSectionID)
+		logging.ToolsLogger.Debug("page_copy parameters", "pageID", pageID, "targetSectionID", targetSectionID)
 
 		result, err := pageClient.CopyPage(pageID, targetSectionID)
 		if err != nil {
-			logging.ToolsLogger.Error("copyPage operation failed", "page_id", pageID, "error", err, "operation", "copyPage")
+			logging.ToolsLogger.Error("page_copy operation failed", "page_id", pageID, "error", err, "operation", "page_copy")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to copy page: %v", err)), nil
 		}
 
 		// Clear pages cache for target section since we added a new page
 		notebookCache.ClearPagesCache(targetSectionID)
-		logging.ToolsLogger.Debug("copyPage cleared pages cache for target section", "target_section_id", targetSectionID)
+		logging.ToolsLogger.Debug("page_copy cleared pages cache for target section", "target_section_id", targetSectionID)
 
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			logging.ToolsLogger.Error("copyPage failed to marshal copy result", "error", err)
+			logging.ToolsLogger.Error("page_copy failed to marshal copy result", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal copy result: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("copyPage operation completed", "duration", elapsed)
+		logging.ToolsLogger.Debug("page_copy operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(copyPageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("copyPage", copyPageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(page_copyTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_copy", page_copyHandler, authConfig, cache, quickNoteConfig)))
 
-	// movePage: Move a page from one section to another (copy then delete)
-	movePageTool := mcp.NewTool(
-		"movePage",
-		mcp.WithDescription(resources.MustGetToolDescription("movePage")),
+	// page_move: Move a page from one section to another (copy then delete)
+	page_moveTool := mcp.NewTool(
+		"page_move",
+		mcp.WithDescription(resources.MustGetToolDescription("page_move")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to move")),
 		mcp.WithString("targetSectionID", mcp.Required(), mcp.Description("Target section ID to move the page to")),
 	)
-	movePageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	page_moveHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Moving OneNote page", "operation", "movePage", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Moving OneNote page", "operation", "page_move", "type", "tool_invocation")
 
 		pageID, err := req.RequireString("pageID")
 		if err != nil {
-			logging.ToolsLogger.Error("movePage missing pageID", "error", err)
+			logging.ToolsLogger.Error("page_move missing pageID", "error", err)
 			return mcp.NewToolResultError("pageID is required"), nil
 		}
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
-		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "movePage"); err != nil {
+		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_move"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		targetSectionID, err := req.RequireString("targetSectionID")
 		if err != nil {
-			logging.ToolsLogger.Error("movePage missing targetSectionID", "error", err)
+			logging.ToolsLogger.Error("page_move missing targetSectionID", "error", err)
 			return mcp.NewToolResultError("targetSectionID is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("movePage parameters", "pageID", pageID, "targetSectionID", targetSectionID)
+		logging.ToolsLogger.Debug("page_move parameters", "pageID", pageID, "targetSectionID", targetSectionID)
 
 		result, err := pageClient.MovePage(pageID, targetSectionID)
 		if err != nil {
-			logging.ToolsLogger.Error("movePage operation failed", "page_id", pageID, "error", err, "operation", "movePage")
+			logging.ToolsLogger.Error("page_move operation failed", "page_id", pageID, "error", err, "operation", "page_move")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to move page: %v", err)), nil
 		}
 
-		// Clear all pages cache since movePage affects both source and target sections
+		// Clear all pages cache since page_move affects both source and target sections
 		// (we don't know the source section ID)
 		notebookCache.ClearAllPagesCache()
-		logging.ToolsLogger.Debug("movePage cleared all pages cache", "page_id", pageID, "target_section_id", targetSectionID)
+		logging.ToolsLogger.Debug("page_move cleared all pages cache", "page_id", pageID, "target_section_id", targetSectionID)
 
 		jsonBytes, err := json.Marshal(result)
 		if err != nil {
-			logging.ToolsLogger.Error("movePage failed to marshal move result", "error", err)
+			logging.ToolsLogger.Error("page_move failed to marshal move result", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal move result: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("movePage operation completed", "duration", elapsed)
+		logging.ToolsLogger.Debug("page_move operation completed", "duration", elapsed)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(movePageTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("movePage", movePageHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(page_moveTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("page_move", page_moveHandler, authConfig, cache, quickNoteConfig)))
 
-	// quickNote: Add a timestamped note to a configured page
-	quickNoteTool := mcp.NewTool(
-		"quickNote",
-		mcp.WithDescription("Add a timestamped note to a configured page. Uses quicknote settings from configuration file to determine target notebook, page, and date format. Appends content to the page with current timestamp."),
+	// quick_note: Add a timestamped note to a configured page
+	quick_noteTool := mcp.NewTool(
+		"quick_note",
+		mcp.WithDescription(resources.MustGetToolDescription("quick_note")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Content to add to the quicknote page")),
 	)
-	quickNoteHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	quick_noteHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("Adding quicknote entry", "operation", "quickNote", "type", "tool_invocation")
+		logging.ToolsLogger.Info("Adding quicknote entry", "operation", "quick_note", "type", "tool_invocation")
 
 		// Extract progress token from request metadata for progress notifications
 		var progressToken string
@@ -991,18 +991,18 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		content, err := req.RequireString("content")
 		if err != nil {
-			logging.ToolsLogger.Error("quickNote missing content", "error", err)
+			logging.ToolsLogger.Error("quick_note missing content", "error", err)
 			return mcp.NewToolResultError("content is required"), nil
 		}
 
 		// Check if quicknote is configured
 		if cfg.QuickNote == nil {
-			logging.ToolsLogger.Error("quickNote not configured")
+			logging.ToolsLogger.Error("quick_note not configured")
 			return mcp.NewToolResultError("QuickNote is not configured. Please set page_name and optionally notebook_name and date_format in your configuration."), nil
 		}
 
 		if cfg.QuickNote.PageName == "" {
-			logging.ToolsLogger.Error("quickNote page name not configured", "page", cfg.QuickNote.PageName)
+			logging.ToolsLogger.Error("quick_note page name not configured", "page", cfg.QuickNote.PageName)
 			return mcp.NewToolResultError("QuickNote page_name is required in quicknote configuration."), nil
 		}
 
@@ -1010,15 +1010,15 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		targetNotebookName := cfg.QuickNote.NotebookName
 		if targetNotebookName == "" {
 			targetNotebookName = cfg.NotebookName
-			logging.ToolsLogger.Debug("quickNote using default notebook name", "default_notebook", targetNotebookName)
+			logging.ToolsLogger.Debug("quick_note using default notebook name", "default_notebook", targetNotebookName)
 		}
 
 		if targetNotebookName == "" {
-			logging.ToolsLogger.Error("quickNote no notebook name available", "quicknote_notebook", cfg.QuickNote.NotebookName, "default_notebook", cfg.NotebookName)
+			logging.ToolsLogger.Error("quick_note no notebook name available", "quicknote_notebook", cfg.QuickNote.NotebookName, "default_notebook", cfg.NotebookName)
 			return mcp.NewToolResultError("No notebook name configured. Please set either quicknote.notebook_name or notebook_name in your configuration."), nil
 		}
 
-		logging.ToolsLogger.Debug("quickNote parameters",
+		logging.ToolsLogger.Debug("quick_note parameters",
 			"content_length", len(content),
 			"target_notebook", targetNotebookName,
 			"quicknote_notebook_config", cfg.QuickNote.NotebookName,
@@ -1033,7 +1033,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		notebookClient := notebooks.NewNotebookClient(graphClient)
 		targetNotebook, fromCache, err := getDetailedNotebookByNameCached(notebookClient, notebookCache, targetNotebookName)
 		if err != nil {
-			logging.ToolsLogger.Error("quickNote failed to find target notebook", "notebook_name", targetNotebookName, "error", err)
+			logging.ToolsLogger.Error("quick_note failed to find target notebook", "notebook_name", targetNotebookName, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to find notebook '%s': %v", targetNotebookName, err)), nil
 		}
 		
@@ -1048,14 +1048,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		sectionClient := sections.NewSectionClient(graphClient)
 		notebookID, ok := targetNotebook["id"].(string)
 		if !ok {
-			logging.ToolsLogger.Error("quickNote notebook ID not found in response")
+			logging.ToolsLogger.Error("quick_note notebook ID not found in response")
 			return mcp.NewToolResultError("Notebook ID not found in response"), nil
 		}
 
 		// Progress notification will be sent based on cache status inside findPageInNotebookWithCache
 		targetPage, targetSectionID, pageFromCache, err := findPageInNotebookWithCache(pageClient, sectionClient, notebookCache, s, notebookID, cfg.QuickNote.PageName, progressToken, ctx)
 		if err != nil {
-			logging.ToolsLogger.Error("quickNote failed to find target page", "page_name", cfg.QuickNote.PageName, "notebook_id", notebookID, "error", err)
+			logging.ToolsLogger.Error("quick_note failed to find target page", "page_name", cfg.QuickNote.PageName, "notebook_id", notebookID, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to find page '%s' in notebook '%s': %v", cfg.QuickNote.PageName, targetNotebookName, err)), nil
 		}
 		
@@ -1072,7 +1072,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		// Detect format and convert content to HTML
 		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
-		logging.ToolsLogger.Debug("quickNote content format detection",
+		logging.ToolsLogger.Debug("quick_note content format detection",
 			"detected_format", detectedFormat.String(),
 			"original_length", len(content),
 			"converted_length", len(convertedHTML))
@@ -1093,13 +1093,13 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		sendProgressNotification(s, ctx, progressToken, 80, 100, "Adding timestamped content to page...")
 		pageID, ok := targetPage["pageId"].(string)
 		if !ok {
-			logging.ToolsLogger.Error("quickNote page ID not found in response")
+			logging.ToolsLogger.Error("quick_note page ID not found in response")
 			return mcp.NewToolResultError("Page ID not found in response"), nil
 		}
 
 		err = pageClient.UpdatePageContent(pageID, commands)
 		if err != nil {
-			logging.ToolsLogger.Error("quickNote failed to update page content", "page_id", pageID, "error", err)
+			logging.ToolsLogger.Error("quick_note failed to update page content", "page_id", pageID, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to add quicknote to page: %v", err)), nil
 		}
 
@@ -1108,10 +1108,10 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		notebookCache.ClearPagesCache(targetSectionID)
 		notebookCache.ClearAllPageSearchCache() // Clear page search cache since page content changed
 		// Note: We don't clear notebook lookup cache as notebook metadata shouldn't change from page updates
-		logging.ToolsLogger.Debug("quickNote cleared pages cache and page search cache", "section_id", targetSectionID)
+		logging.ToolsLogger.Debug("quick_note cleared pages cache and page search cache", "section_id", targetSectionID)
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Info("quickNote operation completed",
+		logging.ToolsLogger.Info("quick_note operation completed",
 			"duration", elapsed,
 			"notebook", targetNotebookName,
 			"page", cfg.QuickNote.PageName,
@@ -1131,7 +1131,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("quickNote failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("quick_note failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
@@ -1140,7 +1140,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(quickNoteTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("quickNote", quickNoteHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(quick_noteTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("quick_note", quick_noteHandler, authConfig, cache, quickNoteConfig)))
 
 	// NOTE: getOnenoteOperation tool is currently commented out in the original code
 	// Uncomment this section if you want to enable it

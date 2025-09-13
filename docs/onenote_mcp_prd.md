@@ -90,10 +90,10 @@ Following the GitHub MCP server pattern, organize tools into logical toolsets:
 - `extract_text` - Extract text content using OCR capabilities
 
 #### 3.5 Authentication Toolset (`auth`)
-- `getAuthStatus` - Get current authentication status and token information
-- `initiateAuth` - Start new OAuth authentication flow with browser redirect
-- `refreshToken` - Manually refresh authentication tokens
-- `clearAuth` - Clear stored tokens (logout functionality)
+- `auth_status` - Get current authentication status and token information
+- `auth_initiate` - Start new OAuth authentication flow with browser redirect
+- `auth_refresh` - Manually refresh authentication tokens
+- `auth_clear` - Clear stored tokens (logout functionality)
 
 ### 4. Resource Templates
 
@@ -163,10 +163,10 @@ onenote://recent/pages?days={days}
 }
 ```
 
-#### Example: `getAuthStatus`
+#### Example: `auth_status`
 ```json
 {
-  "name": "getAuthStatus",
+  "name": "auth_status",
   "description": "Get current authentication status and token information without exposing sensitive data",
   "inputSchema": {
     "type": "object",
@@ -176,10 +176,10 @@ onenote://recent/pages?days={days}
 }
 ```
 
-#### Example: `initiateAuth`
+#### Example: `auth_initiate`
 ```json
 {
-  "name": "initiateAuth", 
+  "name": "auth_initiate", 
   "description": "Start new OAuth authentication flow with browser redirect",
   "inputSchema": {
     "type": "object",
@@ -485,14 +485,14 @@ The original PRD specified OAuth 2.0 with client secret, but the implementation 
 ### MCP Authentication Tools
 The server includes 4 authentication management tools:
 
-1. **`getAuthStatus`** - Check authentication state without exposing tokens
-2. **`initiateAuth`** - Start OAuth flow with automatic HTTP server handling  
-3. **`refreshToken`** - Manual token refresh capability
-4. **`clearAuth`** - Logout and clear stored tokens
+1. **`auth_status`** - Check authentication state without exposing tokens
+2. **`auth_initiate`** - Start OAuth flow with automatic HTTP server handling
+3. **`auth_refresh`** - Manual token refresh capability
+4. **`auth_clear`** - Logout and clear stored tokens
 
 ### Non-Blocking Startup
 Unlike the original design, the server starts immediately without waiting for authentication:
-- **No tokens**: Server starts and user can authenticate via `initiateAuth` 
+- **No tokens**: Server starts and user can authenticate via `auth_initiate` 
 - **Expired tokens**: Server starts and allows re-authentication
 - **Valid tokens**: Server starts normally
 

@@ -46,8 +46,8 @@
 // Usage:
 //   go build -o onenote-mcp-server ./cmd/onenote-mcp-server
 //   ./onenote-mcp-server                    # stdio mode (default)
-//   ./onenote-mcp-server -mode=streamable  # Streamable HTTP mode on port 8080
-//   ./onenote-mcp-server -mode=streamable -port=8081 # Streamable HTTP mode on custom port
+//   ./onenote-mcp-server -mode=http  # HTTP mode on port 8080
+//   ./onenote-mcp-server -mode=http -port=8081 # HTTP mode on custom port
 //
 // Docker:
 //   docker build -t onenote-mcp-server .
@@ -1065,8 +1065,8 @@ func main() {
 	globalNotebookCache = NewNotebookCache()
 
 	// Parse command line flags
-	mode := flag.String("mode", "stdio", "Server mode: stdio or streamable")
-	port := flag.String("port", "8080", "Port for HTTP server (used with streamable mode)")
+	mode := flag.String("mode", "stdio", "Server mode: stdio or http")
+	port := flag.String("port", "8080", "Port for HTTP server (used with http mode)")
 	flag.Parse()
 
 	// Log version on startup
@@ -1158,14 +1158,14 @@ func main() {
 	initializeDefaultNotebook(graphClient, cfg, globalNotebookCache, logger)
 
 	switch *mode {
-	case "streamable":
-		logger.Info("Starting MCP server", "transport", "Streamable HTTP", "port", *port, "request_logging", "enabled")
+	case "http":
+		logger.Info("Starting MCP server", "transport", "HTTP", "port", *port, "request_logging", "enabled")
 		streamableServer := server.NewStreamableHTTPServer(s,
 			server.WithStateLess(*cfg.Stateless))
 		handler := applyAuthIfEnabled(streamableServer, cfg)
-		logger.Info("Streamable HTTP server listening", "address", fmt.Sprintf("http://localhost:%s", *port))
+		logger.Info("HTTP server listening", "address", fmt.Sprintf("http://localhost:%s", *port))
 		if err := http.ListenAndServe(":"+*port, handler); err != nil {
-			logger.Error("Streamable HTTP server error", "error", err)
+			logger.Error("HTTP server error", "error", err)
 			os.Exit(1)
 		}
 	case "stdio":
@@ -1175,7 +1175,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		logger.Error("Invalid mode specified", "mode", *mode, "valid_modes", []string{"stdio", "streamable"})
+		logger.Error("Invalid mode specified", "mode", *mode, "valid_modes", []string{"stdio", "http"})
 		os.Exit(1)
 	}
 }

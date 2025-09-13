@@ -43,18 +43,18 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 	notebookClient := notebooks.NewNotebookClient(graphClient)
 	sectionClient := sections.NewSectionClient(graphClient)
 
-	// listNotebooks: List all OneNote notebooks for the user
-	listNotebooksTool := mcp.NewTool(
-		"listNotebooks",
-		mcp.WithDescription(resources.MustGetToolDescription("listNotebooks")),
+	// notebooks: List all OneNote notebooks for the user
+	notebooksTool := mcp.NewTool(
+		"notebooks",
+		mcp.WithDescription(resources.MustGetToolDescription("notebooks")),
 	)
-	listNotebooksHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	notebooksHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Debug("listNotebooks called with no parameters")
+		logging.ToolsLogger.Debug("notebooks called with no parameters")
 
 		notebooks, err := notebookClient.ListNotebooksDetailed()
 		if err != nil {
-			logging.ToolsLogger.Error("listNotebooks failed", "error", err)
+			logging.ToolsLogger.Error("notebooks failed", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to list notebooks: %v", err)), nil
 		}
 
@@ -65,7 +65,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("listNotebooks completed", 
+		logging.ToolsLogger.Debug("notebooks completed", 
 			"duration", elapsed, 
 			"original_count", originalCount,
 			"filtered_count", len(notebooks))
@@ -135,61 +135,61 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(listNotebooksTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("listNotebooks", listNotebooksHandler, authConfig, cache, quickNoteConfig)(ctx, req)
+	s.AddTool(notebooksTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("notebooks", notebooksHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
-	// createSection: Create a new section in a notebook or section group
-	createSectionTool := mcp.NewTool(
-		"createSection",
-		mcp.WithDescription(resources.MustGetToolDescription("createSection")),
+	// section_create: Create a new section in a notebook or section group
+	sectionCreateTool := mcp.NewTool(
+		"section_create",
+		mcp.WithDescription(resources.MustGetToolDescription("section_create")),
 		mcp.WithString("containerID", mcp.Description("Notebook ID or Section Group ID to create the section in. Optional - if left blank, automatically uses the server's configured default notebook.")),
 		mcp.WithString("displayName", mcp.Required(), mcp.Description("Display name for the new section (cannot contain: ?*\\/:<>|&#''%%~)")),
 	)
-	createSectionHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sectionCreateHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("MCP Tool: createSection", "operation", "createSection", "type", "tool_invocation")
+		logging.ToolsLogger.Info("MCP Tool: section_create", "operation", "section_create", "type", "tool_invocation")
 
 		containerID := req.GetString("containerID", "")
 		if containerID == "" {
-			logging.ToolsLogger.Debug("createSection no containerID provided, using default notebook")
+			logging.ToolsLogger.Debug("section_create no containerID provided, using default notebook")
 			var err error
 			containerID, err = notebooks.GetDefaultNotebookID(graphClient, graphClient.Config)
 			if err != nil {
-				logging.ToolsLogger.Error("createSection failed to get default notebook", "error", err)
+				logging.ToolsLogger.Error("section_create failed to get default notebook", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("No containerID provided and failed to get default notebook: %v", err)), nil
 			}
 		}
 
 		displayName, err := req.RequireString("displayName")
 		if err != nil {
-			logging.ToolsLogger.Error("createSection missing displayName", "error", err)
+			logging.ToolsLogger.Error("section_create missing displayName", "error", err)
 			return mcp.NewToolResultError("displayName is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("createSection parameters", "containerID", containerID, "displayName", displayName)
+		logging.ToolsLogger.Debug("section_create parameters", "containerID", containerID, "displayName", displayName)
 
 		// Validate display name for illegal characters
 		illegalChars := []string{"?", "*", "\\", "/", ":", "<", ">", "|", "&", "#", "'", "'", "%", "~"}
 		for _, char := range illegalChars {
 			if strings.Contains(displayName, char) {
-				logging.ToolsLogger.Error("createSection displayName contains illegal character", "character", char, "display_name", displayName)
+				logging.ToolsLogger.Error("section_create displayName contains illegal character", "character", char, "display_name", displayName)
 				suggestedName := utils.SuggestValidName(displayName, char)
 				return mcp.NewToolResultError(fmt.Sprintf("displayName contains illegal character '%s'. Illegal characters are: ?*\\/:<>|&#''%%%%~\n\nSuggestion: Try using '%s' instead of '%s'.\n\nSuggested valid name: '%s'", char, utils.GetReplacementChar(char), char, suggestedName)), nil
 			}
 		}
-		logging.ToolsLogger.Debug("createSection displayName validation passed")
+		logging.ToolsLogger.Debug("section_create displayName validation passed")
 
 		result, err := sectionClient.CreateSection(containerID, displayName)
 		if err != nil {
-			logging.ToolsLogger.Error("createSection operation failed", "container_id", containerID, "error", err, "operation", "createSection")
+			logging.ToolsLogger.Error("section_create operation failed", "container_id", containerID, "error", err, "operation", "section_create")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create section: %v", err)), nil
 		}
 
 		// Extract only the essential information: success status and section ID
 		sectionID, exists := result["id"].(string)
 		if !exists {
-			logging.ToolsLogger.Error("createSection result missing ID field", "result", result)
+			logging.ToolsLogger.Error("section_create result missing ID field", "result", result)
 			return mcp.NewToolResultError("Section creation succeeded but no ID was returned"), nil
 		}
 
@@ -200,69 +200,69 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("createSection failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("section_create failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("createSection operation completed", "duration", elapsed, "section_id", sectionID)
+		logging.ToolsLogger.Debug("section_create operation completed", "duration", elapsed, "section_id", sectionID)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(createSectionTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("createSection", createSectionHandler, authConfig, cache, quickNoteConfig)(ctx, req)
+	s.AddTool(sectionCreateTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("section_create", sectionCreateHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
-	// createSectionGroup: Create a new section group in a notebook or another section group
-	createSectionGroupTool := mcp.NewTool(
-		"createSectionGroup",
-		mcp.WithDescription(resources.MustGetToolDescription("createSectionGroup")),
+	// section_group_create: Create a new section group in a notebook or another section group
+	sectionGroupCreateTool := mcp.NewTool(
+		"section_group_create",
+		mcp.WithDescription(resources.MustGetToolDescription("section_group_create")),
 		mcp.WithString("containerID", mcp.Description("Notebook ID or Section Group ID to create the section group in. Optional - if left blank, automatically uses the server's configured default notebook.")),
 		mcp.WithString("displayName", mcp.Required(), mcp.Description("Display name for the new section group (cannot contain: ?*\\/:<>|&#''%%~)")),
 	)
-	createSectionGroupHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sectionGroupCreateHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("MCP Tool: createSectionGroup", "operation", "createSectionGroup", "type", "tool_invocation")
+		logging.ToolsLogger.Info("MCP Tool: section_group_create", "operation", "section_group_create", "type", "tool_invocation")
 
 		containerID := req.GetString("containerID", "")
 		if containerID == "" {
-			logging.ToolsLogger.Debug("createSectionGroup no containerID provided, using default notebook")
+			logging.ToolsLogger.Debug("section_group_create no containerID provided, using default notebook")
 			var err error
 			containerID, err = notebooks.GetDefaultNotebookID(graphClient, graphClient.Config)
 			if err != nil {
-				logging.ToolsLogger.Error("createSectionGroup failed to get default notebook", "error", err)
+				logging.ToolsLogger.Error("section_group_create failed to get default notebook", "error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("No containerID provided and failed to get default notebook: %v", err)), nil
 			}
 		}
 
 		displayName, err := req.RequireString("displayName")
 		if err != nil {
-			logging.ToolsLogger.Error("createSectionGroup missing displayName", "error", err)
+			logging.ToolsLogger.Error("section_group_create missing displayName", "error", err)
 			return mcp.NewToolResultError("displayName is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("createSectionGroup parameters", "containerID", containerID, "displayName", displayName)
+		logging.ToolsLogger.Debug("section_group_create parameters", "containerID", containerID, "displayName", displayName)
 
 		// Validate display name for illegal characters
 		illegalChars := []string{"?", "*", "\\", "/", ":", "<", ">", "|", "&", "#", "'", "'", "%", "~"}
 		for _, char := range illegalChars {
 			if strings.Contains(displayName, char) {
-				logging.ToolsLogger.Error("createSectionGroup displayName contains illegal character", "character", char, "display_name", displayName)
+				logging.ToolsLogger.Error("section_group_create displayName contains illegal character", "character", char, "display_name", displayName)
 				suggestedName := utils.SuggestValidName(displayName, char)
 				return mcp.NewToolResultError(fmt.Sprintf("displayName contains illegal character '%s'. Illegal characters are: ?*\\/:<>|&#''%%%%~\n\nSuggestion: Try using '%s' instead of '%s'.\n\nSuggested valid name: '%s'", char, utils.GetReplacementChar(char), char, suggestedName)), nil
 			}
 		}
-		logging.ToolsLogger.Debug("createSectionGroup displayName validation passed")
+		logging.ToolsLogger.Debug("section_group_create displayName validation passed")
 
 		result, err := sectionClient.CreateSectionGroup(containerID, displayName)
 		if err != nil {
-			logging.ToolsLogger.Error("createSectionGroup operation failed", "container_id", containerID, "error", err, "operation", "createSectionGroup")
+			logging.ToolsLogger.Error("section_group_create operation failed", "container_id", containerID, "error", err, "operation", "section_group_create")
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to create section group: %v", err)), nil
 		}
 
 		// Extract only the essential information: success status and section group ID
 		sectionGroupID, exists := result["id"].(string)
 		if !exists {
-			logging.ToolsLogger.Error("createSectionGroup result missing ID field", "result", result)
+			logging.ToolsLogger.Error("section_group_create result missing ID field", "result", result)
 			return mcp.NewToolResultError("Section group creation succeeded but no ID was returned"), nil
 		}
 
@@ -273,69 +273,69 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("createSectionGroup failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("section_group_create failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("createSectionGroup operation completed", "duration", elapsed, "section_group_id", sectionGroupID)
+		logging.ToolsLogger.Debug("section_group_create operation completed", "duration", elapsed, "section_group_id", sectionGroupID)
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(createSectionGroupTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("createSectionGroup", createSectionGroupHandler, authConfig, cache, quickNoteConfig)(ctx, req)
+	s.AddTool(sectionGroupCreateTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("section_group_create", sectionGroupCreateHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
-	// getSelectedNotebook: Get currently selected notebook metadata from cache
-	getSelectedNotebookTool := mcp.NewTool(
-		"getSelectedNotebook",
-		mcp.WithDescription(resources.MustGetToolDescription("getSelectedNotebook")),
+	// notebook_current: Get currently selected notebook metadata from cache
+	notebookCurrentTool := mcp.NewTool(
+		"notebook_current",
+		mcp.WithDescription(resources.MustGetToolDescription("notebook_current")),
 	)
-	getSelectedNotebookHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	notebookCurrentHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Debug("getSelectedNotebook called")
+		logging.ToolsLogger.Debug("notebook_current called")
 
 		notebook, isSet := notebookCache.GetNotebook()
 		if !isSet {
 			logging.ToolsLogger.Debug("No notebook currently selected")
-			return mcp.NewToolResultError("No notebook is currently selected. Use the 'selectNotebook' tool to select a notebook first."), nil
+			return mcp.NewToolResultError("No notebook is currently selected. Use the 'notebook_select' tool to select a notebook first."), nil
 		}
 
 		jsonBytes, err := json.Marshal(notebook)
 		if err != nil {
-			logging.ToolsLogger.Error("getSelectedNotebook failed to marshal notebook", "error", err)
+			logging.ToolsLogger.Error("notebook_current failed to marshal notebook", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal selected notebook: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
 		if displayName, ok := notebookCache.GetDisplayName(); ok {
-			logging.ToolsLogger.Debug("getSelectedNotebook completed successfully",
+			logging.ToolsLogger.Debug("notebook_current completed successfully",
 				"duration", elapsed,
 				"notebook_name", displayName)
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(getSelectedNotebookTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("getSelectedNotebook", getSelectedNotebookHandler, authConfig, cache, quickNoteConfig)(ctx, req)
+	s.AddTool(notebookCurrentTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("notebook_current", notebookCurrentHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
-	// selectNotebook: Select a notebook by name or ID to use as the active notebook
-	selectNotebookTool := mcp.NewTool(
-		"selectNotebook",
-		mcp.WithDescription(resources.MustGetToolDescription("selectNotebook")),
+	// notebook_select: Select a notebook by name or ID to use as the active notebook
+	notebookSelectTool := mcp.NewTool(
+		"notebook_select",
+		mcp.WithDescription(resources.MustGetToolDescription("notebook_select")),
 		mcp.WithString("identifier", mcp.Description("Notebook name or ID to select as active")),
 	)
-	selectNotebookHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	notebookSelectHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
 		args := req.GetArguments()
 
 		identifier, ok := args["identifier"].(string)
 		if !ok || identifier == "" {
-			logging.ToolsLogger.Error("selectNotebook missing identifier parameter")
+			logging.ToolsLogger.Error("notebook_select missing identifier parameter")
 			return mcp.NewToolResultError("Missing required parameter: identifier (notebook name or ID)"), nil
 		}
 
-		logging.ToolsLogger.Debug("selectNotebook called", "identifier", identifier)
+		logging.ToolsLogger.Debug("notebook_select called", "identifier", identifier)
 
 		// Try to get notebook by name first, then by ID
 		var notebook map[string]interface{}
@@ -350,7 +350,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 			detailedNotebooks, errList := notebookClient.ListNotebooksDetailed()
 			if errList != nil {
-				logging.ToolsLogger.Error("selectNotebook failed to list detailed notebooks",
+				logging.ToolsLogger.Error("notebook_select failed to list detailed notebooks",
 					"identifier", identifier, "error", errList)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to search for notebook '%s': %v", identifier, errList)), nil
 			}
@@ -366,7 +366,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 			}
 
 			if !found {
-				logging.ToolsLogger.Error("selectNotebook failed to find notebook by name or ID",
+				logging.ToolsLogger.Error("notebook_select failed to find notebook by name or ID",
 					"identifier", identifier)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to find notebook '%s' by name or ID", identifier)), nil
 			}
@@ -376,12 +376,12 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		notebookDisplayName, _ := notebook["displayName"].(string)
 		if authConfig != nil && authConfig.Enabled {
 			if err := authConfig.SetCurrentNotebook(notebookDisplayName); err != nil {
-				logging.ToolsLogger.Error("selectNotebook authorization denied",
+				logging.ToolsLogger.Error("notebook_select authorization denied",
 					"notebook_name", notebookDisplayName,
 					"error", err)
 				return mcp.NewToolResultError(fmt.Sprintf("Authorization denied: %v", err)), nil
 			}
-			logging.ToolsLogger.Debug("selectNotebook authorization granted",
+			logging.ToolsLogger.Debug("notebook_select authorization granted",
 				"notebook_name", notebookDisplayName)
 		}
 
@@ -397,13 +397,13 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("selectNotebook failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("notebook_select failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal select response: %v", err)), nil
 		}
 
 		elapsed := time.Since(startTime)
 		if displayName, ok := notebook["displayName"].(string); ok {
-			logging.ToolsLogger.Debug("selectNotebook completed successfully",
+			logging.ToolsLogger.Debug("notebook_select completed successfully",
 				"duration", elapsed,
 				"notebook_name", displayName,
 				"notebook_id", notebook["id"])
@@ -411,24 +411,24 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(selectNotebookTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("selectNotebook", selectNotebookHandler, authConfig, cache, quickNoteConfig)(ctx, req)
+	s.AddTool(notebookSelectTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("notebook_select", notebookSelectHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
-	// getNotebookSections: Get sections and section groups from selected notebook with caching
-	getNotebookSectionsTool := mcp.NewTool(
-		"getNotebookSections",
-		mcp.WithDescription(resources.MustGetToolDescription("getNotebookSections")),
+	// sections: Get sections and section groups from selected notebook with caching
+	sectionsTool := mcp.NewTool(
+		"sections",
+		mcp.WithDescription(resources.MustGetToolDescription("sections")),
 	)
-	getNotebookSectionsHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sectionsHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Debug("getNotebookSections called")
+		logging.ToolsLogger.Debug("sections called")
 
 		// Check if notebook is selected
 		notebookID, isSet := notebookCache.GetNotebookID()
 		if !isSet {
-			logging.ToolsLogger.Debug("No notebook currently selected for getNotebookSections")
-			return mcp.NewToolResultError("No notebook is currently selected. Use the 'selectNotebook' tool to select a notebook first."), nil
+			logging.ToolsLogger.Debug("No notebook currently selected for sections")
+			return mcp.NewToolResultError("No notebook is currently selected. Use the 'notebook_select' tool to select a notebook first."), nil
 		}
 
 		// Send initial progress notification
@@ -571,7 +571,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 				}
 
 				elapsed := time.Since(startTime)
-				logging.ToolsLogger.Debug("getNotebookSections completed from cache",
+				logging.ToolsLogger.Debug("sections completed from cache",
 					"duration", elapsed,
 					"notebook_id", notebookID,
 					"original_cached_count", originalCachedCount,
@@ -603,7 +603,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 				jsonBytes, err := json.Marshal(cacheResponse)
 				if err != nil {
-					logging.ToolsLogger.Error("getNotebookSections failed to marshal cached sections", "error", err)
+					logging.ToolsLogger.Error("sections failed to marshal cached sections", "error", err)
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal cached sections: %v", err)), nil
 				}
 
@@ -629,7 +629,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		sectionItems, err := fetchAllNotebookContentWithProgress(sectionClient, notebookID, progressCtx)
 		if err != nil {
-			logging.ToolsLogger.Error("getNotebookSections failed to fetch all content", "notebook_id", notebookID, "error", err)
+			logging.ToolsLogger.Error("sections failed to fetch all content", "notebook_id", notebookID, "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to fetch sections: %v", err)), nil
 		}
 
@@ -682,7 +682,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 		notebookCache.SetSectionsTree(cacheStructure)
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("getNotebookSections completed from API",
+		logging.ToolsLogger.Debug("sections completed from API",
 			"duration", elapsed,
 			"notebook_id", notebookID,
 			"sections_count", len(sectionItems),
@@ -713,7 +713,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		jsonBytes, err := json.Marshal(apiResponse)
 		if err != nil {
-			logging.ToolsLogger.Error("getNotebookSections failed to marshal sections", "error", err)
+			logging.ToolsLogger.Error("sections failed to marshal sections", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal sections: %v", err)), nil
 		}
 
@@ -722,24 +722,24 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	s.AddTool(getNotebookSectionsTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("getNotebookSections", getNotebookSectionsHandler, authConfig, cache, quickNoteConfig)(ctx, req)
+	s.AddTool(sectionsTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return authorization.AuthorizedToolHandler("sections", sectionsHandler, authConfig, cache, quickNoteConfig)(ctx, req)
 	})
 
-	// clearCache: Clear all cached data (notebook sections and pages)
-	clearCacheTool := mcp.NewTool(
-		"clearCache",
-		mcp.WithDescription(resources.MustGetToolDescription("clearCache")),
+	// cache_clear: Clear all cached data (notebook sections and pages)
+	cacheClearTool := mcp.NewTool(
+		"cache_clear",
+		mcp.WithDescription(resources.MustGetToolDescription("cache_clear")),
 	)
-	clearCacheHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	cacheClearHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
-		logging.ToolsLogger.Info("MCP Tool: clearCache", "operation", "clearCache", "type", "tool_invocation")
+		logging.ToolsLogger.Info("MCP Tool: cache_clear", "operation", "cache_clear", "type", "tool_invocation")
 
 		// Clear all cache data
 		notebookCache.ClearAllCache()
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("clearCache operation completed", "duration", elapsed)
+		logging.ToolsLogger.Debug("cache_clear operation completed", "duration", elapsed)
 
 		response := map[string]interface{}{
 			"success": true,
@@ -753,14 +753,14 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 
 		jsonBytes, err := json.Marshal(response)
 		if err != nil {
-			logging.ToolsLogger.Error("clearCache failed to marshal response", "error", err)
+			logging.ToolsLogger.Error("cache_clear failed to marshal response", "error", err)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to marshal response: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText(string(jsonBytes)), nil
 	}
-	// clearCache doesn't require authorization since it's a system maintenance operation
-	s.AddTool(clearCacheTool, server.ToolHandlerFunc(clearCacheHandler))
+	// cache_clear doesn't require authorization since it's a system maintenance operation
+	s.AddTool(cacheClearTool, server.ToolHandlerFunc(cacheClearHandler))
 
 	logging.ToolsLogger.Debug("Notebook and section tools registered successfully")
 }

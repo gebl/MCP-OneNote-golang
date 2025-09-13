@@ -39,7 +39,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    command: ["-mode=streamable", "-port=8080"]
+    command: ["-mode=http", "-port=8080"]
     environment:
       # Azure App Registration
       - ONENOTE_CLIENT_ID=${ONENOTE_CLIENT_ID}

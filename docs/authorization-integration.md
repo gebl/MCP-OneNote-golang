@@ -144,10 +144,10 @@ Broad access with protected areas:
 
 #### `auth_tools` (Recommended: `"full"`)
 Controls access to authentication tools:
-- `getAuthStatus`: Check authentication status
-- `initiateAuth`: Start OAuth flow
-- `refreshToken`: Refresh authentication tokens
-- `clearAuth`: Clear stored tokens
+- `auth_status`: Check authentication status
+- `auth_initiate`: Start OAuth flow
+- `auth_refresh`: Refresh authentication tokens
+- `auth_clear`: Clear stored tokens
 
 **Recommendation:** Always set to `"full"` to allow authentication management.
 

@@ -94,7 +94,7 @@ func AuthorizedResourceHandler(resourceName string, handler ResourceHandler, aut
 				"resource", resourceName,
 				"resource_uri", req.Params.URI,
 				"reason", "no_notebook_selected")
-			return nil, fmt.Errorf("access denied: no notebook selected. Use selectNotebook tool first")
+			return nil, fmt.Errorf("access denied: no notebook selected. Use notebook_select tool first")
 		}
 
 		// Check read permission for current notebook

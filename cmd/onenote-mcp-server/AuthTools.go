@@ -18,13 +18,13 @@ import (
 
 // registerAuthTools registers authentication-related MCP tools
 func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
-	// getAuthStatus: Get current authentication status
-	getAuthStatusTool := mcp.NewTool(
-		"getAuthStatus",
-		mcp.WithDescription(resources.MustGetToolDescription("getAuthStatus")),
+	// auth_status: Get current authentication status
+	auth_statusTool := mcp.NewTool(
+		"auth_status",
+		mcp.WithDescription(resources.MustGetToolDescription("auth_status")),
 	)
-	getAuthStatusHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logger := utils.NewToolLogger("getAuthStatus")
+	auth_statusHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := utils.NewToolLogger("auth_status")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -33,18 +33,18 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		status := authManager.GetAuthStatus()
 
 		logger.LogSuccess("authenticated", status.Authenticated)
-		return utils.ToolResults.NewJSONResult("getAuthStatus", status), nil
+		return utils.ToolResults.NewJSONResult("auth_status", status), nil
 	}
-	// getAuthStatus doesn't require authorization since it's needed to check auth state
-	s.AddTool(getAuthStatusTool, server.ToolHandlerFunc(getAuthStatusHandler))
+	// auth_status doesn't require authorization since it's needed to check auth state
+	s.AddTool(auth_statusTool, server.ToolHandlerFunc(auth_statusHandler))
 
-	// refreshToken: Manually refresh authentication token
-	refreshTokenTool := mcp.NewTool(
-		"refreshToken",
-		mcp.WithDescription(resources.MustGetToolDescription("refreshToken")),
+	// auth_refresh: Manually refresh authentication token
+	auth_refreshTool := mcp.NewTool(
+		"auth_refresh",
+		mcp.WithDescription(resources.MustGetToolDescription("auth_refresh")),
 	)
-	refreshTokenHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logger := utils.NewToolLogger("refreshToken")
+	auth_refreshHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := utils.NewToolLogger("auth_refresh")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -57,17 +57,17 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		}
 
 		logger.LogSuccess()
-		return utils.ToolResults.NewJSONResult("refreshToken", status), nil
+		return utils.ToolResults.NewJSONResult("auth_refresh", status), nil
 	}
-	s.AddTool(refreshTokenTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("refreshToken", refreshTokenHandler, authConfig, cache, quickNoteConfig)))
+	s.AddTool(auth_refreshTool, server.ToolHandlerFunc(authorization.AuthorizedToolHandler("auth_refresh", auth_refreshHandler, authConfig, cache, quickNoteConfig)))
 
-	// initiateAuth: Start new authentication flow
-	initiateAuthTool := mcp.NewTool(
-		"initiateAuth",
-		mcp.WithDescription(resources.MustGetToolDescription("initiateAuth")),
+	// auth_initiate: Start new authentication flow
+	auth_initiateTool := mcp.NewTool(
+		"auth_initiate",
+		mcp.WithDescription(resources.MustGetToolDescription("auth_initiate")),
 	)
-	initiateAuthHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logger := utils.NewToolLogger("initiateAuth")
+	auth_initiateHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := utils.NewToolLogger("auth_initiate")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -89,18 +89,18 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 		}
 
 		logger.LogSuccess("auth_url_generated", true)
-		return utils.ToolResults.NewJSONResult("initiateAuth", response), nil
+		return utils.ToolResults.NewJSONResult("auth_initiate", response), nil
 	}
-	// initiateAuth doesn't require authorization since it's needed to establish auth
-	s.AddTool(initiateAuthTool, server.ToolHandlerFunc(initiateAuthHandler))
+	// auth_initiate doesn't require authorization since it's needed to establish auth
+	s.AddTool(auth_initiateTool, server.ToolHandlerFunc(auth_initiateHandler))
 
-	// clearAuth: Clear stored authentication tokens
-	clearAuthTool := mcp.NewTool(
-		"clearAuth",
-		mcp.WithDescription(resources.MustGetToolDescription("clearAuth")),
+	// auth_clear: Clear stored authentication tokens
+	auth_clearTool := mcp.NewTool(
+		"auth_clear",
+		mcp.WithDescription(resources.MustGetToolDescription("auth_clear")),
 	)
-	clearAuthHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		logger := utils.NewToolLogger("clearAuth")
+	auth_clearHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		logger := utils.NewToolLogger("auth_clear")
 
 		if authManager == nil {
 			return mcp.NewToolResultError("Authentication manager not available"), nil
@@ -114,12 +114,12 @@ func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authC
 
 		response := map[string]interface{}{
 			"success": true,
-			"message": "Authentication tokens cleared successfully. Use initiateAuth to re-authenticate.",
+			"message": "Authentication tokens cleared successfully. Use auth_initiate to re-authenticate.",
 		}
 
 		logger.LogSuccess()
-		return utils.ToolResults.NewJSONResult("clearAuth", response), nil
+		return utils.ToolResults.NewJSONResult("auth_clear", response), nil
 	}
-	// clearAuth doesn't require authorization since it clears auth state
-	s.AddTool(clearAuthTool, server.ToolHandlerFunc(clearAuthHandler))
+	// auth_clear doesn't require authorization since it clears auth state
+	s.AddTool(auth_clearTool, server.ToolHandlerFunc(auth_clearHandler))
 }

@@ -127,7 +127,7 @@ Test the server by listing notebooks:
 ```bash
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listNotebooks", "arguments": {}}'
+  -d '{"name": "notebooks", "arguments": {}}'
 ```
 
 You should see a JSON response with your OneNote notebooks.
@@ -322,7 +322,7 @@ Test all major operations:
 # 1. List notebooks
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listNotebooks", "arguments": {}}'
+  -d '{"name": "notebooks", "arguments": {}}'
 
 # 2. List sections (use notebook ID from step 1)
 curl -X POST http://localhost:8080/tools/call \
@@ -376,7 +376,7 @@ curl -I http://localhost:8080/health
 # Check token validity
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listNotebooks", "arguments": {}}'
+  -d '{"name": "notebooks", "arguments": {}}'
 ```
 
 ### 7.2 Log Rotation

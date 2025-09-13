@@ -71,7 +71,7 @@ func TestSimplifiedAuthorizationConfig_IsAuthorized(t *testing.T) {
 	resourceContext := ResourceContext{
 		Operation: OperationRead,
 	}
-	err = config.IsAuthorized(ctx, "getAuthStatus", req, resourceContext)
+	err = config.IsAuthorized(ctx, "auth_status", req, resourceContext)
 	assert.NoError(t, err)
 
 	// Test non-auth tool with read permission on read-only notebook

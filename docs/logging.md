@@ -231,14 +231,14 @@ The logging system has been successfully migrated to structured logging with the
 
 **Before:**
 ```go
-log.Printf("[tools] [DEBUG] listNotebooks called")
-log.Printf("[tools] [DEBUG] listNotebooks completed in %v, returned %d notebooks", elapsed, len(notebooks))
+log.Printf("[tools] [DEBUG] notebooks called")
+log.Printf("[tools] [DEBUG] notebooks completed in %v, returned %d notebooks", elapsed, len(notebooks))
 ```
 
 **After:**
 ```go
-logging.ToolsLogger.Info("Starting OneNote notebook discovery", "operation", "listNotebooks", "type", "tool_invocation")
-logging.ToolsLogger.Info("listNotebooks operation completed", "duration", elapsed, "notebooks_found", len(notebooks), "success", true)
+logging.ToolsLogger.Info("Starting OneNote notebook discovery", "operation", "notebooks", "type", "tool_invocation")
+logging.ToolsLogger.Info("notebooks operation completed", "duration", elapsed, "notebooks_found", len(notebooks), "success", true)
 ```
 
 The new logging provides much clearer insight into what the program is doing at each step!

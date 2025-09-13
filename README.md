@@ -97,7 +97,7 @@ By using this software, you acknowledge that you understand these risks and have
 ### 🌐 MCP Protocol Integration
 - **MCP Resources**: Hierarchical URI-based resource discovery (`onenote://notebooks`, `onenote://sections`, etc.)
 - **Streamlined MCP Protocol**: Focused on tools and resources following current MCP specification
-- **Multi-Mode Support**: stdio and streamable HTTP protocols with built-in SSE streaming
+- **Multi-Mode Support**: stdio and HTTP protocols with built-in SSE streaming
 
 ### 🧠 Intelligent Content Processing
 - **Format Detection**: Automatic detection and conversion between HTML, Markdown, and ASCII text
@@ -151,8 +151,8 @@ By using this software, you acknowledge that you understand these risks and have
    
    # Run in different modes:
    ./onenote-mcp-server                    # stdio mode (default)
-   ./onenote-mcp-server -mode=streamable  # Streamable HTTP mode on port 8080
-   ./onenote-mcp-server -mode=streamable -port=8081 # Streamable HTTP mode on custom port
+   ./onenote-mcp-server -mode=http        # HTTP mode on port 8080
+   ./onenote-mcp-server -mode=http -port=8081 # HTTP mode on custom port
    ```
 
 ### Option 2: Docker Deployment
@@ -170,8 +170,8 @@ By using this software, you acknowledge that you understand these risks and have
    
    # Run in different modes:
    docker run -p 8080:8080 onenote-mcp-server                    # stdio mode (default)
-   docker run -p 8080:8080 onenote-mcp-server -mode=streamable  # Streamable HTTP mode
-   docker run -p 8081:8081 onenote-mcp-server -mode=streamable -port=8081 # Streamable HTTP mode on custom port
+   docker run -p 8080:8080 onenote-mcp-server -mode=http        # HTTP mode
+   docker run -p 8081:8081 onenote-mcp-server -mode=http -port=8081 # HTTP mode on custom port
    ```
 
 3. **Or use Docker Compose**:
@@ -190,8 +190,8 @@ The OneNote MCP Server supports two different modes for client communication:
 - **Description**: Standard input/output communication for direct integration
 - **Best for**: CLI tools, direct process communication, development
 
-#### 2. **Streamable HTTP Mode**
-- **Usage**: `./onenote-mcp-server -mode=streamable [-port=8080]`
+#### 2. **HTTP Mode**
+- **Usage**: `./onenote-mcp-server -mode=http [-port=8080]`
 - **Description**: HTTP-based communication with built-in Server-Sent Events (SSE) streaming for progress notifications
 - **Best for**: HTTP clients, web applications, real-time updates, integration with HTTP-based systems
 - **Endpoint**: `http://localhost:8080`
@@ -919,9 +919,9 @@ The server now enforces OneNote's strict container hierarchy:
 - **Better Organization**: Improved code structure and separation of responsibilities
 
 ### Streamable HTTP Support
-- **New Server Mode**: Added `-mode=streamable` for streamable HTTP protocol support with built-in SSE streaming
+- **New Server Mode**: Added `-mode=http` for HTTP protocol support with built-in SSE streaming
 - **Port Configuration**: Added `-port` flag for custom port configuration
-- **Flexible Deployment**: Support for stdio and streamable HTTP modes
+- **Flexible Deployment**: Support for stdio and HTTP modes
 
 ## 🚨 Version 1.4.0 Migration Note
 

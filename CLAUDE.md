@@ -11,8 +11,8 @@ go build -o onenote-mcp-server.exe ./cmd/onenote-mcp-server
 
 # Run modes
 ./onenote-mcp-server.exe                    # stdio mode (default)
-./onenote-mcp-server.exe -mode=streamable  # HTTP mode on port 8080
-./onenote-mcp-server.exe -mode=streamable -port=8081 # Custom port
+./onenote-mcp-server.exe -mode=http        # HTTP mode on port 8080
+./onenote-mcp-server.exe -mode=http -port=8081 # Custom port
 ```
 
 ### Development
@@ -41,7 +41,7 @@ docker build -f docker/Dockerfile -t onenote-mcp-server .
 docker run --rm -e ONENOTE_CLIENT_ID=your-id -e ONENOTE_TENANT_ID=common -e ONENOTE_REDIRECT_URI=http://localhost:8080/callback onenote-mcp-server
 
 # Run HTTP mode
-docker run -d -p 8080:8080 -e ONENOTE_CLIENT_ID=your-id -e MCP_AUTH_ENABLED=true -e MCP_BEARER_TOKEN=token onenote-mcp-server -mode=streamable
+docker run -d -p 8080:8080 -e ONENOTE_CLIENT_ID=your-id -e MCP_AUTH_ENABLED=true -e MCP_BEARER_TOKEN=token onenote-mcp-server -mode=http
 
 # Docker Compose
 cd docker && docker-compose up onenote-mcp-server       # Stdio
@@ -245,15 +245,15 @@ Server starts immediately without blocking for auth:
 - Valid tokens: normal startup with auth active
 
 ### MCP Auth Tools
-- `getAuthStatus`: Check current state
-- `initiateAuth`: Start OAuth flow
-- `refreshToken`: Manual token refresh
-- `clearAuth`: Clear tokens (logout)
+- `auth_status`: Check current state
+- `auth_initiate`: Start OAuth flow
+- `auth_refresh`: Manual token refresh
+- `auth_clear`: Clear tokens (logout)
 
 ### Workflow
 1. Start server: `./onenote-mcp-server.exe`
-2. Check: `getAuthStatus` tool
-3. Auth: `initiateAuth` tool → visit URL
+2. Check: `auth_status` tool
+3. Auth: `auth_initiate` tool → visit URL
 4. Auto token refresh on API failures
 
 ## MCP Resources
