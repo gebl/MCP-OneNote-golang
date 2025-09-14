@@ -112,20 +112,55 @@ By using this software, you acknowledge that you understand these risks and have
 - **Configuration Management**: Multi-source configuration (environment variables, JSON files, defaults)
 - **Health Monitoring**: Built-in health checks and comprehensive logging with configurable verbosity
 
+## 🚀 Quick Start with Docker
+
+Get up and running in 5 minutes using Docker and mcptools:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/gebl/onenote-mcp-server.git
+cd onenote-mcp-server
+
+# 2. Set up configuration
+cp configs/example-config.json docker/configs/config.json
+# Edit docker/configs/config.json with your Azure app credentials
+
+# 3. Build Docker image
+docker build -f docker/Dockerfile -t onenote-mcp-server .
+
+# 4. Install mcptools (Windows example, see below for other platforms)
+winget install mcptools
+
+# 5. Run interactive MCP shell
+cd docker
+mcptools shell docker run \
+  -e ONENOTE_MCP_CONFIG="/configs/config.json" \
+  -v ./configs:/configs \
+  -i onenote-mcp-server
+
+# 6. In the MCP shell, authenticate and start using OneNote
+mcp > call initiateAuth
+mcp > call listNotebooks
+mcp > call selectNotebook "My Notebook"
+mcp > call quickNote "Hello from OneNote MCP!"
+```
+
 ## 📋 Prerequisites
 
 1. **Microsoft Azure App Registration**:
    - Create an app registration in Azure Portal
-   - Configure OAuth 2.0 redirect URI (e.g., `http://localhost:8080/callback`)
-   - Grant `Notes.ReadWrite` API permissions
+   - Configure OAuth 2.0 redirect URI (e.g., `http://localhost:8181/callback`)
+   - Grant `Notes.ReadWrite` API permissions (Delegated)
+   - No client secret needed (uses PKCE flow)
 
-2. **Go Environment** (for development):
+2. **For Development**:
    - Go 1.21 or later
    - Git for version control
 
-3. **Docker** (for containerized deployment):
+3. **For Docker Deployment**:
    - Docker Engine 20.10 or later
-   - Docker Compose (optional)
+   - Docker Compose (optional, for HTTP mode)
+   - [mcptools](https://github.com/pyroprompts/mcptools) (a quick and easy way to test things are working)
 
 ## 🛠️ Setup & Installation
 
@@ -157,6 +192,7 @@ By using this software, you acknowledge that you understand these risks and have
 
 ### Option 2: Docker Deployment
 
+#### Prerequisites
 1. **Create configuration file**:
    ```bash
    # Copy the example and customize with your Azure app details
@@ -164,30 +200,150 @@ By using this software, you acknowledge that you understand these risks and have
    # Edit docker/configs/config.json with your actual credentials
    ```
 
-2. **Build and run with Docker**:
+2. **Build the Docker image**:
    ```bash
    # Build from project root (not from docker/ subdirectory)
    docker build -f docker/Dockerfile -t onenote-mcp-server .
-
-   # Run in different modes:
-   docker run -p 8181:8181 onenote-mcp-server                    # stdio mode (default)
-   docker run -p 8181:8181 onenote-mcp-server -mode=http -port=8181  # HTTP mode on port 8181
    ```
 
-3. **Or use Docker Compose** (Recommended for HTTP mode):
+#### Running in stdio Mode (Interactive MCP Shell)
+
+The recommended way to interact with the server in stdio mode is using [mcptools](https://github.com/pyroprompts/mcptools), which provides an interactive shell for MCP servers:
+
+1. **Install mcptools**:
    ```bash
-   cd docker
-   docker-compose build --no-cache  # Build fresh image
-   docker-compose up -d              # Start in background
-   docker-compose logs -f           # View logs
-   docker-compose down              # Stop and remove containers
+   # Windows
+   winget install mcptools
+   # Or download from: https://github.com/pyroprompts/mcptools/releases
+
+   # macOS
+   brew install mcptools
+
+   # Linux - download the appropriate binary from releases
+   wget https://github.com/pyroprompts/mcptools/releases/latest/download/mcptools-linux-amd64
+   chmod +x mcptools-linux-amd64
+   sudo mv mcptools-linux-amd64 /usr/local/bin/mcptools
    ```
 
-   The Docker Compose setup:
-   - Runs on port 8181 by default
-   - Mounts config from `docker/configs/config.json`
-   - Supports Traefik labels for reverse proxy integration
-   - Runs as non-root user (mcpuser) for security
+2. **Run the server with mcptools**:
+   ```bash
+   # Navigate to the docker directory
+   cd docker
+
+   # Launch interactive MCP shell with the Docker container
+   mcptools shell docker run \
+     -e ONENOTE_MCP_CONFIG="/configs/config.json" \
+     -e MCP_LOG_FILE="server.log" \
+     -v ./configs:/configs \
+     -i onenote-mcp-server
+   ```
+
+3. **Use the interactive shell**:
+   ```
+   mcp > Connected to Server: onenote-mcp-server
+   mcp > Type '/h' for help or '/q' to quit
+
+   # List available tools
+   mcp > tools
+
+   # Authenticate with OneNote
+   mcp > call initiateAuth
+
+   # List notebooks after authentication
+   mcp > call listNotebooks
+
+   # Select a notebook
+   mcp > call selectNotebook "My Notebook"
+
+   # Create a quick note
+   mcp > call quickNote "Meeting notes from today"
+   ```
+
+#### Running in HTTP Mode (REST API)
+
+For HTTP/SSE mode deployment, use Docker Compose:
+
+```bash
+cd docker
+docker-compose build --no-cache  # Build fresh image
+docker-compose up -d              # Start in background
+docker-compose logs -f           # View logs
+docker-compose down              # Stop and remove containers
+```
+
+The Docker Compose setup:
+- Runs on port 8181 by default
+- Mounts config from `docker/configs/config.json`
+- Supports Traefik labels for reverse proxy integration
+- Runs as non-root user (mcpuser) for security
+- OAuth callbacks handled at `http://localhost:8181/callback`
+
+#### Direct Docker Run (Advanced)
+
+For manual Docker runs without mcptools:
+
+```bash
+# stdio mode (requires interactive terminal)
+docker run -it \
+  -e ONENOTE_MCP_CONFIG="/configs/config.json" \
+  -v ./docker/configs:/configs \
+  onenote-mcp-server
+
+# HTTP mode
+docker run -d \
+  -p 8181:8181 \
+  -e ONENOTE_MCP_CONFIG="/configs/config.json" \
+  -v ./docker/configs:/configs \
+  onenote-mcp-server -mode=http -port=8181
+```
+
+## 🔧 Using mcptools for Interactive Testing
+
+[mcptools](https://github.com/pyroprompts/mcptools) is a quick and easy way to interact with MCP servers during development and testing. It provides:
+
+- **Interactive Shell**: Test MCP tools in real-time with immediate feedback
+- **Tool Discovery**: Automatically lists all available tools with descriptions
+- **JSON Support**: Pass complex JSON arguments to tools easily
+- **Session Management**: Maintains connection state across multiple tool calls
+- **Error Visibility**: Clear error messages and debugging information
+
+### mcptools Installation
+
+```bash
+# Windows
+winget install mcptools
+# Or use Scoop: scoop install mcptools
+
+# macOS
+brew install mcptools
+
+# Linux
+# Download binary from GitHub releases
+wget https://github.com/pyroprompts/mcptools/releases/latest/download/mcptools-linux-amd64
+chmod +x mcptools-linux-amd64
+sudo mv mcptools-linux-amd64 /usr/local/bin/mcptools
+
+# Or build from source
+go install github.com/pyroprompts/mcptools@latest
+```
+
+### Common mcptools Commands
+
+```bash
+# In the MCP shell
+/h or /help       # Show help
+/tools            # List all available tools
+/resources        # List all available resources
+/prompts          # List all available prompts
+/q or /quit       # Exit the shell
+
+# Call tools with arguments
+call toolName arg1 arg2
+call createPage "My Title" "sectionId123" "# My Content"
+
+# Pass JSON arguments
+call updatePageContent {"pageId": "123", "content": "New content"}
+```
 
 ## 🔧 Configuration
 
