@@ -14,6 +14,9 @@ mcp-server.log
 ctf_image_base64.txt
 image.txt
 
+# Coverage files
+*.out
+
 # Config backups
 mcp-backup.json
 test-config.json
