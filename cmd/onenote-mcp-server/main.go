@@ -82,7 +82,7 @@ import (
 
 const (
 	// Version is the current version of the OneNote MCP server
-	Version        = "1.7.0"
+	Version        = "2.0.0"
 	emptyJSONArray = "[]"
 )
 
@@ -1125,7 +1125,9 @@ func main() {
 	graphClient := graph.NewClientWithTokenRefresh(tokenManager.AccessToken, oauthConfig, tokenManager, tokenPath, graphConfig)
 
 	// Create authentication manager for MCP tools
+	// Pass the mode so it knows whether to start a separate callback server
 	authManager := auth.NewAuthManager(oauthConfig, tokenManager, tokenPath)
+	authManager.SetServerMode(*mode)
 
 	// Set up token refresh callback to update the graph client
 	authManager.SetTokenRefreshCallback(func(newAccessToken string) {
@@ -1136,7 +1138,7 @@ func main() {
 	logger.Debug("Authentication manager created")
 
 	// Create MCP server with progress streaming support
-	s := server.NewMCPServer("OneNote MCP Server", "1.6.0",
+	s := server.NewMCPServer("OneNote MCP Server", "2.0.0",
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(false))
@@ -1162,9 +1164,25 @@ func main() {
 		logger.Info("Starting MCP server", "transport", "HTTP", "port", *port, "request_logging", "enabled")
 		streamableServer := server.NewStreamableHTTPServer(s,
 			server.WithStateLess(*cfg.Stateless))
-		handler := applyAuthIfEnabled(streamableServer, cfg)
+
+		// Create a mux to handle both MCP and OAuth callback
+		mux := http.NewServeMux()
+
+		// Add OAuth callback handler WITHOUT any authentication - most specific pattern first
+		mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+			logger.Debug("Callback endpoint accessed", "path", r.URL.Path, "method", r.Method)
+			authManager.HandleOAuthCallback(w, r)
+		})
+
+		// Apply authentication middleware to the MCP server handler
+		authenticatedHandler := applyAuthIfEnabled(streamableServer, cfg)
+
+		// Register the authenticated MCP server on the root path
+		// This should NOT match /callback due to the more specific pattern above
+		mux.Handle("/", authenticatedHandler)
+
 		logger.Info("HTTP server listening", "address", fmt.Sprintf("http://0.0.0.0:%s", *port), "note", "listening on all interfaces")
-		if err := http.ListenAndServe(":"+*port, handler); err != nil {
+		if err := http.ListenAndServe(":"+*port, mux); err != nil {
 			logger.Error("HTTP server error", "error", err)
 			os.Exit(1)
 		}

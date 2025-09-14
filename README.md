@@ -160,8 +160,8 @@ By using this software, you acknowledge that you understand these risks and have
 1. **Create configuration file**:
    ```bash
    # Copy the example and customize with your Azure app details
-   cp configs/example-config.json configs/config.json
-   # Edit configs/config.json with your actual credentials
+   cp configs/example-config.json docker/configs/config.json
+   # Edit docker/configs/config.json with your actual credentials
    ```
 
 2. **Build and run with Docker**:
@@ -170,15 +170,24 @@ By using this software, you acknowledge that you understand these risks and have
    docker build -f docker/Dockerfile -t onenote-mcp-server .
 
    # Run in different modes:
-   docker run -p 8080:8080 onenote-mcp-server                    # stdio mode (default)
-   docker run -p 8080:8080 onenote-mcp-server -mode=http        # HTTP mode
-   docker run -p 8081:8081 onenote-mcp-server -mode=http -port=8081 # HTTP mode on custom port
+   docker run -p 8181:8181 onenote-mcp-server                    # stdio mode (default)
+   docker run -p 8181:8181 onenote-mcp-server -mode=http -port=8181  # HTTP mode on port 8181
    ```
 
-3. **Or use Docker Compose**:
+3. **Or use Docker Compose** (Recommended for HTTP mode):
    ```bash
-   docker-compose up -d
+   cd docker
+   docker-compose build --no-cache  # Build fresh image
+   docker-compose up -d              # Start in background
+   docker-compose logs -f           # View logs
+   docker-compose down              # Stop and remove containers
    ```
+
+   The Docker Compose setup:
+   - Runs on port 8181 by default
+   - Mounts config from `docker/configs/config.json`
+   - Supports Traefik labels for reverse proxy integration
+   - Runs as non-root user (mcpuser) for security
 
 ## 🔧 Configuration
 
@@ -192,11 +201,14 @@ The OneNote MCP Server supports two different modes for client communication:
 - **Best for**: CLI tools, direct process communication, development
 
 #### 2. **HTTP Mode**
-- **Usage**: `./onenote-mcp-server -mode=http [-port=8080]`
+- **Usage**: `./onenote-mcp-server -mode=http [-port=8181]`
 - **Description**: HTTP-based communication with built-in Server-Sent Events (SSE) streaming for progress notifications
 - **Best for**: HTTP clients, web applications, real-time updates, integration with HTTP-based systems
-- **Endpoint**: `http://localhost:8080`
-- **Features**: Includes SSE streaming for real-time progress updates during long-running operations
+- **Endpoint**: `http://localhost:8181` (default port changed to 8181 in v2.0.0)
+- **Features**:
+  - SSE streaming for real-time progress updates during long-running operations
+  - Optional Bearer token authentication (configure via `MCP_AUTH_ENABLED` and `MCP_BEARER_TOKEN`)
+  - OAuth callback endpoint (`/callback`) automatically bypasses Bearer token requirement for browser-based auth flows
 
 ### Environment Variables
 
@@ -889,7 +901,14 @@ curl -X POST http://localhost:8080/tools/call \
   }'
 ```
 
-## 🆕 Recent Improvements (v1.7.0+)
+## 🆕 Version 2.0.0 - Major Release
+
+### OAuth Callback Improvements
+- **Unified callback handling**: OAuth callbacks now use the main HTTP server in HTTP mode instead of spawning a separate server
+- **Authentication bypass for callbacks**: `/callback` endpoint no longer requires Bearer token authentication
+- **Improved Docker support**: Better layer caching and correct port configuration
+
+### Previous Improvements (v1.7.0)
 
 ### Enhanced Container Validation and Error Handling
 - **Improved Container Type Detection**: All section and section group operations now use `determineContainerType` for upfront validation

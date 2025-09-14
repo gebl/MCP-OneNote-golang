@@ -54,9 +54,9 @@ func BearerTokenMiddleware(expectedToken string) func(http.Handler) http.Handler
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip authentication for health check endpoints if needed
-			if r.URL.Path == "/health" || r.URL.Path == "/ping" {
-				logger.Debug("Skipping authentication for health check endpoint", "path", r.URL.Path)
+			// Skip authentication for health check and OAuth callback endpoints
+			if r.URL.Path == "/health" || r.URL.Path == "/ping" || r.URL.Path == "/callback" {
+				logger.Debug("Skipping authentication for exempt endpoint", "path", r.URL.Path)
 				next.ServeHTTP(w, r)
 				return
 			}

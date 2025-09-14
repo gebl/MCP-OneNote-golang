@@ -28,6 +28,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -65,6 +66,8 @@ type AuthManager struct {
 	activeSession  *AuthSession
 	lastRefresh    *time.Time
 	onTokenRefresh func(string) // Callback for when token is refreshed
+	serverMode     string        // "stdio" or "http" - determines callback handling
+	callbackChan   chan string   // Channel for receiving OAuth callback codes in HTTP mode
 }
 
 // NewAuthManager creates a new authentication manager
@@ -73,6 +76,8 @@ func NewAuthManager(oauthConfig *OAuth2Config, tokenManager *TokenManager, token
 		oauthConfig:  oauthConfig,
 		tokenManager: tokenManager,
 		tokenPath:    tokenPath,
+		serverMode:   "stdio", // Default to stdio mode
+		callbackChan: make(chan string, 1),
 	}
 }
 
@@ -81,6 +86,14 @@ func (am *AuthManager) SetTokenRefreshCallback(callback func(string)) {
 	am.mu.Lock()
 	defer am.mu.Unlock()
 	am.onTokenRefresh = callback
+}
+
+// SetServerMode sets the server mode ("stdio" or "http")
+func (am *AuthManager) SetServerMode(mode string) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+	am.serverMode = mode
+	logging.AuthLogger.Info("Server mode configured for auth manager", "mode", mode)
 }
 
 // GetAuthStatus returns the current authentication status without exposing sensitive data
@@ -216,10 +229,20 @@ func (am *AuthManager) InitiateAuth() (*AuthSession, error) {
 
 	am.activeSession = session
 
-	// Start the OAuth callback server in the background
-	go am.startOAuthCallbackServer(session)
+	// Only start a separate callback server in stdio mode
+	// In HTTP mode, the main server will handle callbacks
+	logging.AuthLogger.Info("Callback handling mode decision", "server_mode", am.serverMode, "will_start_separate_server", am.serverMode == "stdio")
+	if am.serverMode == "stdio" {
+		logging.AuthLogger.Info("Starting separate OAuth callback server for stdio mode")
+		// Start the OAuth callback server in the background
+		go am.startOAuthCallbackServer(session)
+	} else {
+		logging.AuthLogger.Info("Using main HTTP server for OAuth callbacks in HTTP mode")
+		// In HTTP mode, start a goroutine to wait for the callback
+		go am.waitForOAuthCallback(session)
+	}
 
-	logging.AuthLogger.Debug("Authentication session created", "state", state)
+	logging.AuthLogger.Debug("Authentication session created", "state", state, "server_mode", am.serverMode)
 
 	return session, nil
 }
@@ -375,6 +398,92 @@ func (am *AuthManager) GetActiveSession() *AuthSession {
 	defer am.mu.RUnlock()
 
 	return am.activeSession
+}
+
+// HandleOAuthCallback handles OAuth callbacks when running in HTTP mode
+func (am *AuthManager) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	am.mu.RLock()
+	session := am.activeSession
+	am.mu.RUnlock()
+
+	if session == nil {
+		http.Error(w, "No active authentication session", http.StatusBadRequest)
+		logging.AuthLogger.Warn("OAuth callback received with no active session")
+		return
+	}
+
+	// Validate state parameter
+	state := r.URL.Query().Get("state")
+	if state != session.State {
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+		logging.AuthLogger.Warn("OAuth callback received with invalid state", "expected", session.State, "received", state)
+		return
+	}
+
+	// Get authorization code
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		error := r.URL.Query().Get("error")
+		errorDescription := r.URL.Query().Get("error_description")
+		http.Error(w, fmt.Sprintf("OAuth error: %s - %s", error, errorDescription), http.StatusBadRequest)
+		logging.AuthLogger.Error("OAuth callback error", "error", error, "description", errorDescription)
+		return
+	}
+
+	// Send success response to user
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`<!DOCTYPE html>
+<html>
+<head>
+	<title>Authentication Successful</title>
+	<style>
+		body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+		h1 { color: #4CAF50; }
+	</style>
+</head>
+<body>
+	<h1>Authentication Successful!</h1>
+	<p>You may now close this window and return to your application.</p>
+</body>
+</html>`))
+
+	// Send code through channel for processing
+	select {
+	case am.callbackChan <- code:
+		logging.AuthLogger.Info("OAuth callback code sent for processing")
+	default:
+		logging.AuthLogger.Warn("OAuth callback channel is full, discarding code")
+	}
+}
+
+// waitForOAuthCallback waits for OAuth callback when running in HTTP mode
+func (am *AuthManager) waitForOAuthCallback(session *AuthSession) {
+	// Set up timeout
+	timeout := time.Duration(session.TimeoutMinutes) * time.Minute
+	timeoutTimer := time.NewTimer(timeout)
+
+	select {
+	case code := <-am.callbackChan:
+		// We received the auth code
+		timeoutTimer.Stop()
+
+		logging.AuthLogger.Info("OAuth callback code received in HTTP mode")
+
+		// Complete the authentication
+		if err := am.CompleteAuth(code); err != nil {
+			logging.AuthLogger.Error("Failed to complete authentication", "error", err)
+		}
+
+	case <-timeoutTimer.C:
+		// Timeout occurred
+		logging.AuthLogger.Info("OAuth session timed out", "timeout_minutes", session.TimeoutMinutes)
+
+		// Clear the active session
+		am.mu.Lock()
+		am.activeSession = nil
+		am.mu.Unlock()
+	}
 }
 
 // generateSecureState generates a cryptographically secure state parameter

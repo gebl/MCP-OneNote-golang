@@ -1,6 +1,5 @@
 version: '3.8'
 services:
-  # HTTP mode service with Traefik
   onenote-mcp:
     build:
       context: ..
@@ -17,12 +16,8 @@ services:
       - "8181:8181"
     volumes:
       - ./configs:/app/configs:ro
-      - tokens_volume:/app
     labels:
       # Enable Traefik
       - "traefik.enable=true"
       - "traefik.http.routers.onenote-mcp.rule=Host(`onenote-mcp.tehgibson.landq.net`)"
       - "traefik.http.services.onenote-mcp.loadbalancer.server.port=8181"
-
-volumes:
-  tokens_volume: 

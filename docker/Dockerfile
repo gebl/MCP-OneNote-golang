@@ -12,6 +12,7 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+
 # Build the application with proper flags
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o onenote-mcp-server ./cmd/onenote-mcp-server
 
@@ -36,8 +37,8 @@ RUN mkdir -p /app/configs && \
 # Switch to non-root user
 USER mcpuser
 
-# Expose port for HTTP mode
-EXPOSE 8080
+# Expose port for HTTP mode (default 8181 in docker-compose)
+EXPOSE 8181
 
 # Default command runs in stdio mode, can be overridden for HTTP mode
 ENTRYPOINT ["./onenote-mcp-server"] 

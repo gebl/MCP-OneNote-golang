@@ -5,6 +5,27 @@ All notable changes to the OneNote MCP Server project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-01-14
+
+### Changed
+- **BREAKING**: Default HTTP port changed from 8080 to 8181 for better compatibility with development environments
+- **OAuth Callback Handling**: OAuth callbacks now use the main HTTP server in HTTP mode instead of spawning a separate server
+- **Authentication Flow**: OAuth callback endpoint (`/callback`) automatically bypasses Bearer token authentication for browser-based flows
+- **Docker Build Process**: Improved with better layer caching (go.mod files copied before source code)
+- **Docker Configuration**: Updated EXPOSE directive to match the new default port (8181)
+
+### Fixed
+- **Authentication Middleware**: Fixed middleware incorrectly applying to OAuth callback endpoint
+- **Docker Caching**: Resolved Docker container not updating with latest code due to build cache issues
+- **HTTP Routing**: Fixed routing conflicts in HTTP mode that prevented callback handler from being reached
+- **Server Mode Configuration**: AuthManager now properly tracks server mode for correct callback handling
+
+### Improved
+- **OAuth Architecture**: Better separation of concerns between stdio and HTTP modes for OAuth callbacks
+- **Logging**: Enhanced logging for authentication decisions and OAuth flow debugging
+- **HTTP Routing**: Simplified routing logic for more predictable behavior
+- **Docker Compose**: Improved configuration with proper port mapping and volume management
+
 ## [Unreleased]
 
 ### Fixed
