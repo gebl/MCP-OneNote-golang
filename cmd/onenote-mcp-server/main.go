@@ -108,10 +108,10 @@ type NotebookCache struct {
 	pageSearchTime      map[string]time.Time                // Page search cache timestamps
 	notebookLookupCache map[string]map[string]interface{}   // Notebook lookup results cache by notebook name
 	notebookLookupTime  map[string]time.Time                // Notebook lookup cache timestamps
-	
+
 	// Optional references for API fallback in authorization
-	graphClient         interface{}                         // Graph client for API calls
-	mcpServer           interface{}                         // MCP server for progress notifications
+	graphClient interface{} // Graph client for API calls
+	mcpServer   interface{} // MCP server for progress notifications
 }
 
 // NewNotebookCache creates a new notebook cache
@@ -132,10 +132,10 @@ func NewNotebookCache() *NotebookCache {
 func (nc *NotebookCache) SetAPIReferences(graphClient interface{}, mcpServer interface{}) {
 	nc.mu.Lock()
 	defer nc.mu.Unlock()
-	
+
 	nc.graphClient = graphClient
 	nc.mcpServer = mcpServer
-	
+
 	logging.ToolsLogger.Debug("API references set in notebook cache for authorization fallback",
 		"has_graph_client", graphClient != nil,
 		"has_mcp_server", mcpServer != nil)
@@ -145,7 +145,7 @@ func (nc *NotebookCache) SetAPIReferences(graphClient interface{}, mcpServer int
 func (nc *NotebookCache) GetAPIReferences() (interface{}, interface{}) {
 	nc.mu.RLock()
 	defer nc.mu.RUnlock()
-	
+
 	return nc.graphClient, nc.mcpServer
 }
 
@@ -229,7 +229,7 @@ func (nc *NotebookCache) GetSectionName(sectionID string) (string, bool) {
 	return nc.findSectionNameInTree(nc.sectionsTree, sectionID)
 }
 
-// GetSectionNameWithAutoFetch returns the section name for a given section ID, 
+// GetSectionNameWithAutoFetch returns the section name for a given section ID,
 // optionally fetching sections if they're not cached (for authorization context)
 func (nc *NotebookCache) GetSectionNameWithAutoFetch(sectionID string, graphClient interface{}, enableAutoFetch bool) (string, bool) {
 	// First try the fast cache lookup
@@ -260,7 +260,7 @@ func (nc *NotebookCache) GetSectionNameWithAutoFetch(sectionID string, graphClie
 // GetSectionNameWithProgress returns the section name for a given section ID with progress notification support.
 // If not found in cache, it will perform a live API lookup with progress notifications.
 func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, sectionID string, mcpServer interface{}, progressToken string, graphClient interface{}) (string, bool) {
-	
+
 	logging.ToolsLogger.Debug("Looking up section name with progress support",
 		"section_id", sectionID,
 		"has_progress_token", progressToken != "",
@@ -666,9 +666,9 @@ func (nc *NotebookCache) SetNotebookLookupCache(notebookName string, notebook ma
 	nc.mu.Lock()
 	defer nc.mu.Unlock()
 
-	logging.NotebookLogger.Debug("Storing notebook in cache", 
-		"notebook_name", notebookName, 
-		"notebook_id", notebook["id"], 
+	logging.NotebookLogger.Debug("Storing notebook in cache",
+		"notebook_name", notebookName,
+		"notebook_id", notebook["id"],
 		"notebook_data", notebook)
 
 	nc.notebookLookupCache[notebookName] = notebook
@@ -692,7 +692,7 @@ func (nc *NotebookCache) GetNotebookLookupCache(notebookName string) (map[string
 		logging.NotebookLogger.Debug("Notebook lookup cache miss - no timestamp", "notebook_name", notebookName)
 		return nil, false
 	}
-	
+
 	age := time.Since(cacheTime)
 	if age > 5*time.Minute {
 		logging.NotebookLogger.Debug("Notebook lookup cache expired", "notebook_name", notebookName, "age", age)
@@ -836,7 +836,7 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 	// Create a basic page client to fetch page details
 	// We use the GetPageContent method to get page details including title
 	pageApiURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$select=id,title", pageID)
-	
+
 	if mcpServerTyped != nil && progressToken != "" {
 		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
 			"progressToken": progressToken,
@@ -965,8 +965,8 @@ func initializeDefaultNotebook(graphClient *graph.Client, cfg *config.Config, ca
 	var availableNotebooks []map[string]interface{}
 	if cfg.Authorization != nil && cfg.Authorization.Enabled {
 		availableNotebooks = cfg.Authorization.FilterNotebooks(allNotebooks)
-		logger.Debug("Applied authorization filtering", 
-			"total_notebooks", len(allNotebooks), 
+		logger.Debug("Applied authorization filtering",
+			"total_notebooks", len(allNotebooks),
 			"authorized_notebooks", len(availableNotebooks))
 	} else {
 		availableNotebooks = allNotebooks
@@ -993,7 +993,7 @@ func initializeDefaultNotebook(graphClient *graph.Client, cfg *config.Config, ca
 				break
 			}
 		}
-		
+
 		if selectedNotebook == nil {
 			logger.Warn("Configured default notebook not found or not authorized",
 				"notebook_name", cfg.NotebookName)
@@ -1143,14 +1143,14 @@ func main() {
 
 	// Register MCP Tools and Resources
 	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
-	
+
 	// Create resource cache adapter for authorization
 	var resourceCacheAdapter authorization.NotebookCache
 	if cfg != nil && cfg.Authorization != nil && cfg.Authorization.Enabled {
 		resourceCacheAdapter = authorization.NewNotebookCacheAdapter(globalNotebookCache)
 	}
 	registerResources(s, graphClient, cfg, cfg.Authorization, resourceCacheAdapter)
-	
+
 	// Set API references in cache for authorization fallback
 	globalNotebookCache.SetAPIReferences(graphClient, s)
 
@@ -1163,7 +1163,7 @@ func main() {
 		streamableServer := server.NewStreamableHTTPServer(s,
 			server.WithStateLess(*cfg.Stateless))
 		handler := applyAuthIfEnabled(streamableServer, cfg)
-		logger.Info("HTTP server listening", "address", fmt.Sprintf("http://localhost:%s", *port))
+		logger.Info("HTTP server listening", "address", fmt.Sprintf("http://0.0.0.0:%s", *port), "note", "listening on all interfaces")
 		if err := http.ListenAndServe(":"+*port, handler); err != nil {
 			logger.Error("HTTP server error", "error", err)
 			os.Exit(1)
