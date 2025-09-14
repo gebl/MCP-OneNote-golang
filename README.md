@@ -78,7 +78,7 @@ By using this software, you acknowledge that you understand these risks and have
 - **OAuth 2.0 PKCE Flow**: Secure authentication using Proof Key for Code Exchange with non-blocking startup
 - **Safety-First Design**: Prevent AI agents from accidentally modifying sensitive notebooks
 - **Audit Logging**: Authorization decision logging for AI agent safety monitoring
-- **MCP Authentication Tools**: Built-in tools for authentication management (`getAuthStatus`, `initiateAuth`, `refreshToken`, `clearAuth`)
+- **MCP Authentication Tools**: Built-in tools for authentication management (`auth_status`, `auth_initiate`, `auth_refresh`, `auth_clear`)
 
 ### 🚀 High-Performance Architecture
 - **Multi-Layer Caching System**: Three-tier caching (page metadata, search results, notebook lookups) with 5-minute expiration
@@ -166,8 +166,9 @@ By using this software, you acknowledge that you understand these risks and have
 
 2. **Build and run with Docker**:
    ```bash
-   docker build -t onenote-mcp-server .
-   
+   # Build from project root (not from docker/ subdirectory)
+   docker build -f docker/Dockerfile -t onenote-mcp-server .
+
    # Run in different modes:
    docker run -p 8080:8080 onenote-mcp-server                    # stdio mode (default)
    docker run -p 8080:8080 onenote-mcp-server -mode=http        # HTTP mode
@@ -266,7 +267,7 @@ Create `configs/config.json` with full feature support:
 
 ## ⚡ QuickNote Tool
 
-The `quickNote` tool provides rapid note-taking functionality with intelligent format detection and automatic timestamping:
+The `quick_note` tool provides rapid note-taking functionality with intelligent format detection and automatic timestamping:
 
 ### Features
 - **Automatic Timestamping**: Each note gets an H3 timestamp heading in configurable format
@@ -289,13 +290,13 @@ The `quickNote` tool provides rapid note-taking functionality with intelligent f
 ### Usage Examples
 ```bash
 # Plain text note
-{"name": "quickNote", "arguments": {"content": "Had a great idea for the project"}}
+{"name": "quick_note", "arguments": {"content": "Had a great idea for the project"}}
 
 # Markdown note  
-{"name": "quickNote", "arguments": {"content": "# Meeting Notes\n\n- Action item: Review API\n- **Deadline**: EOW"}}
+{"name": "quick_note", "arguments": {"content": "# Meeting Notes\n\n- Action item: Review API\n- **Deadline**: EOW"}}
 
 # HTML note
-{"name": "quickNote", "arguments": {"content": "<p>This is <strong>formatted</strong> content</p>"}}
+{"name": "quick_note", "arguments": {"content": "<p>This is <strong>formatted</strong> content</p>"}}
 ```
 
 Each note automatically gets formatted with timestamp and proper HTML conversion:
@@ -373,8 +374,8 @@ The earlier versions with granular section and page filtering had significant **
 
 ### 🚀 How It Works
 
-1. **`listNotebooks`** - Only shows notebooks with `read` or `write` permissions (filters out `none`)
-2. **`selectNotebook("Work Notebook")`** - Validates notebook has non-`none` permission  
+1. **`notebooks`** - Only shows notebooks with `read` or `write` permissions (filters out `none`)
+2. **`notebook_select("Work Notebook")`** - Validates notebook has non-`none` permission  
 3. **All subsequent operations** inherit the selected notebook's permission level
 4. **Write operations blocked** on read-only notebooks (create/update/delete)
 5. **Cross-notebook access prevented** - all operations scoped to selected notebook
@@ -410,22 +411,22 @@ The server provides hierarchical URI-based resources for data discovery:
 ### MCP Tools
 
 ### Notebook Operations
-- **`listNotebooks`**: List all OneNote notebooks for the user
+- **`notebooks`**: List all OneNote notebooks for the user
   - Parameters: None
   - Returns: Array of notebook metadata with ID, name, isAPIDefault, and isConfigDefault flags
   - **Note:** Automatically handles pagination to return all notebooks
 
-- **`selectNotebook`**: Select a notebook by name or ID to use as the active notebook
+- **`notebook_select`**: Select a notebook by name or ID to use as the active notebook
   - Parameters: `identifier` (required) - Notebook name or ID to select as active
   - Returns: Success confirmation with selected notebook metadata
   - **Note:** Sets the notebook in the global cache for use by other operations
 
-- **`getSelectedNotebook`**: Get currently selected notebook metadata from cache
+- **`notebook_current`**: Get currently selected notebook metadata from cache
   - Parameters: None
   - Returns: Currently selected notebook metadata
   - **Note:** Returns error if no notebook is currently selected
 
-- **`getNotebookSections`**: Get hierarchical sections and section groups from selected notebook
+- **`sections`**: Get hierarchical sections and section groups from selected notebook
   - Parameters: None (uses currently selected notebook)
   - Returns: Notebook root with nested sections and section groups as children
   - **Features:**
@@ -433,10 +434,10 @@ The server provides hierarchical URI-based resources for data discovery:
     - Real-time progress notifications for long-running operations
     - Cache-aware progress updates (differentiates between cached and API operations)
     - Hierarchical tree structure showing complete notebook organization
-  - **Note:** Requires a notebook to be selected first via `selectNotebook`
+  - **Note:** Requires a notebook to be selected first via `notebook_select`
 
 ### Section Operations
-- **`createSection`**: Create a new section in a notebook or section group
+- **`section_create`**: Create a new section in a notebook or section group
   - Parameters: `containerID` (optional), `displayName` (required)
   - Returns: Created section metadata with success status and section ID
   - **Notes:** 
@@ -444,7 +445,7 @@ The server provides hierarchical URI-based resources for data discovery:
     - Display name cannot contain: ?*\\/:<>|&#''%%~
     - Container Hierarchy: Sections can only be created inside notebooks or section groups, not inside other sections
 
-- **`createSectionGroup`**: Create a new section group in a notebook or section group
+- **`section_group_create`**: Create a new section group in a notebook or section group
   - Parameters: `containerID` (optional), `displayName` (required)
   - Returns: Created section group metadata with success status and section group ID
   - **Notes:**
@@ -453,7 +454,7 @@ The server provides hierarchical URI-based resources for data discovery:
     - Container Hierarchy: Section groups can only be created inside notebooks or other section groups, not inside sections
 
 ### Page Operations
-- **`listPages`**: List all pages in a section
+- **`pages`**: List all pages in a section
   - Parameters: `sectionID` (required) - MUST be actual section ID, NOT a section name
   - Returns: Structured response with pages array, cache status, and performance metrics
   - **Features:**
@@ -463,7 +464,7 @@ The server provides hierarchical URI-based resources for data discovery:
     - Cache hit/miss status reporting with performance metrics
   - **Note:** Automatically handles pagination to return all pages
 
-- **`createPage`**: Create a new page in a section
+- **`page_create`**: Create a new page in a section
   - Parameters: `sectionID` (required), `title` (required), `content` (required)
   - Returns: Created page metadata
   - **Features:**
@@ -472,15 +473,15 @@ The server provides hierarchical URI-based resources for data discovery:
     - Illegal character validation with suggested alternatives
   - **Note:** Title cannot contain: ?*\\/:<>|&#''%%~
 
-- **`updatePageContent`**: Update page HTML content (simple replacement)
+- **`page_update`**: Update page HTML content (simple replacement)
   - Parameters: `pageID` (required), `content` (required)
   - Returns: Success confirmation
-  - **Note:** Replaces entire page content. Use `updatePageContentAdvanced` for targeted updates
+  - **Note:** Replaces entire page content. Use `page_update_advanced` for targeted updates
 
-- **`updatePageContentAdvanced`**: Update specific parts of a page using advanced commands (preferred method)
+- **`page_update_advanced`**: Update specific parts of a page using advanced commands (preferred method)
   - Parameters: `pageID` (required), `commands` (required JSON array)
   - Returns: Success confirmation
-  - **How to get data-id values:** Use `getPageContent` with `forUpdate=true` to retrieve HTML with `data-id` attributes
+  - **How to get data-id values:** Use `page_content` with `forUpdate=true` to retrieve HTML with `data-id` attributes
   - **Preferred Usage:** Use this tool to add, change, or delete parts of a page. Only use full page update if you intend to replace entire page content
   - **CRITICAL: Table Update Restrictions:** Tables must be updated as complete units. You CANNOT update individual table cells (td), headers (th), or rows (tr). Always target the entire table element and replace with complete table HTML to prevent layout corruption
   - **How to use the data-tag attribute for built-in note tags:**
@@ -534,16 +535,16 @@ The server provides hierarchical URI-based resources for data discovery:
       ```
     - **Note:** For `append` actions, do not include the `position` parameter as it will be automatically excluded from the API request.
 
-- **`deletePage`**: Delete a page by ID
+- **`page_delete`**: Delete a page by ID
   - Parameters: `pageID` (required)
   - Returns: Success confirmation
 
-- **`copyPage`**: Copy a page from one section to another using Microsoft Graph API (asynchronous)
+- **`page_copy`**: Copy a page from one section to another using Microsoft Graph API (asynchronous)
   - Parameters: `pageID` (required), `targetSectionID` (required)
   - Returns: New page ID and operation metadata
   - **Note:** Automatically handles asynchronous operation polling and completion
 
-- **`movePage`**: Move a page from one section to another (copy then delete)
+- **`page_move`**: Move a page from one section to another (copy then delete)
   - Parameters: `pageID` (required), `targetSectionID` (required)
   - Returns: Moved page metadata with operation details
   - **Note:** Implements move as copy-then-delete for reliable operation
@@ -554,7 +555,7 @@ The server provides hierarchical URI-based resources for data discovery:
   - **Note:** Primarily used internally, but available for manual operation tracking
 
 ### Content Operations
-- **`getPageContent`**: Get HTML content of a page
+- **`page_content`**: Get HTML content of a page
   - Parameters: `pageID` (required), `forUpdate` (optional string, set to 'true' to include data-id attributes for advanced updates)
   - Returns: HTML content as string
   - **Features:**
@@ -562,12 +563,12 @@ The server provides hierarchical URI-based resources for data discovery:
     - Content processing and conversion utilities
   - **Tip:** Use `forUpdate=true` to extract `data-id` values for use with advanced page updates
 
-- **`listPageItems`**: List embedded items (images, files) in a page
+- **`page_items`**: List embedded items (images, files) in a page
   - Parameters: `pageID` (required)
   - Returns: Array of page item metadata with HTML attributes
   - **Note:** Identifies all embedded objects within page content
 
-- **`getPageItemContent`**: Get complete page item data (content + metadata)
+- **`page_item_content`**: Get complete page item data (content + metadata)
   - Parameters: `pageID` (required), `pageItemID` (required), `fullSize` (optional)
   - Returns: JSON with base64-encoded content and metadata
   - **Features:**
@@ -577,7 +578,7 @@ The server provides hierarchical URI-based resources for data discovery:
     - Optional full-size retrieval bypassing automatic scaling
 
 ### Special Tools
-- **`quickNote`**: Rapid note-taking with automatic timestamping and format detection
+- **`quick_note`**: Rapid note-taking with automatic timestamping and format detection
   - Parameters: `content` (required) - Text content in HTML, Markdown, or plain text format
   - Returns: Success confirmation with formatted content preview
   - **Features:**
@@ -591,7 +592,7 @@ The server provides hierarchical URI-based resources for data discovery:
   - **Note:** Falls back to default notebook if `quicknote.notebook_name` not configured
 
 ### Cache Management
-- **`clearCache`**: Clear all cached data (notebook sections and pages)
+- **`cache_clear`**: Clear all cached data (notebook sections and pages)
   - Parameters: None
   - Returns: Success confirmation with details of cleared cache layers
   - **Features:**
@@ -601,25 +602,25 @@ The server provides hierarchical URI-based resources for data discovery:
     - System maintenance operation (no authorization required)
 
 ### Authentication Operations
-- **`getAuthStatus`**: Get current authentication status and token information
+- **`auth_status`**: Get current authentication status and token information
   - Parameters: None
   - Returns: Authentication state, token expiry, refresh availability
   - **Note:** Never exposes actual token values, only metadata
 
-- **`initiateAuth`**: Start new OAuth authentication flow  
+- **`auth_initiate`**: Start new OAuth authentication flow
   - Parameters: None
   - Returns: Browser URL and instructions for OAuth completion
   - **Note:** Starts temporary HTTP server on port 8080 for OAuth callback
 
-- **`refreshToken`**: Manually refresh authentication tokens
-  - Parameters: None  
+- **`auth_refresh`**: Manually refresh authentication tokens
+  - Parameters: None
   - Returns: Updated authentication status after refresh
   - **Note:** Requires valid refresh token to be available
 
-- **`clearAuth`**: Clear stored authentication tokens (logout)
+- **`auth_clear`**: Clear stored authentication tokens (logout)
   - Parameters: None
   - Returns: Success confirmation
-  - **Note:** Requires `initiateAuth` to re-authenticate after clearing
+  - **Note:** Requires `auth_initiate` to re-authenticate after clearing
 
 ### Testing and Utilities
 - **`testProgress`**: Test tool for progress notification functionality
@@ -642,13 +643,13 @@ The server uses OAuth 2.0 PKCE (Proof Key for Code Exchange) flow with **non-blo
 ### **Authentication via MCP Tools**
 4 authentication tools are available:
 
-- **`getAuthStatus`**: Check current authentication state and token information
-- **`initiateAuth`**: Start OAuth flow - returns browser URL for user authentication  
-- **`refreshToken`**: Manually refresh tokens to extend session
-- **`clearAuth`**: Logout and clear all stored tokens
+- **`auth_status`**: Check current authentication state and token information
+- **`auth_initiate`**: Start OAuth flow - returns browser URL for user authentication
+- **`auth_refresh`**: Manually refresh tokens to extend session
+- **`auth_clear`**: Logout and clear all stored tokens
 
 ### **OAuth Flow Details**
-1. **Call `initiateAuth`**: Server generates OAuth URL and starts local HTTP server on port 8080
+1. **Call `auth_initiate`**: Server generates OAuth URL and starts local HTTP server on port 8080
 2. **Browser Authentication**: User visits provided Microsoft login URL
 3. **Automatic Callback**: Server receives authorization code and exchanges for tokens
 4. **Token Storage**: Tokens saved locally and automatically refreshed before expiration
@@ -658,22 +659,22 @@ The server uses OAuth 2.0 PKCE (Proof Key for Code Exchange) flow with **non-blo
 # 1. Start server (immediate, no blocking)
 ./onenote-mcp-server
 
-# 2. Check authentication status  
-mcp > getAuthStatus
+# 2. Check authentication status
+mcp > auth_status
 {"authenticated": false, "message": "No authentication tokens found"}
 
 # 3. Initiate authentication
-mcp > initiateAuth  
+mcp > auth_initiate
 {"authUrl": "https://login.microsoftonline.com/...", "instructions": "Visit this URL..."}
 
 # 4. User visits URL in browser, completes OAuth flow
 
 # 5. Check status again
-mcp > getAuthStatus
+mcp > auth_status
 {"authenticated": true, "tokenExpiresIn": "59 minutes", "authMethod": "OAuth2_PKCE"}
 
 # 6. Use OneNote operations
-mcp > listNotebooks
+mcp > notebooks
 [{"id": "...", "displayName": "My Notebook"}]
 ```
 
@@ -761,17 +762,17 @@ MCP-OneNote-golang/
 # List all notebooks
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listNotebooks", "arguments": {}}'
+  -d '{"name": "notebooks", "arguments": {}}'
 
-# List sections in a notebook
+# List sections in selected notebook
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listSections", "arguments": {"notebookId": "notebook-id"}}'
+  -d '{"name": "sections", "arguments": {}}'
 
 # Create a new section
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "createSection", "arguments": {"containerId": "notebook-id", "displayName": "New Section"}}'
+  -d '{"name": "section_create", "arguments": {"containerId": "notebook-id", "displayName": "New Section"}}'
 ```
 
 ### QuickNote Usage
@@ -780,7 +781,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "quickNote",
+    "name": "quick_note",
     "arguments": {
       "content": "Had a breakthrough idea for the user interface design!"
     }
@@ -790,7 +791,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "quickNote", 
+    "name": "quick_note", 
     "arguments": {
       "content": "# Meeting Summary\n\n- **Decision**: Use React for frontend\n- **Action Item**: Research component libraries\n- *Deadline*: Friday EOD"
     }
@@ -800,7 +801,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "quickNote",
+    "name": "quick_note",
     "arguments": {
       "content": "<p>Important: <strong>Server maintenance</strong> scheduled for <em>tonight at 11 PM</em></p>"
     }
@@ -813,7 +814,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "createPage",
+    "name": "page_create",
     "arguments": {
       "sectionId": "section-id",
       "title": "My New Page",
@@ -825,7 +826,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "updatePageContent",
+    "name": "page_update",
     "arguments": {
       "pageId": "page-id",
       "content": "<h1>Updated Content</h1><p>This content was updated.</p>"
@@ -836,7 +837,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "copyPage",
+    "name": "page_copy",
     "arguments": {
       "pageId": "page-id",
       "targetSectionId": "target-section-id"
@@ -857,7 +858,7 @@ curl -X POST http://localhost:8080/tools/call \
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "movePage",
+    "name": "page_move",
     "arguments": {
       "pageId": "page-id",
       "targetSectionId": "target-section-id"
@@ -869,18 +870,18 @@ curl -X POST http://localhost:8080/tools/call \
 # Get page content
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "getPageContent", "arguments": {"pageId": "page-id"}}'
+  -d '{"name": "page_content", "arguments": {"pageId": "page-id"}}'
 
 # List embedded items
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
-  -d '{"name": "listPageItems", "arguments": {"pageId": "page-id"}}'
+  -d '{"name": "page_items", "arguments": {"pageId": "page-id"}}'
 
 # Get page item with content
 curl -X POST http://localhost:8080/tools/call \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "getPageItem",
+    "name": "page_item_content",
     "arguments": {
       "pageId": "page-id",
       "pageItemId": "item-id"
