@@ -1,0 +1,30 @@
+{
+  "client_id": "c546232f-5556-4213-8728-f39da001b861",
+  "tenant_id": "common",
+  "redirect_uri": "https://onenote.example.com/callback",
+  "notebook_name": "My Notebook",
+  "toolsets": [
+    "notebooks",
+    "sections",
+    "pages",
+    "content"
+  ],
+  "authorization": {
+    "enabled": true,
+    "default_notebook_permissions": "none",
+    "notebook_permissions": {
+      "My Notebook": "write",
+      "Clippings.io": "read"
+    }
+  },
+  "mcp_auth": {
+    "enabled": true,
+    "bearer_token": "aaa"
+  },
+  "log_level": "DEBUG",
+  "log_format": "text",
+  "quicknote": {
+    "page_name": "Notes",
+    "date_format": "January 2, 2006 - 3:04 PM"
+  }
+}

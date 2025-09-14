@@ -1,74 +1,28 @@
 version: '3.8'
 services:
-  onenote-mcp-server:
+  # HTTP mode service with Traefik
+  onenote-mcp:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    command: ["-mode=http", "-port=8181"]
+    restart: unless-stopped
     environment:
-      # Azure App Registration
-      - ONENOTE_CLIENT_ID=${ONENOTE_CLIENT_ID}
-      - ONENOTE_TENANT_ID=${ONENOTE_TENANT_ID:-common}
-      - ONENOTE_REDIRECT_URI=${ONENOTE_REDIRECT_URI:-http://localhost:8080/callback}
-      
-      # Optional configuration
-      - ONENOTE_DEFAULT_NOTEBOOK_NAME=${ONENOTE_DEFAULT_NOTEBOOK_NAME}
-      - ONENOTE_TOOLSETS=${ONENOTE_TOOLSETS:-notebooks,sections,pages,content}
-      
-      # Authorization system
-      - AUTHORIZATION_ENABLED=${AUTHORIZATION_ENABLED:-false}
-      - AUTHORIZATION_DEFAULT_MODE=${AUTHORIZATION_DEFAULT_MODE:-read}
-      
-      # MCP Authentication (for HTTP mode)
-      - MCP_AUTH_ENABLED=${MCP_AUTH_ENABLED:-false}
-      - MCP_BEARER_TOKEN=${MCP_BEARER_TOKEN}
-      
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-text}
       - CONTENT_LOG_LEVEL=${CONTENT_LOG_LEVEL:-INFO}
+      - ONENOTE_MCP_CONFIG=configs/config.json
     ports:
-      - "8080:8080"
+      - "8181:8181"
     volumes:
       - ./configs:/app/configs:ro
       - tokens_volume:/app
-    stdin_open: true
-    tty: true
-
-  # HTTP mode service
-  onenote-mcp-server-http:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: ["-mode=http", "-port=8080"]
-    environment:
-      # Azure App Registration
-      - ONENOTE_CLIENT_ID=${ONENOTE_CLIENT_ID}
-      - ONENOTE_TENANT_ID=${ONENOTE_TENANT_ID:-common}
-      - ONENOTE_REDIRECT_URI=${ONENOTE_REDIRECT_URI:-http://localhost:8080/callback}
-      
-      # Optional configuration
-      - ONENOTE_DEFAULT_NOTEBOOK_NAME=${ONENOTE_DEFAULT_NOTEBOOK_NAME}
-      - ONENOTE_TOOLSETS=${ONENOTE_TOOLSETS:-notebooks,sections,pages,content}
-      
-      # Authorization system
-      - AUTHORIZATION_ENABLED=${AUTHORIZATION_ENABLED:-false}
-      - AUTHORIZATION_DEFAULT_MODE=${AUTHORIZATION_DEFAULT_MODE:-read}
-      
-      # MCP Authentication (required for HTTP mode)
-      - MCP_AUTH_ENABLED=${MCP_AUTH_ENABLED:-true}
-      - MCP_BEARER_TOKEN=${MCP_BEARER_TOKEN}
-      
-      # Logging
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - LOG_FORMAT=${LOG_FORMAT:-text}
-      - CONTENT_LOG_LEVEL=${CONTENT_LOG_LEVEL:-INFO}
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./configs:/app/configs:ro
-      - tokens_volume:/app
-    profiles:
-      - http
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.http.routers.onenote-mcp.rule=Host(`onenote-mcp.tehgibson.landq.net`)"
+      - "traefik.http.services.onenote-mcp.loadbalancer.server.port=8181"
 
 volumes:
   tokens_volume: 

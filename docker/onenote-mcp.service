@@ -1,0 +1,17 @@
+[Unit]
+Description=OneNote MCP Server
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+WorkingDirectory=/home/gabe/Projects/MCP-OneNote-golang/docker
+ExecStart=/usr/local/bin/docker-compose --profile http up
+ExecStop=/usr/local/bin/docker-compose down
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
