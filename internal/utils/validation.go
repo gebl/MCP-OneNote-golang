@@ -311,14 +311,14 @@ func ConvertToHTML(content string) (string, TextFormat) {
 	logging.UtilsLogger.Debug("Starting content conversion to HTML",
 		"original_length", originalLength,
 		"content_preview", truncateString(content, 100))
-	
+
 	format := DetectTextFormat(content)
-	
+
 	logging.UtilsLogger.Debug("Format detected, proceeding with conversion",
 		"detected_format", format.String())
-	
+
 	var convertedHTML string
-	
+
 	switch format {
 	case FormatHTML:
 		// Already HTML, return as-is
@@ -338,7 +338,7 @@ func ConvertToHTML(content string) (string, TextFormat) {
 		convertedHTML = convertASCIIToHTML(content)
 		format = FormatASCII
 	}
-	
+
 	convertedLength := len(convertedHTML)
 	logging.UtilsLogger.Debug("Content conversion completed",
 		"original_length", originalLength,
@@ -346,8 +346,50 @@ func ConvertToHTML(content string) (string, TextFormat) {
 		"length_change", convertedLength-originalLength,
 		"final_format", format.String(),
 		"converted_preview", truncateString(convertedHTML, 100))
-	
+
 	return convertedHTML, format
+}
+
+// ConvertToHTMLWithType converts text content to HTML using the specified content type
+// bypassing automatic format detection
+func ConvertToHTMLWithType(content string, contentType string) (string, TextFormat, error) {
+	originalLength := len(content)
+	logging.UtilsLogger.Debug("Starting content conversion to HTML with explicit type",
+		"original_length", originalLength,
+		"content_type", contentType,
+		"content_preview", truncateString(content, 100))
+
+	var format TextFormat
+	var convertedHTML string
+
+	// Parse and validate content type
+	switch strings.ToLower(strings.TrimSpace(contentType)) {
+	case "html":
+		format = FormatHTML
+		logging.UtilsLogger.Debug("Using explicit HTML format")
+		convertedHTML = content
+	case "markdown", "md":
+		format = FormatMarkdown
+		logging.UtilsLogger.Debug("Using explicit Markdown format")
+		convertedHTML = convertMarkdownToHTML(content)
+	case "text", "plain", "ascii":
+		format = FormatASCII
+		logging.UtilsLogger.Debug("Using explicit text/ASCII format")
+		convertedHTML = convertASCIIToHTML(content)
+	default:
+		return "", FormatASCII, fmt.Errorf("unsupported content type '%s'. Supported types: 'html', 'markdown', 'text'", contentType)
+	}
+
+	convertedLength := len(convertedHTML)
+	logging.UtilsLogger.Debug("Content conversion with explicit type completed",
+		"original_length", originalLength,
+		"converted_length", convertedLength,
+		"length_change", convertedLength-originalLength,
+		"specified_type", contentType,
+		"final_format", format.String(),
+		"converted_preview", truncateString(convertedHTML, 100))
+
+	return convertedHTML, format, nil
 }
 
 // convertMarkdownToHTML converts Markdown text to HTML using goldmark

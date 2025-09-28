@@ -346,6 +346,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithString("sectionID", mcp.Required(), mcp.Description("Section ID to create page in")),
 		mcp.WithString("title", mcp.Required(), mcp.Description("Page title (cannot contain: ?*\\/:<>|&#''%%~)")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
+		mcp.WithString("contentType", mcp.Description("Optional: content type - 'text', 'html', or 'markdown'. If specified, automatic format detection is bypassed and content is converted accordingly")),
 	)
 	createPageHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -369,7 +370,9 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			return mcp.NewToolResultError("content is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("page_create parameters", "sectionID", sectionID, "title", title, "content_length", len(content))
+		contentType := req.GetString("contentType", "")
+
+		logging.ToolsLogger.Debug("page_create parameters", "sectionID", sectionID, "title", title, "content_length", len(content), "contentType", contentType)
 
 		// SECURITY: Verify the section belongs to the currently selected notebook
 		sectionClient := sections.NewSectionClient(graphClient)
@@ -388,12 +391,34 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		}
 		logging.ToolsLogger.Debug("page_create title validation passed")
 
-		// Detect format and convert content to HTML
-		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
-		logging.ToolsLogger.Debug("page_create content format detection",
-			"detected_format", detectedFormat.String(),
-			"original_length", len(content),
-			"converted_length", len(convertedHTML))
+		// Convert content to HTML - use explicit type if provided, otherwise auto-detect
+		var convertedHTML string
+		var detectedFormat utils.TextFormat
+		var formatSource string
+
+		if contentType != "" {
+			// Use explicit content type
+			var err error
+			convertedHTML, detectedFormat, err = utils.ConvertToHTMLWithType(content, contentType)
+			if err != nil {
+				logging.ToolsLogger.Error("page_create failed to convert content with explicit type", "contentType", contentType, "error", err)
+				return mcp.NewToolResultError(fmt.Sprintf("Invalid content type: %v", err)), nil
+			}
+			formatSource = "explicit"
+			logging.ToolsLogger.Debug("page_create content converted with explicit type",
+				"specified_type", contentType,
+				"final_format", detectedFormat.String(),
+				"original_length", len(content),
+				"converted_length", len(convertedHTML))
+		} else {
+			// Auto-detect format
+			convertedHTML, detectedFormat = utils.ConvertToHTML(content)
+			formatSource = "detected"
+			logging.ToolsLogger.Debug("page_create content format detection",
+				"detected_format", detectedFormat.String(),
+				"original_length", len(content),
+				"converted_length", len(convertedHTML))
+		}
 
 		result, err := pageClient.CreatePage(sectionID, title, convertedHTML)
 		if err != nil {
@@ -415,9 +440,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		response := map[string]interface{}{
 			"success":         true,
 			"pageID":          pageID,
-			"detected_format": detectedFormat.String(),
+			"format":          detectedFormat.String(),
+			"format_source":   formatSource,
 			"content_length":  len(content),
 			"html_length":     len(convertedHTML),
+		}
+
+		if contentType != "" {
+			response["specified_type"] = contentType
 		}
 
 		jsonBytes, err := json.Marshal(response)
@@ -438,6 +468,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription(resources.MustGetToolDescription("page_update")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("New content for the page (HTML, Markdown, or plain text - automatically detected and converted)")),
+		mcp.WithString("contentType", mcp.Description("Optional: content type - 'text', 'html', or 'markdown'. If specified, automatic format detection is bypassed and content is converted accordingly")),
 	)
 	page_updateHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -455,19 +486,43 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			return mcp.NewToolResultError("content is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("page_update parameters", "pageID", pageID, "content_length", len(content))
+		contentType := req.GetString("contentType", "")
+
+		logging.ToolsLogger.Debug("page_update parameters", "pageID", pageID, "content_length", len(content), "contentType", contentType)
 
 		// SECURITY: Verify the page belongs to the currently selected notebook
 		if err := verifyPageNotebookOwnership(ctx, pageID, pageClient, notebookCache, "page_update"); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
-		// Detect format and convert content to HTML
-		convertedHTML, detectedFormat := utils.ConvertToHTML(content)
-		logging.ToolsLogger.Debug("page_update content format detection",
-			"detected_format", detectedFormat.String(),
-			"original_length", len(content),
-			"converted_length", len(convertedHTML))
+		// Convert content to HTML - use explicit type if provided, otherwise auto-detect
+		var convertedHTML string
+		var detectedFormat utils.TextFormat
+		var formatSource string
+
+		if contentType != "" {
+			// Use explicit content type
+			var err error
+			convertedHTML, detectedFormat, err = utils.ConvertToHTMLWithType(content, contentType)
+			if err != nil {
+				logging.ToolsLogger.Error("page_update failed to convert content with explicit type", "contentType", contentType, "error", err)
+				return mcp.NewToolResultError(fmt.Sprintf("Invalid content type: %v", err)), nil
+			}
+			formatSource = "explicit"
+			logging.ToolsLogger.Debug("page_update content converted with explicit type",
+				"specified_type", contentType,
+				"final_format", detectedFormat.String(),
+				"original_length", len(content),
+				"converted_length", len(convertedHTML))
+		} else {
+			// Auto-detect format
+			convertedHTML, detectedFormat = utils.ConvertToHTML(content)
+			formatSource = "detected"
+			logging.ToolsLogger.Debug("page_update content format detection",
+				"detected_format", detectedFormat.String(),
+				"original_length", len(content),
+				"converted_length", len(convertedHTML))
+		}
 
 		err = pageClient.UpdatePageContentSimple(pageID, convertedHTML)
 		if err != nil {
@@ -481,9 +536,14 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		response := map[string]interface{}{
 			"success":         true,
 			"message":         "Page content updated successfully",
-			"detected_format": detectedFormat.String(),
+			"format":          detectedFormat.String(),
+			"format_source":   formatSource,
 			"content_length":  len(content),
 			"html_length":     len(convertedHTML),
+		}
+
+		if contentType != "" {
+			response["specified_type"] = contentType
 		}
 
 		jsonBytes, err := json.Marshal(response)
@@ -502,6 +562,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 		mcp.WithDescription(resources.MustGetToolDescription("page_update_advanced")),
 		mcp.WithString("pageID", mcp.Required(), mcp.Description("Page ID to update")),
 		mcp.WithString("commands", mcp.Required(), mcp.Description("JSON STRING containing an array of command objects. MUST be a string, not an array. Content in commands supports HTML, Markdown, or plain text (automatically detected and converted). Example: \"[{\\\"target\\\": \\\"body\\\", \\\"action\\\": \\\"append\\\", \\\"content\\\": \\\"# Header\\n- Item 1\\\"}]\"")),
+		mcp.WithString("contentType", mcp.Description("Optional: content type for all commands - 'text', 'html', or 'markdown'. If specified, automatic format detection is bypassed for all command content and converted accordingly")),
 	)
 	page_update_advancedHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		startTime := time.Now()
@@ -524,7 +585,9 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 			return mcp.NewToolResultError("commands is required"), nil
 		}
 
-		logging.ToolsLogger.Debug("page_update_advanced parameters", "pageID", pageID, "commands_length", len(commandsJSON))
+		contentType := req.GetString("contentType", "")
+
+		logging.ToolsLogger.Debug("page_update_advanced parameters", "pageID", pageID, "commands_length", len(commandsJSON), "contentType", contentType)
 
 		// Parse the commands JSON
 		var commands []pages.UpdateCommand
@@ -537,27 +600,60 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 
 		// Apply format detection and conversion to each command's content
 		var formatDetectionResults []map[string]interface{}
+		var formatSource string
+		if contentType != "" {
+			formatSource = "explicit"
+		} else {
+			formatSource = "detected"
+		}
+
 		for i, command := range commands {
 			if command.Content != "" {
 				originalContent := command.Content
-				convertedHTML, detectedFormat := utils.ConvertToHTML(command.Content)
+				var convertedHTML string
+				var detectedFormat utils.TextFormat
+
+				if contentType != "" {
+					// Use explicit content type for all commands
+					var err error
+					convertedHTML, detectedFormat, err = utils.ConvertToHTMLWithType(command.Content, contentType)
+					if err != nil {
+						logging.ToolsLogger.Error("page_update_advanced failed to convert command content with explicit type",
+							"command_index", i,
+							"contentType", contentType,
+							"error", err)
+						return mcp.NewToolResultError(fmt.Sprintf("Invalid content type for command %d: %v", i, err)), nil
+					}
+				} else {
+					// Auto-detect format for each command
+					convertedHTML, detectedFormat = utils.ConvertToHTML(command.Content)
+				}
+
 				commands[i].Content = convertedHTML
 
 				// Track format detection results
-				formatDetectionResults = append(formatDetectionResults, map[string]interface{}{
+				result := map[string]interface{}{
 					"command_index":    i,
 					"target":          command.Target,
 					"action":          command.Action,
-					"detected_format": detectedFormat.String(),
+					"format":          detectedFormat.String(),
+					"format_source":   formatSource,
 					"original_length": len(originalContent),
 					"html_length":     len(convertedHTML),
-				})
+				}
 
-				logging.ToolsLogger.Debug("page_update_advanced command content format detection",
+				if contentType != "" {
+					result["specified_type"] = contentType
+				}
+
+				formatDetectionResults = append(formatDetectionResults, result)
+
+				logging.ToolsLogger.Debug("page_update_advanced command content format processing",
 					"command_index", i,
 					"target", command.Target,
 					"action", command.Action,
-					"detected_format", detectedFormat.String(),
+					"format", detectedFormat.String(),
+					"format_source", formatSource,
 					"original_length", len(originalContent),
 					"converted_length", len(convertedHTML))
 			}
