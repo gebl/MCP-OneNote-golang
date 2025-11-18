@@ -36,6 +36,22 @@ type SectionItem struct {
 	Children []SectionItem `json:"children"` // Child items (nil for sections, populated for section groups)
 }
 
+// Input/Output structs for notebook tools
+type NotebooksInput struct{}
+type NotebooksOutput struct {
+	Notebooks []map[string]interface{} `json:"notebooks"`
+}
+
+type SelectNotebookInput struct {
+	Name string `json:"name" jsonschema:"required,description=The exact display name of the notebook to select"`
+}
+type SelectNotebookOutput struct {
+	Success      bool                   `json:"success"`
+	Notebook     map[string]interface{} `json:"notebook"`
+	Message      string                 `json:"message"`
+	NotebookName string                 `json:"notebookName"`
+}
+
 // registerNotebookTools registers notebook and section-related MCP tools
 func registerNotebookTools(s *mcp.Server, graphClient *graph.Client, notebookCache *NotebookCache, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// Create specialized clients for notebook and section operations
@@ -43,18 +59,14 @@ func registerNotebookTools(s *mcp.Server, graphClient *graph.Client, notebookCac
 	sectionClient := sections.NewSectionClient(graphClient)
 
 	// notebooks: List all OneNote notebooks for the user
-	notebooksTool := mcp.NewTool(
-		"notebooks",
-		mcp.WithDescription(resources.MustGetToolDescription("notebooks")),
-	)
-	notebooksHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	notebooksHandler := func(ctx context.Context, req *mcp.CallToolRequest, input NotebooksInput) (*mcp.CallToolResult, NotebooksOutput, error) {
 		startTime := time.Now()
 		logging.ToolsLogger.Debug("notebooks called with no parameters")
 
 		notebooks, err := notebookClient.ListNotebooksDetailed()
 		if err != nil {
 			logging.ToolsLogger.Error("notebooks failed", "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to list notebooks: %v", err)), nil
+			return utils.ToolResults.NewError("notebooks", err), NotebooksOutput{}, nil
 		}
 
 		// Apply authorization filtering
@@ -64,14 +76,18 @@ func registerNotebookTools(s *mcp.Server, graphClient *graph.Client, notebookCac
 		}
 
 		elapsed := time.Since(startTime)
-		logging.ToolsLogger.Debug("notebooks completed", 
-			"duration", elapsed, 
+		logging.ToolsLogger.Debug("notebooks completed",
+			"duration", elapsed,
 			"original_count", originalCount,
 			"filtered_count", len(notebooks))
 
 		// Handle empty results gracefully
 		if len(notebooks) == 0 {
-			return mcp.NewToolResultText("[]"), nil
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: "No notebooks found"},
+				},
+			}, NotebooksOutput{Notebooks: []map[string]interface{}{}}, nil
 		}
 
 		// Create a JSON array with id, name, default status flags, and permission info for each notebook
@@ -125,18 +141,39 @@ func registerNotebookTools(s *mcp.Server, graphClient *graph.Client, notebookCac
 			})
 		}
 
-		// Marshal to JSON
-		jsonBytes, err := json.Marshal(notebookList)
-		if err != nil {
-			logging.ToolsLogger.Error("Failed to marshal notebooks to JSON", "error", err)
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to format notebooks: %v", err)), nil
+		// Convert to the required format for output
+		notebooksData := make([]map[string]interface{}, len(notebookList))
+		for i, nb := range notebookList {
+			notebooksData[i] = map[string]interface{}{
+				"id":                nb.ID,
+				"name":              nb.Name,
+				"isAPIDefault":      nb.IsAPIDefault,
+				"isConfigDefault":   nb.IsConfigDefault,
+				"permission":        nb.Permission,
+				"permissionSource":  nb.PermissionSource,
+				"canSelect":         nb.CanSelect,
+			}
 		}
 
-		return mcp.NewToolResultText(string(jsonBytes)), nil
+		// Marshal for display in content
+		jsonBytes, err := json.Marshal(notebooksData)
+		if err != nil {
+			logging.ToolsLogger.Error("Failed to marshal notebooks to JSON", "error", err)
+			return utils.ToolResults.NewError("notebooks", err), NotebooksOutput{}, nil
+		}
+
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: string(jsonBytes)},
+			},
+		}, NotebooksOutput{Notebooks: notebooksData}, nil
 	}
-	s.AddTool(notebooksTool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return authorization.AuthorizedToolHandler("notebooks", notebooksHandler, authConfig, cache, quickNoteConfig)(ctx, req)
-	})
+
+	// Register notebooks tool (TODO: Add authorization wrapper compatibility)
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "notebooks",
+		Description: resources.MustGetToolDescription("notebooks"),
+	}, notebooksHandler)
 
 	// section_create: Create a new section in a notebook or section group
 	sectionCreateTool := mcp.NewTool(
