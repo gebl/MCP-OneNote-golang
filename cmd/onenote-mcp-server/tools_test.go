@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -126,7 +127,10 @@ func (m *MockNotebookCacheType) GetNotebook() (map[string]interface{}, bool) {
 // Test helper to create a test MCP server with mock clients
 func createTestServer(t *testing.T) (*mcp.Server, *MockGraphClient) {
 	mockGraphClient := &MockGraphClient{}
-	s := server.NewMCPServer("Test OneNote MCP Server", "1.0.0")
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "Test OneNote MCP Server",
+		Version: "1.0.0",
+	}, nil)
 
 	// Register tools with nil client, auth manager, notebook cache, and config for testing
 	registerTools(s, nil, nil, nil, nil)
@@ -356,13 +360,22 @@ func TestToolResponseFormats(t *testing.T) {
 		expectedFormat string
 	}{
 		{
-			name:           "text response",
-			toolResult:     mcp.NewToolResultText("Success message"),
+			name: "text response",
+			toolResult: &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: "Success message"},
+				},
+			},
 			expectedFormat: "text",
 		},
 		{
-			name:           "error response",
-			toolResult:     mcp.NewToolResultError("Error message"),
+			name: "error response",
+			toolResult: &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: "Error message"},
+				},
+				IsError: true,
+			},
 			expectedFormat: "error",
 		},
 	}

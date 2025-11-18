@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
@@ -141,7 +141,7 @@ func (ac *AuthorizationConfig) GetCurrentNotebook() string {
 }
 
 // IsAuthorized checks if a tool call is authorized based on the simplified notebook-scoped configuration
-func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string, req mcp.CallToolRequest, resourceContext ResourceContext) error {
+func (ac *AuthorizationConfig) IsAuthorized(ctx context.Context, toolName string, req *mcp.CallToolRequest, resourceContext ResourceContext) error {
 	if !ac.Enabled {
 		logging.AuthorizationLogger.Debug("Authorization disabled, allowing all operations", "tool", toolName)
 		return nil

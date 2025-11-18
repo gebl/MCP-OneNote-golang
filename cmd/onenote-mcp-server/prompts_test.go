@@ -7,11 +7,16 @@ package main
 import (
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPromptRegistration(t *testing.T) {
 	t.Run("prompts are registered successfully", func(t *testing.T) {
-		s := server.NewMCPServer("Test OneNote MCP Server", "1.0.0")
+		s := mcp.NewServer(&mcp.Implementation{
+			Name:    "Test OneNote MCP Server",
+			Version: "1.0.0",
+		}, nil)
 
 		// Register prompts
 		// 		// registerPrompts(s) // This line is commented out as the function is removed // This line is commented out as the function is removed
