@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/graph"
@@ -38,7 +38,7 @@ type SectionItem struct {
 }
 
 // registerNotebookTools registers notebook and section-related MCP tools
-func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, notebookCache *NotebookCache, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
+func registerNotebookTools(s *mcp.Server, graphClient *graph.Client, notebookCache *NotebookCache, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// Create specialized clients for notebook and section operations
 	notebookClient := notebooks.NewNotebookClient(graphClient)
 	sectionClient := sections.NewSectionClient(graphClient)
@@ -766,7 +766,7 @@ func registerNotebookTools(s *server.MCPServer, graphClient *graph.Client, noteb
 }
 
 // sendProgressNotification sends a progress notification using the centralized utility
-func sendProgressNotification(s *server.MCPServer, ctx context.Context, progressToken string, progress int, total int, message string) {
+func sendProgressNotification(s *mcp.Server, ctx context.Context, progressToken string, progress int, total int, message string) {
 	utils.SendProgressNotification(s, ctx, progressToken, progress, total, message)
 }
 
@@ -777,10 +777,10 @@ func fetchAllNotebookContentWithProgress(sectionClient *sections.SectionClient, 
 	logging.ToolsLogger.Debug("Starting fetchAllNotebookContentWithProgress", "notebook_id", notebookID)
 
 	// Extract progress info from context
-	var mcpServer *server.MCPServer
+	var mcpServer *mcp.Server
 	var progressToken string
 	if serverVal := ctx.Value(mcpServerKey); serverVal != nil {
-		mcpServer, _ = serverVal.(*server.MCPServer)
+		mcpServer, _ = serverVal.(*mcp.Server)
 	}
 	if tokenVal := ctx.Value(progressTokenKey); tokenVal != nil {
 		progressToken, _ = tokenVal.(string)
@@ -946,10 +946,10 @@ func buildSectionItemWithProgress(item map[string]interface{}, sectionClient *se
 		"total_items", totalItems)
 
 	// Extract progress info from context
-	var mcpServer *server.MCPServer
+	var mcpServer *mcp.Server
 	var progressToken string
 	if serverVal := ctx.Value(mcpServerKey); serverVal != nil {
-		mcpServer, _ = serverVal.(*server.MCPServer)
+		mcpServer, _ = serverVal.(*mcp.Server)
 	}
 	if tokenVal := ctx.Value(progressTokenKey); tokenVal != nil {
 		progressToken, _ = tokenVal.(string)

@@ -14,7 +14,7 @@
 package main
 
 import (
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -23,7 +23,7 @@ import (
 )
 
 // registerResources registers all MCP resources for the OneNote server
-func registerResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
+func registerResources(s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting resource registration process")
 
 	// Register notebook-related resources from the separate NotebookResources.go file

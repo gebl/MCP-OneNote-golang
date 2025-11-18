@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -114,7 +114,7 @@ func verifyPageNotebookOwnership(ctx context.Context, pageID string, pageClient 
 	return nil
 }
 
-func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
+func registerPageTools(s *mcp.Server, pageClient *pages.PageClient, graphClient *graph.Client, notebookCache *NotebookCache, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// listPages: List all pages in a section
 	listPagesTool := mcp.NewTool(
 		"pages",
@@ -1285,7 +1285,7 @@ func registerPageTools(s *server.MCPServer, pageClient *pages.PageClient, graphC
 // findPageInNotebookWithCache searches for a page by name using cached listPages calls
 // This leverages the existing page cache and progress notification system
 // Returns the page data, section ID where the page was found, whether result was from cache, and any error
-func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *sections.SectionClient, notebookCache *NotebookCache, s *server.MCPServer, notebookID string, pageName string, progressToken string, ctx context.Context) (map[string]interface{}, string, bool, error) {
+func findPageInNotebookWithCache(pageClient *pages.PageClient, sectionClient *sections.SectionClient, notebookCache *NotebookCache, s *mcp.Server, notebookID string, pageName string, progressToken string, ctx context.Context) (map[string]interface{}, string, bool, error) {
 	logging.ToolsLogger.Debug("Searching for page in notebook using cached listPages", "notebook_id", notebookID, "page_name", pageName)
 
 	// Check if page search results are already cached
@@ -1537,7 +1537,7 @@ func getDetailedNotebookByNameCached(notebookClient *notebooks.NotebookClient, n
 // extractProgressToken extracts progress token from MCP request for notifications
 
 // populateSectionsForAuthorization fetches sections to populate cache for authorization context
-func populateSectionsForAuthorization(s *server.MCPServer, ctx context.Context, graphClient *graph.Client, notebookCache *NotebookCache, progressToken string) error {
+func populateSectionsForAuthorization(s *mcp.Server, ctx context.Context, graphClient *graph.Client, notebookCache *NotebookCache, progressToken string) error {
 	// Check if notebook is selected
 	notebookID, isSet := notebookCache.GetNotebookID()
 	if !isSet {

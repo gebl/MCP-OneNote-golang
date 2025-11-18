@@ -7,8 +7,8 @@ package main
 import (
 	"context"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
@@ -17,7 +17,7 @@ import (
 )
 
 // registerAuthTools registers authentication-related MCP tools
-func registerAuthTools(s *server.MCPServer, authManager *auth.AuthManager, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
+func registerAuthTools(s *mcp.Server, authManager *auth.AuthManager, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// auth_status: Get current authentication status
 	auth_statusTool := mcp.NewTool(
 		"auth_status",

@@ -35,8 +35,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -46,7 +46,7 @@ import (
 )
 
 // registerNotebookResources registers all notebook-related MCP resources
-func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
+func registerNotebookResources(s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting notebook resource registration process")
 
 	// Register notebooks resource - list all notebooks with full metadata

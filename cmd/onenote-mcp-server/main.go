@@ -69,7 +69,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
@@ -287,9 +287,9 @@ func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, section
 		return "", false
 	}
 
-	var mcpServerTyped *server.MCPServer
+	var mcpServerTyped *mcp.Server
 	if mcpServer != nil {
-		mcpServerTyped, _ = mcpServer.(*server.MCPServer)
+		mcpServerTyped, _ = mcpServer.(*mcp.Server)
 	}
 
 	// Send progress notification for API lookup
@@ -813,9 +813,9 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 		return "", false
 	}
 
-	var mcpServerTyped *server.MCPServer
+	var mcpServerTyped *mcp.Server
 	if mcpServer != nil {
-		mcpServerTyped, _ = mcpServer.(*server.MCPServer)
+		mcpServerTyped, _ = mcpServer.(*mcp.Server)
 	}
 
 	// Send progress notification for API lookup
@@ -1138,10 +1138,10 @@ func main() {
 	logger.Debug("Authentication manager created")
 
 	// Create MCP server with progress streaming support
-	s := server.NewMCPServer("OneNote MCP Server", "2.0.0",
-		server.WithToolCapabilities(true),
-		server.WithResourceCapabilities(true, true),
-		server.WithPromptCapabilities(false))
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "OneNote MCP Server",
+		Version: "2.0.0",
+	}, nil)
 
 	// Register MCP Tools and Resources
 	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
@@ -1159,11 +1159,16 @@ func main() {
 	// Initialize default notebook if authentication is available
 	initializeDefaultNotebook(graphClient, cfg, globalNotebookCache, logger)
 
+	ctx := context.Background()
+
 	switch *mode {
 	case "http":
 		logger.Info("Starting MCP server", "transport", "HTTP", "port", *port, "request_logging", "enabled")
-		streamableServer := server.NewStreamableHTTPServer(s,
-			server.WithStateLess(*cfg.Stateless))
+
+		// Create the streamable HTTP handler
+		handler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
+			return s
+		}, nil)
 
 		// Create a mux to handle both MCP and OAuth callback
 		mux := http.NewServeMux()
@@ -1175,7 +1180,7 @@ func main() {
 		})
 
 		// Apply authentication middleware to the MCP server handler
-		authenticatedHandler := applyAuthIfEnabled(streamableServer, cfg)
+		authenticatedHandler := applyAuthIfEnabled(handler, cfg)
 
 		// Register the authenticated MCP server on the root path
 		// This should NOT match /callback due to the more specific pattern above
@@ -1188,7 +1193,7 @@ func main() {
 		}
 	case "stdio":
 		logger.Info("Starting MCP server", "transport", "stdio")
-		if err := server.ServeStdio(s); err != nil {
+		if err := s.Run(ctx, &mcp.StdioTransport{}); err != nil {
 			logger.Error("Stdio server error", "error", err)
 			os.Exit(1)
 		}

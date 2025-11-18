@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -126,7 +126,7 @@ func (m *MockNotebookCacheType) GetNotebook() (map[string]interface{}, bool) {
 }
 
 // Test helper to create a test MCP server with mock clients
-func createTestServer(t *testing.T) (*server.MCPServer, *MockGraphClient) {
+func createTestServer(t *testing.T) (*mcp.Server, *MockGraphClient) {
 	mockGraphClient := &MockGraphClient{}
 	s := server.NewMCPServer("Test OneNote MCP Server", "1.0.0")
 

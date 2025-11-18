@@ -35,8 +35,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -47,7 +47,7 @@ import (
 )
 
 // registerSectionResources registers all section-related MCP resources
-func registerSectionResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
+func registerSectionResources(s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting section resource registration process")
 
 	// Register sections by notebook name resource template
@@ -234,7 +234,7 @@ func getMapKeys(m map[string]interface{}) []string {
 
 // getNotebookSectionsForResource calls the same logic as getNotebookSections tool with progress support
 // This function reuses the logic from NotebookTools.go to get notebook sections with caching and progress notifications
-func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, notebookName string, cfg *config.Config) ([]byte, error) {
+func getNotebookSectionsForResource(ctx context.Context, s *mcp.Server, graphClient *graph.Client, notebookName string, cfg *config.Config) ([]byte, error) {
 	logging.MainLogger.Debug("getNotebookSectionsForResource called", "notebook_name", notebookName)
 
 	// Create specialized clients
@@ -362,7 +362,7 @@ func getNotebookSectionsForResource(ctx context.Context, s *server.MCPServer, gr
 
 // getAllSectionsForResource fetches all sections across all notebooks using the global sections endpoint
 // This function calls the Microsoft Graph API equivalent of https://graph.microsoft.com/v1.0/me/onenote/sections?$select=displayName,id
-func getAllSectionsForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig) ([]byte, error) {
+func getAllSectionsForResource(ctx context.Context, s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig) ([]byte, error) {
 	logging.MainLogger.Debug("getAllSectionsForResource called")
 
 	// Extract progress token from request metadata (MCP spec for resources)

@@ -37,8 +37,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -49,7 +49,7 @@ import (
 )
 
 // registerPageResources registers all page-related MCP resources
-func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
+func registerPageResources(s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting page resource registration process")
 
 	// Register pages by section ID or name resource template
@@ -265,7 +265,7 @@ func extractPageIdFromPageURI(uri string) string {
 }
 
 // getPageContentForResource fetches HTML content for a specific page with data-id attributes for updates
-func getPageContentForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, pageID string) (string, error) {
+func getPageContentForResource(ctx context.Context, s *mcp.Server, graphClient *graph.Client, pageID string) (string, error) {
 	logging.MainLogger.Debug("getPageContentForResource called", "page_id", pageID)
 
 	// Extract progress token from request metadata (MCP spec for resources)
@@ -312,7 +312,7 @@ func getPageContentForResource(ctx context.Context, s *server.MCPServer, graphCl
 }
 
 // getPagesForSectionResource fetches all pages for a section identified by ID or name
-func getPagesForSectionResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, sectionIdOrName string) ([]byte, error) {
+func getPagesForSectionResource(ctx context.Context, s *mcp.Server, graphClient *graph.Client, sectionIdOrName string) ([]byte, error) {
 	logging.MainLogger.Debug("getPagesForSectionResource called", "section_id_or_name", sectionIdOrName)
 
 	// Extract progress token from request metadata (MCP spec for resources)
