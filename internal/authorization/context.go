@@ -7,7 +7,7 @@ package authorization
 import (
 	"context"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
@@ -19,7 +19,7 @@ type NotebookCache interface {
 }
 
 // ExtractResourceContext extracts simplified resource context from tool call
-func ExtractResourceContext(ctx context.Context, toolName string, req mcp.CallToolRequest, cache NotebookCache) ResourceContext {
+func ExtractResourceContext(ctx context.Context, toolName string, req *mcp.CallToolRequest, cache NotebookCache) ResourceContext {
 	resourceContext := ResourceContext{
 		Operation: getToolOperation(toolName),
 	}

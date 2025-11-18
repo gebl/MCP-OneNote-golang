@@ -8,20 +8,20 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
 // ToolHandler represents the signature of an MCP tool handler function
-type ToolHandler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+type ToolHandler func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
 // ResourceHandler represents the signature of an MCP resource handler function
-type ResourceHandler func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)
+type ResourceHandler func(ctx context.Context, req *mcp.ReadResourceRequest) ([]mcp.ResourceContents, error)
 
 // AuthorizedToolHandler wraps a tool handler with simplified authorization checks
 func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig) ToolHandler {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Skip authorization if not enabled
 		if authConfig == nil || !authConfig.Enabled {
 			logging.AuthorizationLogger.Debug("Authorization wrapper bypassed",
@@ -58,7 +58,12 @@ func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *Aut
 				"tool", toolName,
 				"resource_context", resourceContext.String(),
 				"error", err.Error())
-			return mcp.NewToolResultError(fmt.Sprintf("Authorization failed: %v", err)), nil
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: fmt.Sprintf("Authorization failed: %v", err)},
+				},
+				IsError: true,
+			}, nil
 		}
 
 		logging.AuthorizationLogger.Debug("Authorization check passed, executing tool",
@@ -72,7 +77,7 @@ func AuthorizedToolHandler(toolName string, handler ToolHandler, authConfig *Aut
 
 // AuthorizedResourceHandler wraps a resource handler with simplified authorization checks
 func AuthorizedResourceHandler(resourceName string, handler ResourceHandler, authConfig *AuthorizationConfig, cache NotebookCache) ResourceHandler {
-	return func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	return func(ctx context.Context, req *mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		// Skip authorization if not enabled
 		if authConfig == nil || !authConfig.Enabled {
 			logging.AuthorizationLogger.Debug("Resource authorization wrapper bypassed",
@@ -124,18 +129,6 @@ type QuickNoteConfig interface {
 	GetNotebookName() string    // Returns quicknote-specific notebook name
 	GetDefaultNotebook() string // Returns default notebook name as fallback
 	GetPageName() string        // Returns target page name
-}
-
-// CreateAuthorizedTool creates an MCP tool with authorization wrapper
-func CreateAuthorizedTool(toolName string, handler ToolHandler, authConfig *AuthorizationConfig, cache NotebookCache, quickNoteConfig QuickNoteConfig, toolOptions ...mcp.ToolOption) mcp.Tool {
-	// Create the tool with the options
-	tool := mcp.NewTool(toolName, toolOptions...)
-	
-	logging.AuthorizationLogger.Debug("Created authorized tool",
-		"tool", toolName,
-		"authorization_enabled", authConfig != nil && authConfig.Enabled)
-	
-	return tool
 }
 
 // AuthorizationInfo provides information about the simplified authorization system status

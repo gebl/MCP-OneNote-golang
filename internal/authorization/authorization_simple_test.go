@@ -8,7 +8,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -65,7 +65,7 @@ func TestSimplifiedAuthorizationConfig_IsAuthorized(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	req := mcp.CallToolRequest{}
+	req := &mcp.CallToolRequest{}
 
 	// Test auth tools (always allowed)
 	resourceContext := ResourceContext{
@@ -137,7 +137,7 @@ func TestSimplifiedAuthorizationConfig_DisabledAuthorization(t *testing.T) {
 	config.Enabled = false // Disabled authorization
 
 	ctx := context.Background()
-	req := mcp.CallToolRequest{}
+	req := &mcp.CallToolRequest{}
 	resourceContext := ResourceContext{
 		NotebookName: "Any Notebook",
 		Operation:    OperationWrite,
@@ -169,7 +169,7 @@ func TestSimplifiedAuthorizationConfig_CrossNotebookAccess(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	req := mcp.CallToolRequest{}
+	req := &mcp.CallToolRequest{}
 
 	// Test cross-notebook access attempt (should be blocked)
 	resourceContext := ResourceContext{
