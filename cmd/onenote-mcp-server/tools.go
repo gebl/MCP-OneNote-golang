@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
@@ -16,7 +16,7 @@ import (
 )
 
 // registerTools registers all MCP tools for the OneNote server
-func registerTools(s *server.MCPServer, graphClient *graph.Client, authManager *auth.AuthManager, notebookCache *NotebookCache, cfg *config.Config) {
+func registerTools(s *mcp.Server, graphClient *graph.Client, authManager *auth.AuthManager, notebookCache *NotebookCache, cfg *config.Config) {
 	// Create specialized clients for each domain
 	pageClient := pages.NewPageClient(graphClient)
 	logging.ToolsLogger.Debug("Starting tool registration")

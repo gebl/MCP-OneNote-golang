@@ -23,8 +23,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
@@ -33,13 +32,23 @@ type ToolResult struct{}
 
 // NewError creates a standardized error result with consistent formatting
 func (tr ToolResult) NewError(operation string, err error) *mcp.CallToolResult {
-	return mcp.NewToolResultError(fmt.Sprintf("Failed to %s: %v", operation, err))
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: fmt.Sprintf("Failed to %s: %v", operation, err)},
+		},
+	}
 }
 
 // NewErrorf creates a standardized error result with formatted message
 func (tr ToolResult) NewErrorf(operation string, format string, args ...interface{}) *mcp.CallToolResult {
 	message := fmt.Sprintf(format, args...)
-	return mcp.NewToolResultError(fmt.Sprintf("Failed to %s: %s", operation, message))
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: fmt.Sprintf("Failed to %s: %s", operation, message)},
+		},
+	}
 }
 
 // NewJSONResult marshals data to JSON and returns a text result, or error result if marshaling fails
@@ -49,18 +58,30 @@ func (tr ToolResult) NewJSONResult(operation string, data interface{}) *mcp.Call
 		logging.ToolsLogger.Error("Failed to marshal JSON response", "operation", operation, "error", err)
 		return tr.NewError(fmt.Sprintf("marshal %s response", operation), err)
 	}
-	return mcp.NewToolResultText(string(jsonBytes))
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(jsonBytes)},
+		},
+	}
 }
 
 // NewJSONResultWithFallback marshals data to JSON, with fallback text if marshaling fails
 func (tr ToolResult) NewJSONResultWithFallback(operation string, data interface{}, fallbackText string) *mcp.CallToolResult {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		logging.ToolsLogger.Warn("Failed to marshal JSON response, using fallback", 
+		logging.ToolsLogger.Warn("Failed to marshal JSON response, using fallback",
 			"operation", operation, "error", err, "fallback", fallbackText)
-		return mcp.NewToolResultText(fallbackText)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fallbackText},
+			},
+		}
 	}
-	return mcp.NewToolResultText(string(jsonBytes))
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(jsonBytes)},
+		},
+	}
 }
 
 // Global instance for easy access
@@ -182,47 +203,49 @@ func (hc *HTTPClient) MakeRequestAndReadBody(method, url string, body io.Reader,
 
 // ToolParameterExtractor provides utilities for extracting and validating tool parameters
 type ToolParameterExtractor struct {
-	req    mcp.CallToolRequest
+	req    *mcp.CallToolRequest
 	logger *ToolLogger
 }
 
 // NewParameterExtractor creates a new parameter extractor for a tool request
-func NewParameterExtractor(req mcp.CallToolRequest, logger *ToolLogger) *ToolParameterExtractor {
+func NewParameterExtractor(req *mcp.CallToolRequest, logger *ToolLogger) *ToolParameterExtractor {
 	return &ToolParameterExtractor{req: req, logger: logger}
 }
 
 // RequireString extracts a required string parameter with validation
 func (tpe *ToolParameterExtractor) RequireString(paramName string) (string, error) {
-	value, err := tpe.req.RequireString(paramName)
-	if err != nil {
-		tpe.logger.LogError(fmt.Errorf("missing required parameter: %s", paramName))
-		return "", fmt.Errorf("%s is required", paramName)
+	// In the new SDK, arguments are in req.Params.Arguments as json.RawMessage
+	if len(tpe.req.Params.Arguments) == 0 {
+		tpe.logger.LogError(fmt.Errorf("no arguments provided"))
+		return "", fmt.Errorf("no arguments provided")
 	}
-	
-	if value == "" {
-		tpe.logger.LogError(fmt.Errorf("empty required parameter: %s", paramName))
-		return "", fmt.Errorf("%s cannot be empty", paramName)
-	}
-	
-	tpe.logger.LogDebug("Extracted parameter", paramName, value)
-	return value, nil
-}
 
-// RequireStringWithLogging extracts a required string parameter with logging
-func (tpe *ToolParameterExtractor) RequireStringWithLogging(paramName string) (string, error) {
-	value, err := tpe.req.RequireString(paramName)
-	if err != nil {
+	// Parse the raw JSON arguments
+	var args map[string]interface{}
+	if err := json.Unmarshal(tpe.req.Params.Arguments, &args); err != nil {
+		tpe.logger.LogError(fmt.Errorf("failed to parse arguments: %v", err))
+		return "", fmt.Errorf("invalid arguments format")
+	}
+
+	value, exists := args[paramName]
+	if !exists {
 		tpe.logger.LogError(fmt.Errorf("missing required parameter: %s", paramName))
 		return "", fmt.Errorf("%s is required", paramName)
 	}
-	
-	if value == "" {
+
+	strValue, ok := value.(string)
+	if !ok {
+		tpe.logger.LogError(fmt.Errorf("parameter %s is not a string", paramName))
+		return "", fmt.Errorf("%s must be a string", paramName)
+	}
+
+	if strValue == "" {
 		tpe.logger.LogError(fmt.Errorf("empty required parameter: %s", paramName))
 		return "", fmt.Errorf("%s cannot be empty", paramName)
 	}
-	
-	tpe.logger.LogDebug("Extracted parameter", paramName, value)
-	return value, nil
+
+	tpe.logger.LogDebug("Extracted parameter", paramName, strValue)
+	return strValue, nil
 }
 
 // ProgressHandler provides utilities for handling progress notifications in tools
@@ -232,7 +255,7 @@ type ProgressHandler struct {
 }
 
 // NewProgressHandler creates a new progress handler
-func NewProgressHandler(req mcp.CallToolRequest, logger *ToolLogger) *ProgressHandler {
+func NewProgressHandler(req *mcp.CallToolRequest, logger *ToolLogger) *ProgressHandler {
 	progressToken := ExtractProgressToken(req)
 	return &ProgressHandler{progressToken: progressToken, logger: logger}
 }
@@ -245,7 +268,7 @@ func (ph *ProgressHandler) HasProgressToken() bool {
 // SendProgress sends a progress notification if a token is available
 func (ph *ProgressHandler) SendProgress(ctx context.Context, s interface{}, progress int, total int, message string) {
 	if ph.progressToken != "" && s != nil {
-		if mcpServer, ok := s.(*server.MCPServer); ok {
+		if mcpServer, ok := s.(*mcp.Server); ok {
 			SendProgressNotification(mcpServer, ctx, ph.progressToken, progress, total, message)
 			ph.logger.LogDebug("Progress notification sent", "progress", progress, "total", total, "message", message)
 		}
@@ -255,7 +278,7 @@ func (ph *ProgressHandler) SendProgress(ctx context.Context, s interface{}, prog
 // SendProgressMessage sends a simple progress message if a token is available
 func (ph *ProgressHandler) SendProgressMessage(ctx context.Context, s interface{}, message string) {
 	if ph.progressToken != "" && s != nil {
-		if mcpServer, ok := s.(*server.MCPServer); ok {
+		if mcpServer, ok := s.(*mcp.Server); ok {
 			SendProgressMessage(mcpServer, ctx, ph.progressToken, message)
 			ph.logger.LogDebug("Progress message sent", "message", message)
 		}

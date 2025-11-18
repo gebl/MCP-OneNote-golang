@@ -35,8 +35,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -46,21 +45,21 @@ import (
 )
 
 // registerNotebookResources registers all notebook-related MCP resources
-func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
+func registerNotebookResources(s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting notebook resource registration process")
 
 	// Register notebooks resource - list all notebooks with full metadata
 	logging.MainLogger.Debug("Creating notebooks resource",
 		"resource_uri", "onenote://notebooks",
 		"resource_type", "static_resource")
-	notebooksResource := mcp.NewResource(
-		"onenote://notebooks",
-		"OneNote Notebooks",
-		mcp.WithResourceDescription("List of all OneNote notebooks accessible to the authenticated user with comprehensive metadata including timestamps, ownership, links, and properties"),
-		mcp.WithMIMEType("application/json"),
-	)
+	notebooksResource := &mcp.Resource{
+		URI:         "onenote://notebooks",
+		Name:        "OneNote Notebooks",
+		Description: "List of all OneNote notebooks accessible to the authenticated user with comprehensive metadata including timestamps, ownership, links, and properties",
+		MIMEType:    "application/json",
+	}
 
-	notebooksHandler := func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	notebooksHandler := func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logging.MainLogger.Debug("Resource handler invoked",
 			"resource_uri", "onenote://notebooks",
 			"request_uri", request.Params.URI,
@@ -108,11 +107,13 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 			"response_size_bytes", responseSize,
 			"notebooks_count", len(notebooks))
 
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      "onenote://notebooks",
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      "onenote://notebooks",
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
 		}, nil
 	}
@@ -125,14 +126,14 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 	logging.MainLogger.Debug("Creating notebook by name resource template",
 		"template_pattern", "onenote://notebooks/{name}",
 		"resource_type", "template_resource")
-	notebookByNameTemplate := mcp.NewResourceTemplate(
-		"onenote://notebooks/{name}",
-		"OneNote Notebook by Name",
-		mcp.WithTemplateDescription("Get a specific OneNote notebook by its display name with comprehensive metadata including timestamps, ownership, links, and properties"),
-		mcp.WithTemplateMIMEType("application/json"),
-	)
+	notebookByNameTemplate := &mcp.ResourceTemplate{
+		URITemplate: "onenote://notebooks/{name}",
+		Name:        "OneNote Notebook by Name",
+		Description: "Get a specific OneNote notebook by its display name with comprehensive metadata including timestamps, ownership, links, and properties",
+		MIMEType:    "application/json",
+	}
 
-	notebookByNameHandler := func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	notebookByNameHandler := func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logging.MainLogger.Debug("Resource template handler invoked",
 			"template_pattern", "onenote://notebooks/{name}",
 			"request_uri", request.Params.URI,
@@ -204,11 +205,13 @@ func registerNotebookResources(s *server.MCPServer, graphClient *graph.Client, c
 			"response_size_bytes", responseSize,
 			"attributes_count", len(detailedNotebook))
 
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      request.Params.URI,
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      request.Params.URI,
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
 		}, nil
 	}

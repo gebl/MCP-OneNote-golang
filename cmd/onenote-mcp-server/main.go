@@ -69,7 +69,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
@@ -287,19 +287,22 @@ func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, section
 		return "", false
 	}
 
-	var mcpServerTyped *server.MCPServer
+	var mcpServerTyped *mcp.Server
 	if mcpServer != nil {
-		mcpServerTyped, _ = mcpServer.(*server.MCPServer)
+		mcpServerTyped, _ = mcpServer.(*mcp.Server)
 	}
 
 	// Send progress notification for API lookup
 	if mcpServerTyped != nil && progressToken != "" {
-		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressToken,
-			"progress":      5,
-			"total":         100,
-			"message":       fmt.Sprintf("Looking up section name for %s via API...", sectionID),
-		})
+		// TODO: Redesign progress notifications for new SDK - requires ServerSession
+		// // TODO: Fix progress notifications for new SDK
+		// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+		//	"progressToken": progressToken,
+		//	"progress":      5,
+		//	"total":         100,
+		//	"message":       fmt.Sprintf("Looking up section name for %s via API...", sectionID),
+		//})
+		var err error = nil
 		if err != nil {
 			logging.ToolsLogger.Warn("Failed to send progress notification for section lookup",
 				"error", err,
@@ -316,12 +319,14 @@ func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, section
 
 	// Send progress notification for API call
 	if mcpServerTyped != nil && progressToken != "" {
-		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressToken,
-			"progress":      10,
-			"total":         100,
-			"message":       "Fetching section details from OneNote API...",
-		})
+		// TODO: Fix progress notifications for new SDK
+		// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+		//	"progressToken": progressToken,
+		//	"progress":      10,
+		//	"total":         100,
+		//	"message":       "Fetching section details from OneNote API...",
+		//})
+		var err error = nil
 		if err != nil {
 			logging.ToolsLogger.Warn("Failed to send API progress notification",
 				"error", err,
@@ -339,12 +344,14 @@ func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, section
 
 		// Send failure progress notification
 		if mcpServerTyped != nil && progressToken != "" {
-			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-				"progressToken": progressToken,
-				"progress":      15,
-				"total":         100,
-				"message":       "Section lookup failed, section name unavailable",
-			})
+			// TODO: Fix progress notifications for new SDK
+			// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			//	"progressToken": progressToken,
+			//	"progress":      15,
+			//	"total":         100,
+			//	"message":       "Section lookup failed, section name unavailable",
+			//})
+			var err error = nil
 			if err != nil {
 				logging.ToolsLogger.Warn("Failed to send failure progress notification", "error", err)
 			}
@@ -366,12 +373,14 @@ func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, section
 
 		// Send failure progress notification
 		if mcpServerTyped != nil && progressToken != "" {
-			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-				"progressToken": progressToken,
-				"progress":      20,
-				"total":         100,
-				"message":       "Section found but name is missing",
-			})
+			// TODO: Fix progress notifications for new SDK
+			// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			//	"progressToken": progressToken,
+			//	"progress":      20,
+			//	"total":         100,
+			//	"message":       "Section found but name is missing",
+			//})
+			var err error = nil
 			if err != nil {
 				logging.ToolsLogger.Warn("Failed to send missing name progress notification", "error", err)
 			}
@@ -382,12 +391,14 @@ func (nc *NotebookCache) GetSectionNameWithProgress(ctx context.Context, section
 
 	// Send success progress notification
 	if mcpServerTyped != nil && progressToken != "" {
-		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressToken,
-			"progress":      25,
-			"total":         100,
-			"message":       fmt.Sprintf("Section name resolved: %s", sectionName),
-		})
+		// TODO: Fix progress notifications for new SDK
+		// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+		//	"progressToken": progressToken,
+		//	"progress":      25,
+		//	"total":         100,
+		//	"message":       fmt.Sprintf("Section name resolved: %s", sectionName),
+		//})
+		var err error = nil
 		if err != nil {
 			logging.ToolsLogger.Warn("Failed to send success progress notification", "error", err)
 		}
@@ -813,19 +824,21 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 		return "", false
 	}
 
-	var mcpServerTyped *server.MCPServer
+	var mcpServerTyped *mcp.Server
 	if mcpServer != nil {
-		mcpServerTyped, _ = mcpServer.(*server.MCPServer)
+		mcpServerTyped, _ = mcpServer.(*mcp.Server)
 	}
 
 	// Send progress notification for API lookup
 	if mcpServerTyped != nil && progressToken != "" {
-		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressToken,
-			"progress":      5,
-			"total":         100,
-			"message":       fmt.Sprintf("Looking up page name for %s via API...", pageID),
-		})
+		// TODO: Fix progress notifications for new SDK
+		// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+		//	"progressToken": progressToken,
+		//	"progress":      5,
+		//	"total":         100,
+		//	"message":       fmt.Sprintf("Looking up page name for %s via API...", pageID),
+		//})
+		var err error = nil
 		if err != nil {
 			logging.AuthorizationLogger.Warn("Failed to send progress notification for page lookup",
 				"error", err,
@@ -838,12 +851,14 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 	pageApiURL := fmt.Sprintf("https://graph.microsoft.com/v1.0/me/onenote/pages/%s?$select=id,title", pageID)
 
 	if mcpServerTyped != nil && progressToken != "" {
-		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressToken,
-			"progress":      10,
-			"total":         100,
-			"message":       "Fetching page details from OneNote API...",
-		})
+		// TODO: Fix progress notifications for new SDK
+		// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+		//	"progressToken": progressToken,
+		//	"progress":      10,
+		//	"total":         100,
+		//	"message":       "Fetching page details from OneNote API...",
+		//})
+		var err error = nil
 		if err != nil {
 			logging.AuthorizationLogger.Warn("Failed to send API progress notification",
 				"error", err,
@@ -860,12 +875,14 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 
 		// Send failure progress notification
 		if mcpServerTyped != nil && progressToken != "" {
-			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-				"progressToken": progressToken,
-				"progress":      15,
-				"total":         100,
-				"message":       "Page lookup failed, page name unavailable",
-			})
+			// TODO: Fix progress notifications for new SDK
+			// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			//	"progressToken": progressToken,
+			//	"progress":      15,
+			//	"total":         100,
+			//	"message":       "Page lookup failed, page name unavailable",
+			//})
+			var err error = nil
 			if err != nil {
 				logging.AuthorizationLogger.Warn("Failed to send failure progress notification", "error", err)
 			}
@@ -898,12 +915,14 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 
 		// Send failure progress notification
 		if mcpServerTyped != nil && progressToken != "" {
-			err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-				"progressToken": progressToken,
-				"progress":      20,
-				"total":         100,
-				"message":       "Page found but title is missing",
-			})
+			// TODO: Fix progress notifications for new SDK
+			// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+			//	"progressToken": progressToken,
+			//	"progress":      20,
+			//	"total":         100,
+			//	"message":       "Page found but title is missing",
+			//})
+			var err error = nil
 			if err != nil {
 				logging.AuthorizationLogger.Warn("Failed to send missing title progress notification", "error", err)
 			}
@@ -914,12 +933,14 @@ func (nc *NotebookCache) GetPageNameWithProgress(ctx context.Context, pageID str
 
 	// Send success progress notification
 	if mcpServerTyped != nil && progressToken != "" {
-		err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-			"progressToken": progressToken,
-			"progress":      25,
-			"total":         100,
-			"message":       fmt.Sprintf("Page name resolved: %s", pageName),
-		})
+		// TODO: Fix progress notifications for new SDK
+		// err := mcpServerTyped.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
+		//	"progressToken": progressToken,
+		//	"progress":      25,
+		//	"total":         100,
+		//	"message":       fmt.Sprintf("Page name resolved: %s", pageName),
+		//})
+		var err error = nil
 		if err != nil {
 			logging.AuthorizationLogger.Warn("Failed to send success progress notification", "error", err)
 		}
@@ -1138,10 +1159,10 @@ func main() {
 	logger.Debug("Authentication manager created")
 
 	// Create MCP server with progress streaming support
-	s := server.NewMCPServer("OneNote MCP Server", "2.0.0",
-		server.WithToolCapabilities(true),
-		server.WithResourceCapabilities(true, true),
-		server.WithPromptCapabilities(false))
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "OneNote MCP Server",
+		Version: "2.0.0",
+	}, nil)
 
 	// Register MCP Tools and Resources
 	registerTools(s, graphClient, authManager, globalNotebookCache, cfg)
@@ -1159,11 +1180,24 @@ func main() {
 	// Initialize default notebook if authentication is available
 	initializeDefaultNotebook(graphClient, cfg, globalNotebookCache, logger)
 
+	ctx := context.Background()
+
 	switch *mode {
 	case "http":
 		logger.Info("Starting MCP server", "transport", "HTTP", "port", *port, "request_logging", "enabled")
-		streamableServer := server.NewStreamableHTTPServer(s,
-			server.WithStateLess(*cfg.Stateless))
+
+		// Create the streamable HTTP handler with options
+		statelessMode := false
+		if cfg.Stateless != nil {
+			statelessMode = *cfg.Stateless
+		}
+		handler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
+			return s
+		}, &mcp.StreamableHTTPOptions{
+			Stateless:      statelessMode,   // Use stateless mode from config if enabled
+			Logger:         logger,           // Enable SDK logging
+			SessionTimeout: 5 * time.Minute,  // 5 minute idle session timeout
+		})
 
 		// Create a mux to handle both MCP and OAuth callback
 		mux := http.NewServeMux()
@@ -1175,7 +1209,7 @@ func main() {
 		})
 
 		// Apply authentication middleware to the MCP server handler
-		authenticatedHandler := applyAuthIfEnabled(streamableServer, cfg)
+		authenticatedHandler := applyAuthIfEnabled(handler, cfg)
 
 		// Register the authenticated MCP server on the root path
 		// This should NOT match /callback due to the more specific pattern above
@@ -1188,7 +1222,7 @@ func main() {
 		}
 	case "stdio":
 		logger.Info("Starting MCP server", "transport", "stdio")
-		if err := server.ServeStdio(s); err != nil {
+		if err := s.Run(ctx, &mcp.StdioTransport{}); err != nil {
 			logger.Error("Stdio server error", "error", err)
 			os.Exit(1)
 		}

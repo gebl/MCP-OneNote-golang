@@ -8,8 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
@@ -17,13 +16,13 @@ import (
 // ProgressNotifier provides centralized progress notification functionality
 // for MCP tools and internal operations
 type ProgressNotifier struct {
-	server *server.MCPServer
+	server *mcp.Server
 	ctx    context.Context
 	token  string
 }
 
 // NewProgressNotifier creates a new progress notifier instance
-func NewProgressNotifier(s *server.MCPServer, ctx context.Context, token string) *ProgressNotifier {
+func NewProgressNotifier(s *mcp.Server, ctx context.Context, token string) *ProgressNotifier {
 	return &ProgressNotifier{
 		server: s,
 		ctx:    ctx,
@@ -32,15 +31,10 @@ func NewProgressNotifier(s *server.MCPServer, ctx context.Context, token string)
 }
 
 // ExtractProgressToken extracts the progress token from MCP request metadata
-func ExtractProgressToken(req mcp.CallToolRequest) string {
-	// Extract progress token from request metadata if available
-	if req.Params.Meta != nil && req.Params.Meta.ProgressToken != nil {
-		if token, ok := req.Params.Meta.ProgressToken.(string); ok {
-			return token
-		}
-		// Handle case where ProgressToken is not a string (e.g., mcp.ProgressToken type)
-		return fmt.Sprintf("%v", req.Params.Meta.ProgressToken)
-	}
+func ExtractProgressToken(req *mcp.CallToolRequest) string {
+	// In the new SDK, progress token might be extracted differently
+	// For now, return empty string and let individual handlers handle it
+	// TODO: Update when progress token extraction pattern is clarified
 	return ""
 }
 
@@ -60,7 +54,7 @@ func (pn *ProgressNotifier) IsValid() bool {
 }
 
 // SendProgressNotification sends a progress notification with percentage-based progress
-func SendProgressNotification(s *server.MCPServer, ctx context.Context, progressToken string, progress int, total int, message string) {
+func SendProgressNotification(s *mcp.Server, ctx context.Context, progressToken string, progress int, total int, message string) {
 	if progressToken == "" {
 		logging.UtilsLogger.Debug("Skipping progress notification - no progress token provided",
 			"progress", progress,
@@ -88,12 +82,15 @@ func SendProgressNotification(s *server.MCPServer, ctx context.Context, progress
 		return
 	}
 
-	err := s.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-		"progressToken": progressToken,
-		"progress":      progress,
-		"total":         total,
-		"message":       message,
-	})
+	// TODO: Update progress notification for new SDK
+	// The new SDK may handle progress notifications differently
+	// For now, just log the progress attempt
+	logging.UtilsLogger.Info("Progress notification (new SDK - TODO: implement)",
+		"progressToken", progressToken,
+		"progress", progress,
+		"total", total,
+		"message", message)
+	err := fmt.Errorf("progress notifications not yet implemented for new SDK")
 
 	if err != nil {
 		logging.UtilsLogger.Warn("Failed to send progress notification to client",
@@ -114,7 +111,7 @@ func SendProgressNotification(s *server.MCPServer, ctx context.Context, progress
 }
 
 // SendProgressMessage sends a simple progress message without percentage
-func SendProgressMessage(s *server.MCPServer, ctx context.Context, progressToken string, message string) {
+func SendProgressMessage(s *mcp.Server, ctx context.Context, progressToken string, message string) {
 	if progressToken == "" {
 		logging.UtilsLogger.Debug("Skipping progress message - no progress token provided",
 			"message", message)
@@ -133,10 +130,11 @@ func SendProgressMessage(s *server.MCPServer, ctx context.Context, progressToken
 		return
 	}
 
-	err := s.SendNotificationToClient(ctx, "notifications/progress", map[string]any{
-		"progressToken": progressToken,
-		"message":       message,
-	})
+	// TODO: Update progress notification for new SDK
+	logging.UtilsLogger.Info("Progress message (new SDK - TODO: implement)",
+		"progressToken", progressToken,
+		"message", message)
+	err := fmt.Errorf("progress messages not yet implemented for new SDK")
 
 	if err != nil {
 		logging.UtilsLogger.Warn("Failed to send progress message to client",
@@ -160,12 +158,12 @@ const (
 
 // ExtractFromContext extracts MCP server and progress token from context
 // This supports the pattern used by internal clients like SectionClient
-func ExtractFromContext(ctx context.Context) (*server.MCPServer, string) {
-	var mcpServer *server.MCPServer
+func ExtractFromContext(ctx context.Context) (*mcp.Server, string) {
+	var mcpServer *mcp.Server
 	var progressToken string
 
 	if serverVal := ctx.Value(MCPServerKey); serverVal != nil {
-		if s, ok := serverVal.(*server.MCPServer); ok {
+		if s, ok := serverVal.(*mcp.Server); ok {
 			mcpServer = s
 		}
 	}

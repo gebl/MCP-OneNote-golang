@@ -37,8 +37,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"
@@ -49,21 +48,21 @@ import (
 )
 
 // registerPageResources registers all page-related MCP resources
-func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
+func registerPageResources(s *mcp.Server, graphClient *graph.Client, cfg *config.Config, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache) {
 	logging.MainLogger.Debug("Starting page resource registration process")
 
 	// Register pages by section ID or name resource template
 	logging.MainLogger.Debug("Creating pages by section resource template",
 		"template_pattern", "onenote://pages/{sectionIdOrName}",
 		"resource_type", "template_resource")
-	pagesTemplate := mcp.NewResourceTemplate(
-		"onenote://pages/{sectionIdOrName}",
-		"OneNote Pages for Section",
-		mcp.WithTemplateDescription("List all pages in a specific section by either section ID or display name, returning page titles and IDs"),
-		mcp.WithTemplateMIMEType("application/json"),
-	)
+	pagesTemplate := &mcp.ResourceTemplate{
+		URITemplate: "onenote://pages/{sectionIdOrName}",
+		Name:        "OneNote Pages for Section",
+		Description: "List all pages in a specific section by either section ID or display name, returning page titles and IDs",
+		MIMEType:    "application/json",
+	}
 
-	s.AddResourceTemplate(pagesTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	pagesHandler := func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logging.MainLogger.Debug("Page resource template handler invoked",
 			"template_pattern", "onenote://pages/{sectionIdOrName}",
 			"request_uri", request.Params.URI,
@@ -120,14 +119,18 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 			"request_uri", request.Params.URI,
 			"response_size_bytes", responseSize)
 
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      request.Params.URI,
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      request.Params.URI,
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
 		}, nil
-	})
+	}
+
+	s.AddResourceTemplate(pagesTemplate, pagesHandler)
 	logging.MainLogger.Debug("Registered pages by section resource template successfully",
 		"template_pattern", "onenote://pages/{sectionIdOrName}")
 
@@ -135,14 +138,14 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 	logging.MainLogger.Debug("Creating page content by page ID resource template",
 		"template_pattern", "onenote://page/{pageId}",
 		"resource_type", "template_resource")
-	pageContentTemplate := mcp.NewResourceTemplate(
-		"onenote://page/{pageId}",
-		"OneNote Page Content for Update",
-		mcp.WithTemplateDescription("Get HTML content for a specific page with data-id attributes included for update operations"),
-		mcp.WithTemplateMIMEType("text/html"),
-	)
+	pageContentTemplate := &mcp.ResourceTemplate{
+		URITemplate: "onenote://page/{pageId}",
+		Name:        "OneNote Page Content for Update",
+		Description: "Get HTML content for a specific page with data-id attributes included for update operations",
+		MIMEType:    "text/html",
+	}
 
-	s.AddResourceTemplate(pageContentTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	pageContentHandler := func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logging.MainLogger.Debug("Page content resource template handler invoked",
 			"template_pattern", "onenote://page/{pageId}",
 			"request_uri", request.Params.URI,
@@ -199,14 +202,18 @@ func registerPageResources(s *server.MCPServer, graphClient *graph.Client, cfg *
 			"request_uri", request.Params.URI,
 			"response_size_bytes", responseSize)
 
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      request.Params.URI,
-				MIMEType: "text/html",
-				Text:     htmlContent,
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      request.Params.URI,
+					MIMEType: "text/html",
+					Text:     htmlContent,
+				},
 			},
 		}, nil
-	})
+	}
+
+	s.AddResourceTemplate(pageContentTemplate, pageContentHandler)
 	logging.MainLogger.Debug("Registered page content by page ID resource template successfully",
 		"template_pattern", "onenote://page/{pageId}")
 
@@ -265,7 +272,7 @@ func extractPageIdFromPageURI(uri string) string {
 }
 
 // getPageContentForResource fetches HTML content for a specific page with data-id attributes for updates
-func getPageContentForResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, pageID string) (string, error) {
+func getPageContentForResource(ctx context.Context, s *mcp.Server, graphClient *graph.Client, pageID string) (string, error) {
 	logging.MainLogger.Debug("getPageContentForResource called", "page_id", pageID)
 
 	// Extract progress token from request metadata (MCP spec for resources)
@@ -312,7 +319,7 @@ func getPageContentForResource(ctx context.Context, s *server.MCPServer, graphCl
 }
 
 // getPagesForSectionResource fetches all pages for a section identified by ID or name
-func getPagesForSectionResource(ctx context.Context, s *server.MCPServer, graphClient *graph.Client, sectionIdOrName string) ([]byte, error) {
+func getPagesForSectionResource(ctx context.Context, s *mcp.Server, graphClient *graph.Client, sectionIdOrName string) ([]byte, error) {
 	logging.MainLogger.Debug("getPagesForSectionResource called", "section_id_or_name", sectionIdOrName)
 
 	// Extract progress token from request metadata (MCP spec for resources)

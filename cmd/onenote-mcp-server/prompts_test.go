@@ -7,8 +7,6 @@ package main
 import (
 	"testing"
 
-	"github.com/mark3labs/mcp-go/server"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPromptRegistration(t *testing.T) {
