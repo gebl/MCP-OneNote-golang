@@ -1,5 +1,5 @@
 {
-  "client_id": "c546232f-5556-4213-8728-f39da001b861",
+  "client_id": "your-client-id",
   "tenant_id": "common",
   "redirect_uri": "https://onenote.example.com/callback",
   "notebook_name": "My Notebook",

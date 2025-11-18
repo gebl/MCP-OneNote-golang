@@ -53,14 +53,14 @@ func registerSectionResources(s *mcp.Server, graphClient *graph.Client, cfg *con
 	logging.MainLogger.Debug("Creating sections by notebook resource template",
 		"template_pattern", "onenote://notebooks/{name}/sections",
 		"resource_type", "template_resource")
-	sectionsTemplate := mcp.NewResourceTemplate(
-		"onenote://notebooks/{name}/sections",
-		"OneNote Sections for Notebook",
-		mcp.WithTemplateDescription("Hierarchical view of sections and section groups within a specific notebook to understand its organizational structure"),
-		mcp.WithTemplateMIMEType("application/json"),
-	)
+	sectionsTemplate := &mcp.ResourceTemplate{
+		URITemplate: "onenote://notebooks/{name}/sections",
+		Name:        "OneNote Sections for Notebook",
+		Description: "Hierarchical view of sections and section groups within a specific notebook to understand its organizational structure",
+		MIMEType:    "application/json",
+	}
 
-	s.AddResourceTemplate(sectionsTemplate, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	sectionsHandler := func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logging.MainLogger.Debug("Resource template handler invoked",
 			"template_pattern", "onenote://notebooks/{name}/sections",
 			"request_uri", request.Params.URI,
@@ -108,14 +108,18 @@ func registerSectionResources(s *mcp.Server, graphClient *graph.Client, cfg *con
 			"request_uri", request.Params.URI,
 			"response_size_bytes", responseSize)
 
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      request.Params.URI,
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      request.Params.URI,
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
 		}, nil
-	})
+	}
+
+	s.AddResourceTemplate(sectionsTemplate, sectionsHandler)
 	logging.MainLogger.Debug("Registered sections by notebook resource template successfully",
 		"template_pattern", "onenote://notebooks/{name}/sections")
 
@@ -123,14 +127,14 @@ func registerSectionResources(s *mcp.Server, graphClient *graph.Client, cfg *con
 	logging.MainLogger.Debug("Creating global sections resource",
 		"resource_uri", "onenote://sections",
 		"resource_type", "static_resource")
-	globalSectionsResource := mcp.NewResource(
-		"onenote://sections",
-		"OneNote All Sections",
-		mcp.WithResourceDescription("Get all sections across all notebooks using Microsoft Graph global sections endpoint (/me/onenote/sections?$select=displayName,id)"),
-		mcp.WithMIMEType("application/json"),
-	)
+	globalSectionsResource := &mcp.Resource{
+		URI:         "onenote://sections",
+		Name:        "OneNote All Sections",
+		Description: "Get all sections across all notebooks using Microsoft Graph global sections endpoint (/me/onenote/sections?$select=displayName,id)",
+		MIMEType:    "application/json",
+	}
 
-	s.AddResource(globalSectionsResource, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	globalSectionsHandler := func(ctx context.Context, request *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		logging.MainLogger.Debug("Global sections resource handler invoked",
 			"resource_uri", "onenote://sections",
 			"request_uri", request.Params.URI,
@@ -178,14 +182,18 @@ func registerSectionResources(s *mcp.Server, graphClient *graph.Client, cfg *con
 			"request_uri", request.Params.URI,
 			"response_size_bytes", responseSize)
 
-		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      request.Params.URI,
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+		return &mcp.ReadResourceResult{
+			Contents: []*mcp.ResourceContents{
+				{
+					URI:      request.Params.URI,
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
 		}, nil
-	})
+	}
+
+	s.AddResource(globalSectionsResource, globalSectionsHandler)
 	logging.MainLogger.Debug("Registered global sections resource successfully",
 		"resource_uri", "onenote://sections")
 
