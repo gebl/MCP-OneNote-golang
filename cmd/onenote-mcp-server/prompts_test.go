@@ -7,8 +7,6 @@ package main
 import (
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPromptRegistration(t *testing.T) {

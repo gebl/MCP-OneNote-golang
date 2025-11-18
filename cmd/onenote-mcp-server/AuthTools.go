@@ -6,8 +6,8 @@ package main
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/auth"
@@ -16,27 +16,37 @@ import (
 	"github.com/gebl/onenote-mcp-server/internal/utils"
 )
 
+// Input/Output structs for auth tools
+type AuthStatusInput struct{}
+type AuthStatusOutput struct {
+	Status interface{} `json:"status"`
+}
+
 // registerAuthTools registers authentication-related MCP tools
 func registerAuthTools(s *mcp.Server, authManager *auth.AuthManager, authConfig *authorization.AuthorizationConfig, cache authorization.NotebookCache, quickNoteConfig authorization.QuickNoteConfig) {
 	// auth_status: Get current authentication status
-	auth_statusTool := mcp.NewTool(
-		"auth_status",
-		mcp.WithDescription(resources.MustGetToolDescription("auth_status")),
-	)
-	auth_statusHandler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	auth_statusHandler := func(ctx context.Context, req *mcp.CallToolRequest, input AuthStatusInput) (*mcp.CallToolResult, AuthStatusOutput, error) {
 		logger := utils.NewToolLogger("auth_status")
 
 		if authManager == nil {
-			return mcp.NewToolResultError("Authentication manager not available"), nil
+			return utils.ToolResults.NewError("auth_status", fmt.Errorf("authentication manager not available")), AuthStatusOutput{}, nil
 		}
 
 		status := authManager.GetAuthStatus()
 
 		logger.LogSuccess("authenticated", status.Authenticated)
-		return utils.ToolResults.NewJSONResult("auth_status", status), nil
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fmt.Sprintf("Authentication status: %+v", status)},
+			},
+		}, AuthStatusOutput{Status: status}, nil
 	}
-	// auth_status doesn't require authorization since it's needed to check auth state
-	s.AddTool(auth_statusTool, server.ToolHandlerFunc(auth_statusHandler))
+
+	// Register auth_status tool
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "auth_status",
+		Description: resources.MustGetToolDescription("auth_status"),
+	}, auth_statusHandler)
 
 	// auth_refresh: Manually refresh authentication token
 	auth_refreshTool := mcp.NewTool(

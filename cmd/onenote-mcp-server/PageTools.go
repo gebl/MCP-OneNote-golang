@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/gebl/onenote-mcp-server/internal/authorization"
 	"github.com/gebl/onenote-mcp-server/internal/config"

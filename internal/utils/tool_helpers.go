@@ -23,8 +23,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/gebl/onenote-mcp-server/internal/logging"
 )
 
@@ -33,13 +32,23 @@ type ToolResult struct{}
 
 // NewError creates a standardized error result with consistent formatting
 func (tr ToolResult) NewError(operation string, err error) *mcp.CallToolResult {
-	return mcp.NewToolResultError(fmt.Sprintf("Failed to %s: %v", operation, err))
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: fmt.Sprintf("Failed to %s: %v", operation, err)},
+		},
+	}
 }
 
 // NewErrorf creates a standardized error result with formatted message
 func (tr ToolResult) NewErrorf(operation string, format string, args ...interface{}) *mcp.CallToolResult {
 	message := fmt.Sprintf(format, args...)
-	return mcp.NewToolResultError(fmt.Sprintf("Failed to %s: %s", operation, message))
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: fmt.Sprintf("Failed to %s: %s", operation, message)},
+		},
+	}
 }
 
 // NewJSONResult marshals data to JSON and returns a text result, or error result if marshaling fails
@@ -49,18 +58,30 @@ func (tr ToolResult) NewJSONResult(operation string, data interface{}) *mcp.Call
 		logging.ToolsLogger.Error("Failed to marshal JSON response", "operation", operation, "error", err)
 		return tr.NewError(fmt.Sprintf("marshal %s response", operation), err)
 	}
-	return mcp.NewToolResultText(string(jsonBytes))
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(jsonBytes)},
+		},
+	}
 }
 
 // NewJSONResultWithFallback marshals data to JSON, with fallback text if marshaling fails
 func (tr ToolResult) NewJSONResultWithFallback(operation string, data interface{}, fallbackText string) *mcp.CallToolResult {
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
-		logging.ToolsLogger.Warn("Failed to marshal JSON response, using fallback", 
+		logging.ToolsLogger.Warn("Failed to marshal JSON response, using fallback",
 			"operation", operation, "error", err, "fallback", fallbackText)
-		return mcp.NewToolResultText(fallbackText)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: fallbackText},
+			},
+		}
 	}
-	return mcp.NewToolResultText(string(jsonBytes))
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(jsonBytes)},
+		},
+	}
 }
 
 // Global instance for easy access
