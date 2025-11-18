@@ -158,12 +158,12 @@ const (
 
 // ExtractFromContext extracts MCP server and progress token from context
 // This supports the pattern used by internal clients like SectionClient
-func ExtractFromContext(ctx context.Context) (*server.MCPServer, string) {
-	var mcpServer *server.MCPServer
+func ExtractFromContext(ctx context.Context) (*mcp.Server, string) {
+	var mcpServer *mcp.Server
 	var progressToken string
 
 	if serverVal := ctx.Value(MCPServerKey); serverVal != nil {
-		if s, ok := serverVal.(*server.MCPServer); ok {
+		if s, ok := serverVal.(*mcp.Server); ok {
 			mcpServer = s
 		}
 	}

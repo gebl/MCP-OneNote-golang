@@ -203,47 +203,49 @@ func (hc *HTTPClient) MakeRequestAndReadBody(method, url string, body io.Reader,
 
 // ToolParameterExtractor provides utilities for extracting and validating tool parameters
 type ToolParameterExtractor struct {
-	req    mcp.CallToolRequest
+	req    *mcp.CallToolRequest
 	logger *ToolLogger
 }
 
 // NewParameterExtractor creates a new parameter extractor for a tool request
-func NewParameterExtractor(req mcp.CallToolRequest, logger *ToolLogger) *ToolParameterExtractor {
+func NewParameterExtractor(req *mcp.CallToolRequest, logger *ToolLogger) *ToolParameterExtractor {
 	return &ToolParameterExtractor{req: req, logger: logger}
 }
 
 // RequireString extracts a required string parameter with validation
 func (tpe *ToolParameterExtractor) RequireString(paramName string) (string, error) {
-	value, err := tpe.req.RequireString(paramName)
-	if err != nil {
-		tpe.logger.LogError(fmt.Errorf("missing required parameter: %s", paramName))
-		return "", fmt.Errorf("%s is required", paramName)
+	// In the new SDK, arguments are in req.Params.Arguments as json.RawMessage
+	if len(tpe.req.Params.Arguments) == 0 {
+		tpe.logger.LogError(fmt.Errorf("no arguments provided"))
+		return "", fmt.Errorf("no arguments provided")
 	}
-	
-	if value == "" {
-		tpe.logger.LogError(fmt.Errorf("empty required parameter: %s", paramName))
-		return "", fmt.Errorf("%s cannot be empty", paramName)
-	}
-	
-	tpe.logger.LogDebug("Extracted parameter", paramName, value)
-	return value, nil
-}
 
-// RequireStringWithLogging extracts a required string parameter with logging
-func (tpe *ToolParameterExtractor) RequireStringWithLogging(paramName string) (string, error) {
-	value, err := tpe.req.RequireString(paramName)
-	if err != nil {
+	// Parse the raw JSON arguments
+	var args map[string]interface{}
+	if err := json.Unmarshal(tpe.req.Params.Arguments, &args); err != nil {
+		tpe.logger.LogError(fmt.Errorf("failed to parse arguments: %v", err))
+		return "", fmt.Errorf("invalid arguments format")
+	}
+
+	value, exists := args[paramName]
+	if !exists {
 		tpe.logger.LogError(fmt.Errorf("missing required parameter: %s", paramName))
 		return "", fmt.Errorf("%s is required", paramName)
 	}
-	
-	if value == "" {
+
+	strValue, ok := value.(string)
+	if !ok {
+		tpe.logger.LogError(fmt.Errorf("parameter %s is not a string", paramName))
+		return "", fmt.Errorf("%s must be a string", paramName)
+	}
+
+	if strValue == "" {
 		tpe.logger.LogError(fmt.Errorf("empty required parameter: %s", paramName))
 		return "", fmt.Errorf("%s cannot be empty", paramName)
 	}
-	
-	tpe.logger.LogDebug("Extracted parameter", paramName, value)
-	return value, nil
+
+	tpe.logger.LogDebug("Extracted parameter", paramName, strValue)
+	return strValue, nil
 }
 
 // ProgressHandler provides utilities for handling progress notifications in tools
@@ -253,7 +255,7 @@ type ProgressHandler struct {
 }
 
 // NewProgressHandler creates a new progress handler
-func NewProgressHandler(req mcp.CallToolRequest, logger *ToolLogger) *ProgressHandler {
+func NewProgressHandler(req *mcp.CallToolRequest, logger *ToolLogger) *ProgressHandler {
 	progressToken := ExtractProgressToken(req)
 	return &ProgressHandler{progressToken: progressToken, logger: logger}
 }
@@ -266,7 +268,7 @@ func (ph *ProgressHandler) HasProgressToken() bool {
 // SendProgress sends a progress notification if a token is available
 func (ph *ProgressHandler) SendProgress(ctx context.Context, s interface{}, progress int, total int, message string) {
 	if ph.progressToken != "" && s != nil {
-		if mcpServer, ok := s.(*server.MCPServer); ok {
+		if mcpServer, ok := s.(*mcp.Server); ok {
 			SendProgressNotification(mcpServer, ctx, ph.progressToken, progress, total, message)
 			ph.logger.LogDebug("Progress notification sent", "progress", progress, "total", total, "message", message)
 		}
@@ -276,7 +278,7 @@ func (ph *ProgressHandler) SendProgress(ctx context.Context, s interface{}, prog
 // SendProgressMessage sends a simple progress message if a token is available
 func (ph *ProgressHandler) SendProgressMessage(ctx context.Context, s interface{}, message string) {
 	if ph.progressToken != "" && s != nil {
-		if mcpServer, ok := s.(*server.MCPServer); ok {
+		if mcpServer, ok := s.(*mcp.Server); ok {
 			SendProgressMessage(mcpServer, ctx, ph.progressToken, message)
 			ph.logger.LogDebug("Progress message sent", "message", message)
 		}
